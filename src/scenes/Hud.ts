@@ -1,12 +1,14 @@
 import Phaser from 'phaser';
-import { GAME_W, MAX_HAND, MAX_DEPTH, ROOM_H, HUD_H } from '../config';
+import { GAME_W, MAX_HAND, MAX_DEPTH, ROOM_H, HUD_H, MAX_INVENTORY } from '../config';
+import { primaryCardValue } from '../data/cards';
 import { getRun } from '../state';
 
 const TYPE_COLOR: Record<string, string> = {
   attack: '#e87060',
   block: '#7fb2e8',
   heal: '#5fe07a',
-  drain: '#c490e8',
+  utility: '#90d8e8',
+  status: '#c490e8',
 };
 
 export class HudScene extends Phaser.Scene {
@@ -53,11 +55,11 @@ export class HudScene extends Phaser.Scene {
     // cards
     const cardX0 = 200;
     this.dynamic.add(
-      this.add.text(cardX0, y0 + 10, `CARDS ${run.hand.length}/${MAX_HAND}`, {
+      this.add.text(cardX0, y0 + 10, `HAND ${run.combatHand.length}/${MAX_HAND}  DECK ${run.cardCollection.length}`, {
         fontFamily: 'monospace', fontSize: '12px', color: '#b8b0c8',
       }),
     );
-    for (const [i, card] of run.hand.entries()) {
+    for (const [i, card] of run.combatHand.entries()) {
       const x = cardX0 + i * 62;
       const g = this.add.graphics();
       g.fillStyle(0x1c1826, 1);
@@ -71,7 +73,7 @@ export class HudScene extends Phaser.Scene {
         }).setOrigin(0.5),
       );
       this.dynamic.add(
-        this.add.text(x + 28, y0 + 66, String(card.value), {
+        this.add.text(x + 28, y0 + 66, String(primaryCardValue(card)), {
           fontFamily: 'monospace', fontSize: '20px', fontStyle: 'bold', color: TYPE_COLOR[card.type],
         }).setOrigin(0.5),
       );
@@ -84,15 +86,20 @@ export class HudScene extends Phaser.Scene {
 
     // inventory + depth
     const invX = 545;
-    this.dynamic.add(this.add.image(invX, y0 + 30, 'potion').setScale(2));
     this.dynamic.add(
-      this.add.text(invX + 22, y0 + 30, `x${run.potions}`, {
+      this.add.text(invX, y0 + 12, `GOLD ${run.gold}`, {
+        fontFamily: 'monospace', fontSize: '12px', fontStyle: 'bold', color: '#f1c40f',
+      }),
+    );
+    this.dynamic.add(this.add.image(invX, y0 + 42, 'potion').setScale(2));
+    this.dynamic.add(
+      this.add.text(invX + 22, y0 + 42, `${run.inventory.length}/${MAX_INVENTORY}`, {
         fontFamily: 'monospace', fontSize: '15px', fontStyle: 'bold', color: '#f5edd8',
       }).setOrigin(0, 0.5),
     );
-    this.dynamic.add(this.add.image(invX, y0 + 66, 'armor').setScale(2));
+    this.dynamic.add(this.add.image(invX, y0 + 74, 'armor').setScale(2));
     this.dynamic.add(
-      this.add.text(invX + 22, y0 + 66, `x${run.armor}`, {
+      this.add.text(invX + 22, y0 + 74, `x${run.armor}`, {
         fontFamily: 'monospace', fontSize: '15px', fontStyle: 'bold', color: '#f5edd8',
       }).setOrigin(0, 0.5),
     );

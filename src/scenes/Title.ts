@@ -61,7 +61,8 @@ export class TitleScene extends Phaser.Scene {
     this.tweens.add({ targets: start, alpha: 0.3, duration: 600, yoyo: true, repeat: -1 });
 
     const begin = () => {
-      newRun();
+      const seed = new URLSearchParams(window.location.search).get('seed') ?? String(Math.random());
+      newRun(seed);
       this.scene.start('Dungeon');
     };
     this.input.keyboard?.once('keydown-SPACE', begin);

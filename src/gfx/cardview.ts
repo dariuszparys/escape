@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { Card } from '../data/cards';
+import { Card, primaryCardValue } from '../data/cards';
 
 export const CARD_W = 104;
 export const CARD_H = 140;
@@ -8,7 +8,8 @@ const TYPE_LABEL: Record<string, string> = {
   attack: 'ATK',
   block: 'BLK',
   heal: 'HEAL',
-  drain: 'DRAIN',
+  utility: 'UTIL',
+  status: 'STAT',
 };
 
 /** Render a card as a container centered on (x, y). */
@@ -39,7 +40,7 @@ export function makeCardView(
     .setOrigin(0.5);
 
   const value = scene.add
-    .text(0, -4, String(card.value), {
+    .text(0, -4, String(primaryCardValue(card)), {
       fontFamily: 'monospace',
       fontSize: '40px',
       fontStyle: 'bold',
@@ -57,7 +58,7 @@ export function makeCardView(
     .setOrigin(0.5);
 
   const desc = scene.add
-    .text(0, h / 2 - 18, card.desc, {
+    .text(0, h / 2 - 18, card.description, {
       fontFamily: 'monospace',
       fontSize: '9px',
       color: '#b8b0c8',

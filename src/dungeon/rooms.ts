@@ -1,6 +1,7 @@
 import { Dir, DIRS, MAX_DEPTH, OPPOSITE, ROOM_COLS, ROOM_ROWS } from '../config';
+import { GameRng } from '../game/rng';
 
-export type RoomEvent = 'start' | 'encounter' | 'chest' | 'potion' | 'trap' | 'empty' | 'boss';
+export type RoomEvent = 'start' | 'encounter' | 'chest' | 'potion' | 'trap' | 'boss';
 
 export interface RoomData {
   depth: number;
@@ -13,24 +14,20 @@ export interface RoomData {
   cleared: boolean;
 }
 
-function rollEvent(rng: Phaser.Math.RandomDataGenerator, depth: number): RoomEvent {
-  // Encounters get more likely deeper in; always something to do mid-run.
-  const table: [RoomEvent, number][] = [
-    ['encounter', 40 + depth * 2],
-    ['chest', 18],
-    ['potion', 14],
-    ['trap', 16],
-    ['empty', 10],
-  ];
-  const total = table.reduce((s, [, w]) => s + w, 0);
-  let r = rng.frac() * total;
+export function rollRoomEvent(rng: GameRng, depth: number): RoomEvent {
+  const table: [RoomEvent, number][] = depth === MAX_DEPTH - 1
+    ? [['encounter', 35], ['chest', 35], ['potion', 25], ['trap', 5]]
+    : [['encounter', 45], ['chest', 25], ['potion', 20], ['trap', 10]];
+
+  let r = rng.frac() * 100;
   for (const [event, w] of table) {
-    if ((r -= w) < 0) return event;
+    if (r < w) return event;
+    r -= w;
   }
-  return 'empty';
+  return 'trap';
 }
 
-function rollSpikes(rng: Phaser.Math.RandomDataGenerator): { col: number; row: number }[] {
+function rollSpikes(rng: GameRng): { col: number; row: number }[] {
   const spikes: { col: number; row: number }[] = [];
   const count = rng.between(5, 8);
   const midCol = Math.floor(ROOM_COLS / 2);
@@ -59,7 +56,7 @@ export function makeStartRoom(): RoomData {
 
 /** Build the room behind a door. Entered moving `travelDir`, so the door at OPPOSITE(travelDir) is blocked. */
 export function makeNextRoom(
-  rng: Phaser.Math.RandomDataGenerator,
+  rng: GameRng,
   depth: number,
   travelDir: Dir,
 ): RoomData {
@@ -67,7 +64,7 @@ export function makeNextRoom(
   if (depth >= MAX_DEPTH) {
     return { depth, event: 'boss', openDoors: [], blockedDoor: entry, spikes: [], cleared: false };
   }
-  const event = rollEvent(rng, depth);
+  const event = rollRoomEvent(rng, depth);
   return {
     depth,
     event,

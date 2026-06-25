@@ -1,28 +1,31 @@
 import Phaser from 'phaser';
-import { GAME_H, GAME_W, POTION_HEAL, PUNCH_DAMAGE } from '../config';
-import { Card } from '../data/cards';
+import { GAME_H, GAME_W, PUNCH_DAMAGE } from '../config';
+import { Card, cardEffectAmount } from '../data/cards';
 import { EnemyInstance } from '../data/enemies';
+import { InventoryItem } from '../data/items';
 import { CARD_H, CARD_W, makeCardBack, makeCardView } from '../gfx/cardview';
+import { ActiveStatusEffect, CombatAction, resolveRound } from '../game/combat';
+import { GameRng } from '../game/rng';
+import { awardEnemyGold } from '../game/rewards';
 import { getRun } from '../state';
 
-type PlayerAction = { kind: 'card'; card: Card } | { kind: 'potion' } | { kind: 'punch' };
-
-interface Resolved {
-  atk: number;
-  block: number;
-  heal: number;
-  label: string;
-  ignoresBlock?: boolean;
-}
+type PlayerAction =
+  | { kind: 'card'; card: Card }
+  | { kind: 'item'; item: InventoryItem }
+  | { kind: 'punch' };
 
 export class BattleScene extends Phaser.Scene {
   private enemy!: EnemyInstance;
+  private rng!: GameRng;
   private round = 1;
   private busy = false;
   private playerUsed = new Set<number>();
   private enemyUsed = new Set<number>();
+  private playerStatuses: ActiveStatusEffect[] = [];
+  private enemyStatuses: ActiveStatusEffect[] = [];
 
   private handViews: Phaser.GameObjects.Container[] = [];
+  private itemButtons: Phaser.GameObjects.Text[] = [];
   private enemyCardBacks: Phaser.GameObjects.Container[] = [];
   private enemySprite!: Phaser.GameObjects.Image;
   private heroSprite!: Phaser.GameObjects.Image;
@@ -32,20 +35,24 @@ export class BattleScene extends Phaser.Scene {
   private playerHpText!: Phaser.GameObjects.Text;
   private logText!: Phaser.GameObjects.Text;
   private telegraphText!: Phaser.GameObjects.Text;
-  private potionBtn!: Phaser.GameObjects.Text;
   private armorText!: Phaser.GameObjects.Text;
+  private statusText!: Phaser.GameObjects.Text;
 
   constructor() {
     super('Battle');
   }
 
-  init(data: { enemy: EnemyInstance }): void {
+  init(data: { enemy: EnemyInstance; rng: GameRng }): void {
     this.enemy = data.enemy;
+    this.rng = data.rng;
     this.round = 1;
     this.busy = false;
     this.playerUsed = new Set();
     this.enemyUsed = new Set();
+    this.playerStatuses = [];
+    this.enemyStatuses = [];
     this.handViews = [];
+    this.itemButtons = [];
     this.enemyCardBacks = [];
   }
 
@@ -53,7 +60,7 @@ export class BattleScene extends Phaser.Scene {
     const run = getRun();
     const cx = GAME_W / 2;
 
-    this.scene.sleep('Hud'); // battle has its own status UI and needs the full screen
+    this.scene.sleep('Hud');
 
     const bg = this.add.graphics();
     bg.fillStyle(0x0b0a12, 0.92);
@@ -61,52 +68,77 @@ export class BattleScene extends Phaser.Scene {
     bg.lineStyle(3, 0xcab98a, 0.8);
     bg.strokeRoundedRect(12, 12, GAME_W - 24, GAME_H - 24, 10);
 
-    // enemy
     const isBoss = this.enemy.def.boss;
     this.enemySprite = this.add.image(cx, isBoss ? 158 : 150, this.enemy.def.texture).setScale(isBoss ? 5.5 : 6);
     this.tweens.add({
-      targets: this.enemySprite, y: this.enemySprite.y - 8,
-      duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+      targets: this.enemySprite,
+      y: this.enemySprite.y - 8,
+      duration: 900,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
     });
     this.add
       .text(cx, 42, this.enemy.def.name, {
-        fontFamily: 'monospace', fontSize: isBoss ? '28px' : '22px', fontStyle: 'bold',
+        fontFamily: 'monospace',
+        fontSize: isBoss ? '28px' : '22px',
+        fontStyle: 'bold',
         color: isBoss ? '#ff5544' : '#f5edd8',
       })
       .setOrigin(0.5);
     this.enemyHpBar = this.add.graphics();
     this.enemyHpText = this.add.text(cx, 68, '', {
-      fontFamily: 'monospace', fontSize: '13px', color: '#f5edd8',
+      fontFamily: 'monospace',
+      fontSize: '13px',
+      color: '#f5edd8',
     }).setOrigin(0.5);
 
-    // hero
     this.heroSprite = this.add.image(110, 408, 'hero_up_0').setScale(5);
     this.playerHpBar = this.add.graphics();
     this.playerHpText = this.add.text(110, 472, '', {
-      fontFamily: 'monospace', fontSize: '13px', color: '#f5edd8',
+      fontFamily: 'monospace',
+      fontSize: '13px',
+      color: '#f5edd8',
     }).setOrigin(0.5);
     this.armorText = this.add.text(110, 350, run.armor > 0 ? `Armor +${run.armor}` : '', {
-      fontFamily: 'monospace', fontSize: '12px', color: '#aab2bd',
+      fontFamily: 'monospace',
+      fontSize: '12px',
+      color: '#aab2bd',
+    }).setOrigin(0.5);
+    this.statusText = this.add.text(cx, 285, '', {
+      fontFamily: 'monospace',
+      fontSize: '12px',
+      color: '#b8b0c8',
+      align: 'center',
     }).setOrigin(0.5);
 
-    // center texts
     this.logText = this.add
-      .text(cx, 330, 'Choose a card to play!', {
-        fontFamily: 'monospace', fontSize: '15px', color: '#d8d2e4', align: 'center',
+      .text(cx, 330, 'Choose a card, item, or punch.', {
+        fontFamily: 'monospace',
+        fontSize: '15px',
+        color: '#d8d2e4',
+        align: 'center',
       })
       .setOrigin(0.5);
     this.telegraphText = this.add
-      .text(cx, 250, '', {
-        fontFamily: 'monospace', fontSize: '15px', fontStyle: 'bold', color: '#ff9944',
+      .text(cx, 240, '', {
+        fontFamily: 'monospace',
+        fontSize: '14px',
+        fontStyle: 'bold',
+        color: '#ff9944',
         align: 'center',
       })
       .setOrigin(0.5);
 
-    // innate punch: weak, but you can always deal damage
     this.add
-      .text(615, 350, `Punch\n(${PUNCH_DAMAGE} dmg)`, {
-        fontFamily: 'monospace', fontSize: '14px', fontStyle: 'bold', color: '#e8c070',
-        backgroundColor: '#2a241c', padding: { x: 10, y: 8 }, align: 'center',
+      .text(615, 345, `Punch\n(${PUNCH_DAMAGE} dmg)`, {
+        fontFamily: 'monospace',
+        fontSize: '14px',
+        fontStyle: 'bold',
+        color: '#e8c070',
+        backgroundColor: '#2a241c',
+        padding: { x: 10, y: 8 },
+        align: 'center',
       })
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true })
@@ -114,26 +146,13 @@ export class BattleScene extends Phaser.Scene {
         if (!this.busy) this.playRound({ kind: 'punch' });
       });
 
-    // potion button
-    this.potionBtn = this.add
-      .text(615, 430, '', {
-        fontFamily: 'monospace', fontSize: '14px', fontStyle: 'bold', color: '#5fe07a',
-        backgroundColor: '#1c2a1e', padding: { x: 10, y: 8 },
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => {
-        if (!this.busy && getRun().potions > 0) this.playRound({ kind: 'potion' });
-      });
-
     this.redrawBars();
     this.renderEnemyCards();
     this.renderHand();
-    this.updatePotionBtn();
+    this.renderItems();
     this.updateTelegraph();
+    this.updateStatusText();
   }
-
-  // ------------------------------------------------------------ UI
 
   private redrawBars(): void {
     const run = getRun();
@@ -171,11 +190,11 @@ export class BattleScene extends Phaser.Scene {
     for (const v of this.handViews) v.destroy();
     this.handViews = [];
     const run = getRun();
-    const n = run.hand.length;
+    const n = run.combatHand.length;
     const spacing = Math.min(CARD_W + 12, (GAME_W - 120) / Math.max(n, 1));
     const startX = GAME_W / 2 - ((n - 1) * spacing) / 2;
     const y = GAME_H - CARD_H / 2 - 24;
-    for (const [i, card] of run.hand.entries()) {
+    for (const [i, card] of run.combatHand.entries()) {
       const view = makeCardView(this, card, startX + i * spacing, y);
       const used = this.playerUsed.has(card.uid);
       if (used) {
@@ -192,63 +211,91 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
-  private updatePotionBtn(): void {
-    const run = getRun();
-    this.potionBtn.setText(`Potion x${run.potions}\n(+${POTION_HEAL} HP)`);
-    this.potionBtn.setAlpha(run.potions > 0 ? 1 : 0.35);
+  private renderItems(): void {
+    for (const button of this.itemButtons) button.destroy();
+    this.itemButtons = [];
+    const items = getRun().inventory.filter((item) => item.usableInCombat);
+    for (const [i, item] of items.entries()) {
+      const button = this.add
+        .text(615, 410 + i * 42, `${item.name}\n${item.description}`, {
+          fontFamily: 'monospace',
+          fontSize: '10px',
+          fontStyle: 'bold',
+          color: '#5fe07a',
+          backgroundColor: '#1c2a1e',
+          padding: { x: 8, y: 5 },
+          align: 'center',
+        })
+        .setOrigin(0.5)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => {
+          if (!this.busy) this.playRound({ kind: 'item', item });
+        });
+      this.itemButtons.push(button);
+    }
   }
 
   private isSpecialRound(round: number): boolean {
-    return !!this.enemy.def.special && round % 3 === 0;
+    const special = this.enemy.def.special;
+    return !!special && round % special.interval === 0;
   }
 
   private updateTelegraph(): void {
-    if (this.isSpecialRound(this.round)) {
-      const sp = this.enemy.def.special!;
-      this.telegraphText.setText(`⚠ ${sp.telegraph}\n${sp.name}: ${sp.damage} dmg${sp.ignoresBlock ? ' (ignores block!)' : ''}${sp.selfHeal ? `, heals ${sp.selfHeal}` : ''}`);
+    const special = this.enemy.def.special;
+    if (special && this.isSpecialRound(this.round)) {
+      this.telegraphText.setText(`${special.telegraph}\n${special.name}`);
     } else {
       this.telegraphText.setText('');
     }
   }
 
-  // ------------------------------------------------------------ combat
-
-  private resolveAction(action: PlayerAction): Resolved {
-    if (action.kind === 'potion') {
-      return { atk: 0, block: 0, heal: POTION_HEAL, label: 'a Potion' };
-    }
-    if (action.kind === 'punch') {
-      return { atk: PUNCH_DAMAGE, block: 0, heal: 0, label: 'Punch' };
-    }
-    const c = action.card;
-    return {
-      atk: c.type === 'attack' ? c.value : c.type === 'drain' ? c.value : 0,
-      block: c.type === 'block' ? c.value : 0,
-      heal: c.type === 'heal' ? c.value : c.type === 'drain' ? c.value : 0,
-      label: `${c.name}`,
-    };
+  private updateStatusText(): void {
+    const format = (label: string, statuses: ActiveStatusEffect[]) =>
+      statuses.length === 0 ? `${label}: none`
+        : `${label}: ${statuses.map((status) => `${status.type} ${status.remainingTurns}`).join(', ')}`;
+    this.statusText.setText(`${format('You', this.playerStatuses)}\n${format('Enemy', this.enemyStatuses)}`);
   }
 
   private pickEnemyCard(): Card {
     const avail = this.enemy.cards.filter((c) => !this.enemyUsed.has(c.uid));
     const pool = avail.length > 0 ? avail : this.enemy.cards;
-    if (avail.length === 0) {
-      this.enemyUsed.clear();
-    }
+    if (avail.length === 0) this.enemyUsed.clear();
+
     const lowHp = this.enemy.hp / this.enemy.maxHp < 0.35;
-    const weighted: { card: Card; w: number }[] = pool.map((card) => {
+    const weighted = pool.map((card) => {
       let w = 3;
-      if (card.type === 'block') w = 1.5;
-      if (card.type === 'heal') w = lowHp ? 6 : 0.8;
-      if (card.type === 'drain') w = lowHp ? 5 : 3;
+      if (cardEffectAmount(card, 'block') > 0) w = 1.5;
+      if (cardEffectAmount(card, 'heal') > 0) w = lowHp ? 6 : 0.8;
+      if (card.effects.some((effect) => effect.kind === 'status')) w = 4;
       return { card, w };
     });
-    const total = weighted.reduce((s, e) => s + e.w, 0);
-    let r = Math.random() * total;
-    for (const e of weighted) {
-      if ((r -= e.w) < 0) return e.card;
+    const total = weighted.reduce((sum, entry) => sum + entry.w, 0);
+    let r = this.rng.frac() * total;
+    for (const entry of weighted) {
+      if ((r -= entry.w) < 0) return entry.card;
     }
     return weighted[weighted.length - 1].card;
+  }
+
+  private toCombatAction(action: PlayerAction): CombatAction {
+    if (action.kind === 'card') return { actor: 'player', kind: 'card', card: action.card };
+    if (action.kind === 'item') return { actor: 'player', kind: 'item', item: action.item };
+    return { actor: 'player', kind: 'punch' };
+  }
+
+  private enemyAction(): { action: CombatAction; card: Card | null } {
+    const special = this.enemy.def.special;
+    if (special && this.isSpecialRound(this.round)) {
+      return {
+        card: null,
+        action: { actor: 'enemy', kind: 'special', name: special.name, speed: special.speed, effects: special.effects },
+      };
+    }
+
+    const card = this.pickEnemyCard();
+    this.enemyUsed.add(card.uid);
+    if (this.enemy.cards.every((candidate) => this.enemyUsed.has(candidate.uid))) this.enemyUsed.clear();
+    return { card, action: { actor: 'enemy', kind: 'card', card } };
   }
 
   private playRound(action: PlayerAction): void {
@@ -256,90 +303,82 @@ export class BattleScene extends Phaser.Scene {
     const run = getRun();
     const cx = GAME_W / 2;
 
-    // player side
-    const p = this.resolveAction(action);
     if (action.kind === 'card') {
       this.playerUsed.add(action.card.uid);
-      if (run.hand.every((c) => this.playerUsed.has(c.uid))) {
+      if (run.combatHand.every((card) => this.playerUsed.has(card.uid))) {
         this.playerUsed.clear();
-        this.time.delayedCall(1500, () => this.logText.setText('Your cards refresh!'));
+        this.time.delayedCall(1200, () => this.logText.setText('Your cards refresh!'));
       }
-    } else if (action.kind === 'potion') {
-      run.potions--;
+    } else if (action.kind === 'item') {
+      run.removeItem(action.item.uid);
     }
 
-    // enemy side
-    let e: Resolved;
-    let enemyCardPlayed: Card | null = null;
-    if (this.isSpecialRound(this.round)) {
-      const sp = this.enemy.def.special!;
-      e = { atk: sp.damage, block: 0, heal: sp.selfHeal, label: sp.name, ignoresBlock: sp.ignoresBlock };
-    } else {
-      enemyCardPlayed = this.pickEnemyCard();
-      this.enemyUsed.add(enemyCardPlayed.uid);
-      if (this.enemy.cards.every((c) => this.enemyUsed.has(c.uid))) this.enemyUsed.clear();
-      const c = enemyCardPlayed;
-      e = {
-        atk: c.type === 'attack' || c.type === 'drain' ? c.value : 0,
-        block: c.type === 'block' ? c.value : 0,
-        heal: c.type === 'heal' ? c.value : c.type === 'drain' ? c.value : 0,
-        label: c.name,
-      };
-    }
-
-    const playerBlock = p.block + run.armor;
-    const dmgToEnemy = Math.max(0, p.atk - e.block);
-    const dmgToPlayer = Math.max(0, e.atk - (e.ignoresBlock ? 0 : playerBlock));
-
-    // reveal animation
+    const beforePlayerHp = run.hp;
+    const beforeEnemyHp = this.enemy.hp;
+    const enemyTurn = this.enemyAction();
     const shown: Phaser.GameObjects.Container[] = [];
-    if (action.kind === 'card') {
-      shown.push(makeCardView(this, action.card, cx - 100, 250, 0.8));
-    }
-    if (enemyCardPlayed) {
+    if (action.kind === 'card') shown.push(makeCardView(this, action.card, cx - 100, 250, 0.8));
+    if (enemyTurn.card) {
       const back = makeCardBack(this, cx + 100, 250, 0.8);
       shown.push(back);
-      this.time.delayedCall(350, () => {
+      this.time.delayedCall(250, () => {
         back.destroy();
-        shown.push(makeCardView(this, enemyCardPlayed!, cx + 100, 250, 0.8));
+        shown.push(makeCardView(this, enemyTurn.card!, cx + 100, 250, 0.8));
       });
     }
+
+    const resolved = resolveRound({
+      player: {
+        id: 'player',
+        name: 'Player',
+        hp: run.hp,
+        maxHp: run.maxHp,
+        armor: run.armor,
+        statuses: this.playerStatuses,
+      },
+      enemy: {
+        id: this.enemy.def.id,
+        name: this.enemy.def.name,
+        hp: this.enemy.hp,
+        maxHp: this.enemy.maxHp,
+        armor: this.enemy.armor,
+        statuses: this.enemyStatuses,
+      },
+      playerAction: this.toCombatAction(action),
+      enemyAction: enemyTurn.action,
+    });
+
+    run.hp = resolved.player.hp;
+    this.enemy.hp = resolved.enemy.hp;
+    this.enemy.armor = resolved.enemy.armor;
+    this.playerStatuses = resolved.player.statuses;
+    this.enemyStatuses = resolved.enemy.statuses;
+
     this.renderHand();
     this.renderEnemyCards();
-    this.updatePotionBtn();
+    this.renderItems();
     this.telegraphText.setText('');
-
-    this.logText.setText(`You play ${p.label}.  ${this.enemy.def.name} uses ${e.label}!`);
+    this.logText.setText(resolved.log.join('\n'));
 
     this.time.delayedCall(700, () => {
-      // apply effects
-      this.enemy.hp -= dmgToEnemy;
-      run.hp -= dmgToPlayer;
-      if (run.hp > 0) run.hp = Math.min(run.maxHp, run.hp + p.heal);
-      if (this.enemy.hp > 0) this.enemy.hp = Math.min(this.enemy.maxHp, this.enemy.hp + e.heal);
-
-      if (dmgToEnemy > 0) {
-        this.damagePop(this.enemySprite.x + 40, this.enemySprite.y - 30, `-${dmgToEnemy}`, '#ff5544');
+      const enemyDamage = Math.max(0, beforeEnemyHp - this.enemy.hp);
+      const playerDamage = Math.max(0, beforePlayerHp - run.hp);
+      if (enemyDamage > 0) {
+        this.damagePop(this.enemySprite.x + 40, this.enemySprite.y - 30, `-${enemyDamage}`, '#ff5544');
         this.flash(this.enemySprite);
-      } else if (p.atk > 0) {
-        this.damagePop(this.enemySprite.x + 40, this.enemySprite.y - 30, 'Blocked!', '#7fb2e8');
       }
-      if (dmgToPlayer > 0) {
-        this.damagePop(this.heroSprite.x + 36, this.heroSprite.y - 30, `-${dmgToPlayer}`, '#ff5544');
+      if (playerDamage > 0) {
+        this.damagePop(this.heroSprite.x + 36, this.heroSprite.y - 30, `-${playerDamage}`, '#ff5544');
         this.flash(this.heroSprite);
         this.cameras.main.shake(120, 0.006);
-      } else if (e.atk > 0) {
-        this.damagePop(this.heroSprite.x + 36, this.heroSprite.y - 30, 'Blocked!', '#7fb2e8');
       }
-      if (p.heal > 0) this.damagePop(this.heroSprite.x - 36, this.heroSprite.y - 40, `+${p.heal}`, '#5fe07a');
-      if (e.heal > 0) this.damagePop(this.enemySprite.x - 40, this.enemySprite.y - 40, `+${e.heal}`, '#5fe07a');
-
       this.redrawBars();
+      this.updateStatusText();
       this.game.events.emit('hud-update');
     });
 
     this.time.delayedCall(1500, () => {
-      for (const s of shown) s.destroy();
+      for (const view of shown) view.destroy();
       if (this.enemy.hp <= 0) {
         this.victory();
         return;
@@ -352,17 +391,22 @@ export class BattleScene extends Phaser.Scene {
       this.busy = false;
       this.renderHand();
       this.renderEnemyCards();
-      this.updatePotionBtn();
+      this.renderItems();
       this.updateTelegraph();
-      this.logText.setText('Choose a card to play!');
+      this.updateStatusText();
+      this.logText.setText('Choose a card, item, or punch.');
     });
   }
 
   private damagePop(x: number, y: number, msg: string, color: string): void {
     const t = this.add
       .text(x, y, msg, {
-        fontFamily: 'monospace', fontSize: '22px', fontStyle: 'bold', color,
-        stroke: '#16121e', strokeThickness: 5,
+        fontFamily: 'monospace',
+        fontSize: '22px',
+        fontStyle: 'bold',
+        color,
+        stroke: '#16121e',
+        strokeThickness: 5,
       })
       .setOrigin(0.5)
       .setDepth(20);
@@ -374,13 +418,16 @@ export class BattleScene extends Phaser.Scene {
     this.time.delayedCall(120, () => img.clearTint());
   }
 
-  // ------------------------------------------------------------ outcome
-
   private victory(): void {
     const run = getRun();
+    const gold = awardEnemyGold(run, this.rng, run.depth);
     this.tweens.add({
-      targets: this.enemySprite, alpha: 0, angle: 12, scale: this.enemySprite.scale * 0.4,
-      duration: 600, ease: 'Cubic.easeIn',
+      targets: this.enemySprite,
+      alpha: 0,
+      angle: 12,
+      scale: this.enemySprite.scale * 0.4,
+      duration: 600,
+      ease: 'Cubic.easeIn',
     });
     this.logText.setText('');
     this.telegraphText.setText('');
@@ -391,13 +438,18 @@ export class BattleScene extends Phaser.Scene {
     g.fillRect(0, 0, GAME_W, GAME_H);
     overlay.add(g);
     overlay.add(
-      this.add.text(GAME_W / 2, 90, 'VICTORY!', {
-        fontFamily: 'monospace', fontSize: '40px', fontStyle: 'bold', color: '#f1c40f',
+      this.add.text(GAME_W / 2, 86, 'VICTORY!', {
+        fontFamily: 'monospace',
+        fontSize: '40px',
+        fontStyle: 'bold',
+        color: '#f1c40f',
       }).setOrigin(0.5),
     );
     overlay.add(
-      this.add.text(GAME_W / 2, 140, 'Take one of the enemy\'s cards:', {
-        fontFamily: 'monospace', fontSize: '17px', color: '#d8d2e4',
+      this.add.text(GAME_W / 2, 132, `+${gold} gold. Take one enemy card:`, {
+        fontFamily: 'monospace',
+        fontSize: '17px',
+        color: '#d8d2e4',
       }).setOrigin(0.5),
     );
 
@@ -410,74 +462,27 @@ export class BattleScene extends Phaser.Scene {
       view.setInteractive({ useHandCursor: true });
       view.on('pointerover', () => view.setScale(1.0));
       view.on('pointerout', () => view.setScale(0.92));
-      view.on('pointerdown', () => this.takeCard(card, overlay));
+      view.on('pointerdown', () => this.takeCard(card));
       overlay.add(view);
     }
 
     const skip = this.add
       .text(GAME_W / 2, 380, '[ Take nothing ]', {
-        fontFamily: 'monospace', fontSize: '16px', color: '#b8b0c8',
+        fontFamily: 'monospace',
+        fontSize: '16px',
+        color: '#b8b0c8',
       })
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.endBattle(true));
     skip.setDepth(31);
     overlay.add(skip);
-
-    if (run.handFull) {
-      overlay.add(
-        this.add.text(GAME_W / 2, 340, 'Your hand is full (5) — taking a card will replace one of yours.', {
-          fontFamily: 'monospace', fontSize: '13px', color: '#ff9944',
-        }).setOrigin(0.5),
-      );
-    }
   }
 
-  private takeCard(card: Card, overlay: Phaser.GameObjects.Container): void {
-    const run = getRun();
-    if (!run.handFull) {
-      run.addCard(card);
-      this.game.events.emit('hud-update');
-      this.endBattle(true);
-      return;
-    }
-    // hand full: pick one of yours to discard
-    overlay.destroy();
-    const overlay2 = this.add.container(0, 0).setDepth(30);
-    const g = this.add.graphics();
-    g.fillStyle(0x0b0a12, 0.92);
-    g.fillRect(0, 0, GAME_W, GAME_H);
-    overlay2.add(g);
-    overlay2.add(
-      this.add.text(GAME_W / 2, 110, `Replace which card with ${card.name}?`, {
-        fontFamily: 'monospace', fontSize: '18px', fontStyle: 'bold', color: '#f5edd8',
-      }).setOrigin(0.5),
-    );
-    const n = run.hand.length;
-    const spacing = Math.min(CARD_W + 10, (GAME_W - 80) / n);
-    const startX = GAME_W / 2 - ((n - 1) * spacing) / 2;
-    for (const [i, mine] of run.hand.entries()) {
-      const view = makeCardView(this, mine, startX + i * spacing, 260, 0.92);
-      view.setDepth(31);
-      view.setInteractive({ useHandCursor: true });
-      view.on('pointerover', () => view.setScale(1.0));
-      view.on('pointerout', () => view.setScale(0.92));
-      view.on('pointerdown', () => {
-        run.hand.splice(i, 1, card);
-        this.game.events.emit('hud-update');
-        this.endBattle(true);
-      });
-      overlay2.add(view);
-    }
-    const skip = this.add
-      .text(GAME_W / 2, 400, '[ Keep my hand ]', {
-        fontFamily: 'monospace', fontSize: '16px', color: '#b8b0c8',
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this.endBattle(true));
-    skip.setDepth(31);
-    overlay2.add(skip);
+  private takeCard(card: Card): void {
+    getRun().addCard(card);
+    this.game.events.emit('hud-update');
+    this.endBattle(true);
   }
 
   private endBattle(won: boolean): void {

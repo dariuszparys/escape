@@ -1,12 +1,14 @@
 import Phaser from 'phaser';
 import {
-  Dir, DIR_VEC, PLAYER_SPEED, POTION_HEAL, ROOM_COLS, ROOM_H, ROOM_ROWS, ROOM_W,
+  Dir, DIR_VEC, PLAYER_SPEED, ROOM_COLS, ROOM_H, ROOM_ROWS, ROOM_W,
   TILE, TRAP_DAMAGE,
 } from '../config';
-import { Card, makeCard, CARD_DEFS, randomCard } from '../data/cards';
+import { Card, makeCard, CARD_DEFS } from '../data/cards';
 import { EnemyInstance, spawnBoss, spawnEnemy } from '../data/enemies';
 import { makeStartRoom, makeNextRoom, RoomData } from '../dungeon/rooms';
 import { makeCardView } from '../gfx/cardview';
+import { PhaserGameRng } from '../game/rng';
+import { awardFloorPotion, rollChestReward } from '../game/rewards';
 import { getRun } from '../state';
 
 const DOOR_CELL: Record<Dir, { col: number; row: number }> = {
@@ -46,6 +48,7 @@ interface BuiltRoom {
 
 export class DungeonScene extends Phaser.Scene {
   private rng!: Phaser.Math.RandomDataGenerator;
+  private gameRng!: PhaserGameRng;
   private room!: RoomData;
   private origin = { x: 0, y: 0 };
   private built!: BuiltRoom;
@@ -64,7 +67,9 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.rng = new Phaser.Math.RandomDataGenerator([String(Math.random())]);
+    const run = getRun();
+    this.rng = new Phaser.Math.RandomDataGenerator([run.seed]);
+    this.gameRng = new PhaserGameRng(this.rng);
     this.transitioning = false;
     this.battleActive = false;
     this.exitHatch = null;
@@ -184,11 +189,9 @@ export class DungeonScene extends Phaser.Scene {
 
     switch (room.event) {
       case 'start': {
-        // Both starting options deal damage — pure offense vs. sustain.
-        const attacks = CARD_DEFS.filter((c) => c.tier === 1 && c.type === 'attack');
-        const attack = makeCard(this.rng.pick(attacks));
-        const hybrid = makeCard(CARD_DEFS.find((c) => c.id === 'drain')!);
-        for (const [i, card] of [attack, hybrid].entries()) {
+        const slash = makeCard(CARD_DEFS.find((c) => c.id === 'slash')!);
+        const guard = makeCard(CARD_DEFS.find((c) => c.id === 'guard')!);
+        for (const [i, card] of [slash, guard].entries()) {
           const pos = at(i === 0 ? 4 : 10, 4);
           const view = makeCardView(this, card, pos.x, pos.y, 0.62);
           view.setDepth(5);
@@ -225,7 +228,7 @@ export class DungeonScene extends Phaser.Scene {
         break;
       }
       case 'encounter': {
-        built.enemy = spawnEnemy(this.rng, room.depth, Math.max(getRun().hand.length, 1));
+        built.enemy = spawnEnemy(this.gameRng, room.depth, Math.max(getRun().combatHand.length, 1));
         const img = this.add.image(center.x, center.y, built.enemy.def.texture).setScale(4).setDepth(5);
         this.tweens.add({ targets: img, y: center.y - 6, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
         objs.push(img);
@@ -233,15 +236,13 @@ export class DungeonScene extends Phaser.Scene {
         break;
       }
       case 'boss': {
-        built.enemy = spawnBoss(this.rng);
+        built.enemy = spawnBoss(this.gameRng);
         const img = this.add.image(center.x, center.y - 10, built.enemy.def.texture).setScale(4.5).setDepth(5);
         this.tweens.add({ targets: img, y: center.y - 18, duration: 800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
         objs.push(img);
         built.enemySprite = img;
         break;
       }
-      case 'empty':
-        break;
     }
 
     return built;
@@ -268,7 +269,7 @@ export class DungeonScene extends Phaser.Scene {
 
     const run = getRun();
     const nextDepth = run.depth + 1;
-    const nextRoom = makeNextRoom(this.rng, nextDepth, dir);
+    const nextRoom = makeNextRoom(this.gameRng, nextDepth, dir);
     const vec = DIR_VEC[dir];
     const newOrigin = {
       x: this.origin.x + vec.x * ROOM_W,
@@ -348,7 +349,7 @@ export class DungeonScene extends Phaser.Scene {
     if (!this.built.enemy) return;
     this.battleActive = true;
     this.player.setVelocity(0, 0);
-    this.scene.launch('Battle', { enemy: this.built.enemy });
+    this.scene.launch('Battle', { enemy: this.built.enemy, rng: this.gameRng });
     this.scene.pause();
   }
 
@@ -408,12 +409,13 @@ export class DungeonScene extends Phaser.Scene {
 
     // drink a potion
     if (Phaser.Input.Keyboard.JustDown(this.keys.p)) {
-      if (run.potions > 0 && run.hp < run.maxHp) {
-        run.potions--;
-        run.heal(POTION_HEAL);
-        this.floatText(this.player.x, this.player.y - 50, `+${POTION_HEAL} HP`, '#5fe07a');
+      const potion = run.firstUsablePotion();
+      if (potion && run.hp < run.maxHp) {
+        run.removeItem(potion.uid);
+        run.heal(potion.amount);
+        this.floatText(this.player.x, this.player.y - 50, `+${potion.amount} HP`, '#5fe07a');
         this.hud();
-      } else if (run.potions === 0) {
+      } else if (!potion) {
         this.floatText(this.player.x, this.player.y - 50, 'No potions!', '#b8b0c8');
       }
     }
@@ -424,7 +426,7 @@ export class DungeonScene extends Phaser.Scene {
     // doors
     for (const door of this.built.doors) {
       if (!door.rect.contains(px, py)) continue;
-      if (this.room.event === 'start' && run.hand.length === 0) {
+      if (this.room.event === 'start' && run.cardCollection.length === 0) {
         if (time > this.lastHintAt + 900) {
           this.lastHintAt = time;
           this.floatText(px, py - 50, 'Choose a card first!', '#ff9944');
@@ -462,8 +464,9 @@ export class DungeonScene extends Phaser.Scene {
     if (this.built.potionAt && Phaser.Math.Distance.Between(px, py, this.built.potionAt.x, this.built.potionAt.y) < 36) {
       this.built.potionAt.img.destroy();
       this.built.potionAt = null;
-      run.potions++;
-      this.floatText(px, py - 50, '+1 Potion', '#5fe07a');
+      const result = awardFloorPotion(run);
+      const msg = result.kind === 'heal' ? `+${result.amount} HP` : `+${result.item.name}`;
+      this.floatText(px, py - 50, msg, '#5fe07a');
       this.hud();
     }
 
@@ -504,18 +507,13 @@ export class DungeonScene extends Phaser.Scene {
 
   private openChest(x: number, y: number): void {
     const run = getRun();
-    const roll = this.rng.frac();
-    if (roll < 0.4 && !run.handFull) {
-      const card = randomCard(this.rng, run.depth);
-      run.addCard(card);
-      this.floatText(x, y - 50, `Found card: ${card.name}!`, '#f1c40f');
-    } else if (roll < 0.75 || run.armor >= 3) {
-      run.potions++;
-      this.floatText(x, y - 50, '+1 Potion', '#5fe07a');
-    } else {
-      run.addArmor();
-      this.floatText(x, y - 50, '+1 Armor', '#aab2bd');
-    }
+    const result = rollChestReward(run, this.gameRng, run.depth);
+    const message = result.kind === 'card' ? `Found card: ${result.cardName}!`
+      : result.kind === 'item' ? `Found ${result.item.name}!`
+        : result.kind === 'armor' ? '+1 Armor'
+          : result.kind === 'gold' ? `+${result.amount} Gold`
+            : `+${result.amount} HP`;
+    this.floatText(x, y - 50, message, result.kind === 'gold' ? '#f1c40f' : '#5fe07a');
     this.hud();
   }
 }
