@@ -516,14 +516,17 @@ export class BattleScene extends Phaser.Scene {
     const cx = GAME_W / 2;
     const playerAction = this.toCombatAction(action);
 
-    if (action.kind === 'card') {
-      this.playerUsed.add(action.card.uid);
-      if (run.combatHand.every((card) => this.playerUsed.has(card.uid))) {
-        this.playerUsed.clear();
-        this.time.delayedCall(1700, () => this.setPrompt('Your cards refresh!'));
+    const playerStunned = this.playerStatuses.some((status) => status.type === 'stun');
+    if (!playerStunned) {
+      if (action.kind === 'card') {
+        this.playerUsed.add(action.card.uid);
+        if (run.combatHand.every((card) => this.playerUsed.has(card.uid))) {
+          this.playerUsed.clear();
+          this.time.delayedCall(1700, () => this.setPrompt('Your cards refresh!'));
+        }
+      } else if (action.kind === 'item') {
+        run.removeItem(action.item.uid);
       }
-    } else if (action.kind === 'item') {
-      run.removeItem(action.item.uid);
     }
 
     const enemyTurn = this.enemyAction();

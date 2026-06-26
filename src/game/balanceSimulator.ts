@@ -358,13 +358,16 @@ function applyRound(
   next.rng = enemyDecision.nextRng.clone();
   next.enemyUsed = new Set(enemyDecision.used);
 
-  if (action.kind === 'card') {
-    next.playerUsed.add(action.card.uid);
-    if (next.hand.every((card) => next.playerUsed.has(card.uid))) {
-      next.playerUsed.clear();
+  const playerStunned = next.playerStatuses.some((status) => status.type === 'stun');
+  if (!playerStunned) {
+    if (action.kind === 'card') {
+      next.playerUsed.add(action.card.uid);
+      if (next.hand.every((card) => next.playerUsed.has(card.uid))) {
+        next.playerUsed.clear();
+      }
+    } else if (action.kind === 'item') {
+      next.inventory = next.inventory.filter((item) => item.uid !== action.item.uid);
     }
-  } else if (action.kind === 'item') {
-    next.inventory = next.inventory.filter((item) => item.uid !== action.item.uid);
   }
 
   const resolved = resolveRound({

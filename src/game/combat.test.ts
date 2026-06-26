@@ -242,4 +242,25 @@ describe('resolveRound', () => {
 
     expect(ticked.enemyHpChange.damage).toBe(2);
   });
+
+  test('stunned player action is replaced with none and stun is consumed', () => {
+    const result = resolveRound({
+      player: {
+        id: 'player',
+        name: 'Player',
+        hp: 20,
+        maxHp: 20,
+        armor: 0,
+        statuses: [{ type: 'stun', amount: 1, remainingTurns: 1 }],
+      },
+      enemy: { id: 'enemy', name: 'Enemy', hp: 20, maxHp: 20, armor: 0, statuses: [] },
+      playerAction: { actor: 'player', kind: 'card', card: strike },
+      enemyAction: { actor: 'enemy', kind: 'card', card: slow },
+    });
+
+    expect(result.player.hp).toBe(10);
+    expect(result.enemy.hp).toBe(20);
+    expect(result.log).toContain('Player is stunned');
+    expect(result.player.statuses).toEqual([]);
+  });
 });
