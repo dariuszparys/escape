@@ -59,6 +59,28 @@ describe('campfire purchases', () => {
     });
   });
 
+  test('buys scout flame once and rejects duplicate preparation', () => {
+    const first = buyCampfirePurchase({
+      embers: 20,
+      pendingPrep: createDefaultPendingPrep(),
+    }, 'scout_flame');
+
+    expect(first.ok).toBe(true);
+    expect(first.state).toEqual({
+      embers: 14,
+      pendingPrep: {
+        itemIds: [],
+        extraStartingChoice: false,
+        scoutFlame: true,
+      },
+    });
+
+    expect(canBuyCampfirePurchase(first.state, 'scout_flame')).toEqual({
+      ok: false,
+      reason: 'Already prepared.',
+    });
+  });
+
   test('rejects unaffordable purchases without changing state', () => {
     const state = {
       embers: 3,

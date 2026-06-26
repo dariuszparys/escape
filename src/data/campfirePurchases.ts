@@ -14,14 +14,22 @@ export interface PendingPrep {
   scoutFlame: boolean;
 }
 
-export interface CampfirePurchaseDef {
+interface CampfirePurchaseBase {
   id: CampfirePurchaseId;
   name: string;
   cost: number;
   description: string;
-  kind: 'item' | 'extra_starting_choice' | 'scout_flame';
-  itemId?: InventoryItemDef['id'];
 }
+
+export type CampfirePurchaseDef =
+  | (CampfirePurchaseBase & {
+      kind: 'item';
+      itemId: InventoryItemDef['id'];
+    })
+  | (CampfirePurchaseBase & {
+      kind: 'extra_starting_choice' | 'scout_flame';
+      itemId?: never;
+    });
 
 export interface CampfirePurchaseState {
   embers: number;
@@ -133,7 +141,6 @@ export function buyCampfirePurchase(
   };
 
   if (purchase.kind === 'item') {
-    if (!purchase.itemId) throw new Error(`Campfire item purchase has no item id: ${purchase.id}`);
     pendingPrep.itemIds.push(purchase.itemId);
   } else if (purchase.kind === 'extra_starting_choice') {
     pendingPrep.extraStartingChoice = true;
