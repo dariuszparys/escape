@@ -48,6 +48,8 @@ export function makeCard(def: CardDef): Card {
 }
 
 export function primaryCardValue(card: Pick<CardDef, 'effects'>): number {
+  const damage = cardEffectAmount(card, 'damage');
+  if (damage > 0) return damage;
   return card.effects.reduce((sum, effect) => sum + effect.amount, 0);
 }
 

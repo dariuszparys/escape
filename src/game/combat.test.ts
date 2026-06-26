@@ -121,4 +121,46 @@ describe('resolveRound', () => {
     expect(result.enemy.hp).toBe(7);
     expect(result.log).toContain('Enemy takes 3 damage');
   });
+
+  test('gross player heal is reported even when enemy damage cancels it out', () => {
+    const result = resolveRound({
+      player: { id: 'player', name: 'Player', hp: 10, maxHp: 20, armor: 0, statuses: [] },
+      enemy: { id: 'enemy', name: 'Enemy', hp: 20, maxHp: 20, armor: 0, statuses: [] },
+      playerAction: { actor: 'player', kind: 'card', card: heal },
+      enemyAction: { actor: 'enemy', kind: 'card', card: strike },
+    });
+
+    expect(result.player.hp).toBe(9);
+    expect(result.playerHpChange).toEqual({ damage: 6, heal: 5 });
+  });
+
+  test('gross enemy damage and heal are both reported for mixed cards', () => {
+    const result = resolveRound({
+      player: { id: 'player', name: 'Player', hp: 20, maxHp: 20, armor: 0, statuses: [] },
+      enemy: { id: 'enemy', name: 'Enemy', hp: 10, maxHp: 20, armor: 0, statuses: [] },
+      playerAction: { actor: 'player', kind: 'none' },
+      enemyAction: { actor: 'enemy', kind: 'card', card: vampiricStrike },
+    });
+
+    expect(result.playerHpChange).toEqual({ damage: 4, heal: 0 });
+    expect(result.enemyHpChange).toEqual({ damage: 0, heal: 5 });
+  });
+
+  test('poison tick damage is included in gross damage', () => {
+    const poisoned = resolveRound({
+      player: { id: 'player', name: 'Player', hp: 20, maxHp: 20, armor: 0, statuses: [] },
+      enemy: { id: 'enemy', name: 'Enemy', hp: 20, maxHp: 20, armor: 0, statuses: [] },
+      playerAction: { actor: 'player', kind: 'card', card: poison },
+      enemyAction: { actor: 'enemy', kind: 'none' },
+    });
+
+    const ticked = resolveRound({
+      player: poisoned.player,
+      enemy: poisoned.enemy,
+      playerAction: { actor: 'player', kind: 'none' },
+      enemyAction: { actor: 'enemy', kind: 'none' },
+    });
+
+    expect(ticked.enemyHpChange.damage).toBe(2);
+  });
 });

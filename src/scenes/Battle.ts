@@ -7,7 +7,6 @@ import { CARD_H, CARD_W, makeCardBack, makeCardView } from '../gfx/cardview';
 import { createDeckPanel } from '../gfx/deckPanel';
 import { buildBattleRoundHistory, orderedBattleActions } from '../game/battleLog';
 import { ActiveStatusEffect, CombatAction, combatActionLabel, combatActionSpeed, resolveRound } from '../game/combat';
-import { hpChange } from '../game/combatFeedback';
 import { GameRng } from '../game/rng';
 import { awardEnemyGold } from '../game/rewards';
 import { getRun } from '../state';
@@ -469,8 +468,6 @@ export class BattleScene extends Phaser.Scene {
       run.removeItem(action.item.uid);
     }
 
-    const beforePlayerHp = run.hp;
-    const beforeEnemyHp = this.enemy.hp;
     const enemyTurn = this.enemyAction();
     const order = orderedBattleActions(playerAction, enemyTurn.action);
     const shown: Phaser.GameObjects.GameObject[] = [
@@ -501,8 +498,8 @@ export class BattleScene extends Phaser.Scene {
       enemyAction: enemyTurn.action,
     });
 
-    const enemyHpChange = hpChange(beforeEnemyHp, resolved.enemy.hp);
-    const playerHpChange = hpChange(beforePlayerHp, resolved.player.hp);
+    const enemyHpChange = resolved.enemyHpChange;
+    const playerHpChange = resolved.playerHpChange;
 
     run.hp = resolved.player.hp;
     this.enemy.hp = resolved.enemy.hp;

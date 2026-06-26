@@ -1,6 +1,7 @@
 import { PUNCH_DAMAGE } from '../config';
 import { Card, CardEffect, StatusEffectType } from '../data/cards';
 import { InventoryItem } from '../data/items';
+import { HpChange } from './combatFeedback';
 
 export interface ActiveStatusEffect {
   type: StatusEffectType;
@@ -37,6 +38,8 @@ export interface ResolveRoundResult {
   player: CombatantSnapshot;
   enemy: CombatantSnapshot;
   log: string[];
+  playerHpChange: HpChange;
+  enemyHpChange: HpChange;
 }
 
 interface MutableCombatant extends CombatantSnapshot {
@@ -167,12 +170,29 @@ export function resolveRound(input: ResolveRoundInput): ResolveRoundResult {
   const player = cloneCombatant(input.player);
   const enemy = cloneCombatant(input.enemy);
   const log: string[] = [];
+  const playerHpChange: HpChange = { damage: 0, heal: 0 };
+  const enemyHpChange: HpChange = { damage: 0, heal: 0 };
 
+  const trackHp = (combatant: MutableCombatant, before: number, isPlayer: boolean) => {
+    const delta = combatant.hp - before;
+    if (delta < 0) {
+      if (isPlayer) playerHpChange.damage += -delta;
+      else enemyHpChange.damage += -delta;
+    } else if (delta > 0) {
+      if (isPlayer) playerHpChange.heal += delta;
+      else enemyHpChange.heal += delta;
+    }
+  };
+
+  const playerHpBeforeStatus = player.hp;
+  const enemyHpBeforeStatus = enemy.hp;
   applyStartOfRoundStatuses(player, log);
   applyStartOfRoundStatuses(enemy, log);
+  trackHp(player, playerHpBeforeStatus, true);
+  trackHp(enemy, enemyHpBeforeStatus, false);
 
   if (player.hp <= 0 || enemy.hp <= 0) {
-    return { player, enemy, log };
+    return { player, enemy, log, playerHpChange, enemyHpChange };
   }
 
   const playerStunned = consumeStun(player);
@@ -204,7 +224,13 @@ export function resolveRound(input: ResolveRoundInput): ResolveRoundResult {
       continue;
     }
 
+    const actorIsPlayer = turn.actor.id === 'player';
+    const targetIsPlayer = turn.target.id === 'player';
+    const actorHpBefore = turn.actor.hp;
+    const targetHpBefore = turn.target.hp;
     const outcome = applyAction(turn.action, turn.actor, turn.target, log);
+    trackHp(turn.actor, actorHpBefore, actorIsPlayer);
+    trackHp(turn.target, targetHpBefore, targetIsPlayer);
     if (outcome === 'skip_target') {
       if (turn.action.actor === 'player') skipEnemyAction = true;
       else skipPlayerAction = true;
@@ -212,5 +238,5 @@ export function resolveRound(input: ResolveRoundInput): ResolveRoundResult {
   }
 
   const trim = ({ roundBlock: _roundBlock, ...combatant }: MutableCombatant): CombatantSnapshot => combatant;
-  return { player: trim(player), enemy: trim(enemy), log };
+  return { player: trim(player), enemy: trim(enemy), log, playerHpChange, enemyHpChange };
 }

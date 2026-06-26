@@ -42,7 +42,7 @@ export const ITEM_DEFS: InventoryItemDef[] = [
     amount: 5,
     usableInDungeon: false,
     usableInCombat: true,
-    description: 'Reduce the next 5 damage',
+    description: 'Gain 5 block this round',
   },
   {
     id: 'smoke_bomb',
