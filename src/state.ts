@@ -3,9 +3,16 @@ import { Card } from './data/cards';
 import { InventoryItem, makeItem } from './data/items';
 import { selectCombatHand } from './game/cardSelection';
 
+let nextRunId = 1;
+
+function createRunId(): string {
+  return `run-${Date.now()}-${nextRunId++}`;
+}
+
 /** Mutable state of the current run, shared across scenes. */
 export class RunState {
   seed: string;
+  runId: string;
   hp = PLAYER_MAX_HP;
   maxHp = PLAYER_MAX_HP;
   cardCollection: Card[] = [];
@@ -14,10 +21,14 @@ export class RunState {
   gold = 0;
   armor = 0; // each point = 1 flat damage reduction in battle
   depth = 1;
+  enemiesDefeated = 0;
+  startingCardChoices = 2;
+  scoutCharges = 0;
   bossDefeated = false;
 
-  constructor(seed = String(Math.random())) {
+  constructor(seed = String(Math.random()), runId = createRunId()) {
     this.seed = seed;
+    this.runId = runId;
   }
 
   get hand(): Card[] {
