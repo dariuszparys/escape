@@ -10,6 +10,8 @@ import { HudScene } from './scenes/Hud';
 import { EndScene } from './scenes/End';
 import { getRun } from './state';
 
+type DebugSetMeta = (next: Parameters<typeof setMeta>[0]) => ReturnType<typeof setMeta>;
+
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game',
@@ -29,7 +31,18 @@ const game = new Phaser.Game({
 });
 
 // handles for debugging / automated testing
-(window as unknown as { __game: Phaser.Game }).__game = game;
-(window as unknown as { __getRun: typeof getRun }).__getRun = getRun;
-(window as unknown as { __getMeta: typeof getMeta }).__getMeta = getMeta;
-(window as unknown as { __setMeta: typeof setMeta }).__setMeta = setMeta;
+const debugWindow = window as unknown as {
+  __game: Phaser.Game;
+  __getRun: typeof getRun;
+  __getMeta: typeof getMeta;
+  __setMeta: DebugSetMeta;
+};
+
+debugWindow.__game = game;
+debugWindow.__getRun = getRun;
+debugWindow.__getMeta = getMeta;
+debugWindow.__setMeta = (next) => {
+  const updated = setMeta(next);
+  game.events.emit('meta-update', updated);
+  return updated;
+};
