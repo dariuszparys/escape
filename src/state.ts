@@ -2,6 +2,10 @@ import { MAX_ARMOR, MAX_HAND, MAX_INVENTORY, PLAYER_MAX_HP } from './config';
 import { Card } from './data/cards';
 import { InventoryItem, makeItem } from './data/items';
 import { selectCombatHand } from './game/cardSelection';
+import {
+  DEFAULT_STARTING_CARD_CHOICES,
+  DEFAULT_STARTING_CARD_PICKS,
+} from './game/startingCards';
 
 let nextRunId = 1;
 
@@ -22,7 +26,9 @@ export class RunState {
   armor = 0; // each point = 1 flat damage reduction in battle
   depth = 1;
   enemiesDefeated = 0;
-  startingCardChoices = 2;
+  startingCardChoices = DEFAULT_STARTING_CARD_CHOICES;
+  startingCardPicks = DEFAULT_STARTING_CARD_PICKS;
+  startingCardsTaken = 0;
   scoutCharges = 0;
   bossDefeated = false;
 

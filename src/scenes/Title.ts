@@ -31,12 +31,13 @@ export class TitleScene extends Phaser.Scene {
     const lines = [
       'Descend 10 rooms. Slay the boss. Escape.',
       '',
+      'Choose two starting cards at the fire',
       'Move with WASD / arrow keys',
       'Walk into things to pick them up',
       'Beat enemies to steal their cards (max 5 in hand)',
-      'The enemy always holds one card more than you...',
+      'Most enemies match your hand size',
       '',
-      'In battle you can always Punch for 2 damage',
+      'In battle you can always Punch for 3 damage',
       'Press P in the dungeon to drink a potion',
     ];
     this.add

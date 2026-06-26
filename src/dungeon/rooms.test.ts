@@ -4,19 +4,19 @@ import { SequenceRng } from '../game/test-rng';
 
 describe('room generation', () => {
   test('rooms 2 through 8 use the MVP event thresholds without empty rooms', () => {
-    expect(rollRoomEvent(new SequenceRng([0.44]), 5)).toBe('encounter');
-    expect(rollRoomEvent(new SequenceRng([0.45]), 5)).toBe('chest');
-    expect(rollRoomEvent(new SequenceRng([0.69]), 5)).toBe('chest');
-    expect(rollRoomEvent(new SequenceRng([0.70]), 5)).toBe('potion');
+    expect(rollRoomEvent(new SequenceRng([0.34]), 5)).toBe('encounter');
+    expect(rollRoomEvent(new SequenceRng([0.35]), 5)).toBe('chest');
+    expect(rollRoomEvent(new SequenceRng([0.64]), 5)).toBe('chest');
+    expect(rollRoomEvent(new SequenceRng([0.65]), 5)).toBe('potion');
     expect(rollRoomEvent(new SequenceRng([0.89]), 5)).toBe('potion');
     expect(rollRoomEvent(new SequenceRng([0.90]), 5)).toBe('trap');
   });
 
   test('room 9 is biased toward rewards before the boss', () => {
-    expect(rollRoomEvent(new SequenceRng([0.34]), 9)).toBe('encounter');
-    expect(rollRoomEvent(new SequenceRng([0.35]), 9)).toBe('chest');
-    expect(rollRoomEvent(new SequenceRng([0.69]), 9)).toBe('chest');
-    expect(rollRoomEvent(new SequenceRng([0.70]), 9)).toBe('potion');
+    expect(rollRoomEvent(new SequenceRng([0.24]), 9)).toBe('encounter');
+    expect(rollRoomEvent(new SequenceRng([0.25]), 9)).toBe('chest');
+    expect(rollRoomEvent(new SequenceRng([0.64]), 9)).toBe('chest');
+    expect(rollRoomEvent(new SequenceRng([0.65]), 9)).toBe('potion');
     expect(rollRoomEvent(new SequenceRng([0.95]), 9)).toBe('trap');
   });
 

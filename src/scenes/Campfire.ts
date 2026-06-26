@@ -8,6 +8,12 @@ import {
 import type { CampfirePurchaseDef } from '../data/campfirePurchases';
 import { ITEM_DEFS } from '../data/items';
 import { applyPendingPrepToRun } from '../game/campfirePrep';
+import {
+  BONUS_STARTING_CARD_CHOICES,
+  BONUS_STARTING_CARD_PICKS,
+  DEFAULT_STARTING_CARD_CHOICES,
+  DEFAULT_STARTING_CARD_PICKS,
+} from '../game/startingCards';
 import { getMeta, setMeta } from '../meta';
 import { newRun } from '../state';
 
@@ -172,9 +178,11 @@ export class CampfireScene extends Phaser.Scene {
   private pendingPrepSummary(): string {
     const prep = getMeta().pendingPrep;
     const names = prep.itemIds.map((id) => ITEM_DEFS.find((item) => item.id === id)?.name ?? id);
+    const openingChoices = prep.extraStartingChoice ? BONUS_STARTING_CARD_CHOICES : DEFAULT_STARTING_CARD_CHOICES;
+    const openingPicks = prep.extraStartingChoice ? BONUS_STARTING_CARD_PICKS : DEFAULT_STARTING_CARD_PICKS;
     return [
       `Prepared supplies: ${names.length > 0 ? names.join(', ') : 'none'} (${names.length}/${MAX_INVENTORY})`,
-      `Starting choice: ${prep.extraStartingChoice ? 'three cards' : 'two cards'}`,
+      `Opening picks: ${openingPicks} of ${openingChoices}`,
       `Scout flame: ${prep.scoutFlame ? 'ready' : 'unlit'}`,
     ].join('\n');
   }

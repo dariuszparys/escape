@@ -9,15 +9,15 @@ describe('enemy generation', () => {
     expect(getEnemyTierForDepth(8)).toBe('strong');
   });
 
-  test('normal enemies hold player combat hand plus one card capped at six', () => {
+  test('normal enemies mirror the player hand size within the combat cap', () => {
     expect(spawnEnemy(new SequenceRng([0]), 2, 1).cards).toHaveLength(2);
-    expect(spawnEnemy(new SequenceRng([0]), 8, 5).cards).toHaveLength(6);
+    expect(spawnEnemy(new SequenceRng([0]), 8, 5).cards).toHaveLength(5);
   });
 
-  test('bosses have six cards and scheduled special mechanics', () => {
+  test('bosses have five cards and scheduled special mechanics', () => {
     const boss = spawnBoss(new SequenceRng([0]));
 
-    expect(boss.cards).toHaveLength(6);
+    expect(boss.cards).toHaveLength(5);
     expect(boss.def.boss).toBe(true);
     expect(boss.def.special?.interval).toBeGreaterThanOrEqual(2);
   });

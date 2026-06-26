@@ -35,18 +35,18 @@ export function awardFloorPotion(run: RunState): FloorPotionResult {
 
 export function rollChestReward(run: RunState, rng: GameRng, depth: number): RewardResult {
   const roll = rng.frac();
-  if (roll < 0.35) {
+  if (roll < 0.55) {
     const card = randomCard(rng, depth);
     run.addCard(card);
     return { kind: 'card', cardName: card.name };
   }
 
-  if (roll < 0.6) {
+  if (roll < 0.75) {
     const item = makeItem(randomItemIdForDepth(depth));
     return awardPotionItem(run, item);
   }
 
-  if (roll < 0.8) {
+  if (roll < 0.9) {
     if (run.addArmor()) return { kind: 'armor', amount: 1 };
     const amount = rng.between(8, 18);
     run.addGold(amount);

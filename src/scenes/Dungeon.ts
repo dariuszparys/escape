@@ -5,7 +5,7 @@ import {
 } from '../config';
 import { Card, makeCard, CARD_DEFS } from '../data/cards';
 import { EnemyInstance, spawnBoss, spawnEnemy } from '../data/enemies';
-import { InventoryItem, makeItem } from '../data/items';
+import { InventoryItem, makeItem, randomItemIdForDepth } from '../data/items';
 import { makeStartRoom, makeNextRoom, RoomData, type RoomEvent } from '../dungeon/rooms';
 import { makeCardView } from '../gfx/cardview';
 import { PhaserGameRng } from '../game/rng';
@@ -57,6 +57,11 @@ interface BuiltRoom {
   enemySprite: Phaser.GameObjects.Image | null;
 }
 
+interface NextRoomOption {
+  room: RoomData;
+  rngState: string;
+}
+
 export class DungeonScene extends Phaser.Scene {
   private rng!: Phaser.Math.RandomDataGenerator;
   private gameRng!: PhaserGameRng;
@@ -71,6 +76,7 @@ export class DungeonScene extends Phaser.Scene {
   private battleActive = false;
   private invulnUntil = 0;
   private lastHintAt = 0;
+  private nextRoomOptions: Partial<Record<Dir, NextRoomOption>> = {};
   private exitHatch: { x: number; y: number; img: Phaser.GameObjects.Image } | null = null;
   private scoutRevealText: Phaser.GameObjects.Text | null = null;
   private itemSwapPrompt: Phaser.GameObjects.Container | null = null;
@@ -93,6 +99,7 @@ export class DungeonScene extends Phaser.Scene {
     this.room = makeStartRoom();
     this.origin = { x: 0, y: 0 };
     this.built = this.buildRoom(this.room, this.origin);
+    this.primeNextRoomOptions();
 
     const spawn = this.cellXY(7, 7);
     this.player = this.physics.add.sprite(spawn.x, spawn.y, 'hero_down_0');
@@ -112,6 +119,7 @@ export class DungeonScene extends Phaser.Scene {
 
     this.scene.launch('Hud');
     this.hud();
+    this.tryRevealScoutOptions();
 
     this.game.events.off('battle-end');
     this.game.events.on('battle-end', (won: boolean) => this.onBattleEnd(won));
@@ -157,6 +165,48 @@ export class DungeonScene extends Phaser.Scene {
     this.tweens.killTweensOf(this.scoutRevealText);
     this.scoutRevealText.destroy();
     this.scoutRevealText = null;
+  }
+
+  private branchSeed(dir: Dir): string {
+    const run = getRun();
+    return [run.seed, this.room.depth, this.origin.x, this.origin.y, dir].join(':');
+  }
+
+  private primeNextRoomOptions(): void {
+    this.nextRoomOptions = {};
+    if (this.room.openDoors.length === 0) return;
+
+    const nextDepth = this.room.depth + 1;
+    for (const dir of this.room.openDoors) {
+      const rng = new Phaser.Math.RandomDataGenerator([this.branchSeed(dir)]);
+      const option = makeNextRoom(new PhaserGameRng(rng), nextDepth, dir);
+      this.nextRoomOptions[dir] = { room: option, rngState: rng.state() };
+    }
+  }
+
+  private tryRevealScoutOptions(): void {
+    const run = getRun();
+    if (run.scoutCharges <= 0 || this.room.openDoors.length === 0 || this.scoutRevealText) return;
+
+    const lines = this.room.openDoors.map((dir) => {
+      const option = this.nextRoomOptions[dir];
+      const label = option ? ROOM_EVENT_LABEL[option.room.event] : 'unknown';
+      return `${dir}: ${label}`;
+    });
+
+    this.scoutRevealText = this.add.text(this.origin.x + ROOM_W / 2, this.origin.y + 42, `Scout Flame\n${lines.join('   ')}`, {
+      fontFamily: 'monospace',
+      fontSize: '15px',
+      fontStyle: 'bold',
+      color: '#f1c40f',
+      align: 'center',
+      stroke: '#16121e',
+      strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(60);
+    this.built.objs.push(this.scoutRevealText);
+
+    run.scoutCharges--;
+    this.hud();
   }
 
   // ------------------------------------------------------------ room construction
@@ -219,7 +269,7 @@ export class DungeonScene extends Phaser.Scene {
       case 'start': {
         const run = getRun();
         const cardIds = startingCardIdsForChoiceCount(run.startingCardChoices);
-        const cols = cardIds.length === 2 ? [4, 10] : [3, 7, 11];
+        const cols = cardIds.length === 4 ? [2, 5, 9, 12] : [3, 7, 11];
 
         for (const [i, cardId] of cardIds.entries()) {
           const def = CARD_DEFS.find((candidate) => candidate.id === cardId);
@@ -238,7 +288,7 @@ export class DungeonScene extends Phaser.Scene {
         break;
       }
       case 'potion': {
-        this.spawnFloorPotion(center.x, center.y, makeItem('small_potion'), built);
+        this.spawnFloorPotion(center.x, center.y, makeItem(randomItemIdForDepth(room.depth)), built);
         break;
       }
       case 'chest': {
@@ -418,14 +468,12 @@ export class DungeonScene extends Phaser.Scene {
     this.transitioning = true;
     this.player.setVelocity(0, 0);
     this.player.body.enable = false;
+    this.clearScoutRevealText();
 
     const run = getRun();
     const nextDepth = run.depth + 1;
-    const nextRoom = makeNextRoom(this.gameRng, nextDepth, dir);
-    const scoutMessage = run.scoutCharges > 0
-      ? `Scout Flame: ${ROOM_EVENT_LABEL[nextRoom.event]} ahead`
-      : null;
-    if (scoutMessage) run.scoutCharges--;
+    const nextRoomOption = this.nextRoomOptions[dir];
+    const nextRoom = nextRoomOption?.room ?? makeNextRoom(this.gameRng, nextDepth, dir);
     const vec = DIR_VEC[dir];
     const newOrigin = {
       x: this.origin.x + vec.x * ROOM_W,
@@ -468,16 +516,16 @@ export class DungeonScene extends Phaser.Scene {
         this.attachWalls();
         this.room = nextRoom;
         this.origin = newOrigin;
+        if (nextRoomOption) {
+          this.rng.state(nextRoomOption.rngState);
+        }
         run.depth = nextDepth;
+        this.primeNextRoomOptions();
         this.player.anims.stop();
         this.player.body.enable = true;
         this.player.body.reset(target.x, target.y);
         this.transitioning = false;
         this.hud();
-        if (scoutMessage) {
-          this.clearScoutRevealText();
-          this.scoutRevealText = this.floatText(target.x, target.y - 50, scoutMessage, '#f1c40f');
-        }
         this.onRoomEntered();
       },
     });
@@ -502,12 +550,14 @@ export class DungeonScene extends Phaser.Scene {
       });
     } else if (room.event === 'trap') {
       this.floatText(this.player.x, this.player.y - 50, 'Watch your step!', '#ff9944');
+      this.tryRevealScoutOptions();
+    } else {
+      this.tryRevealScoutOptions();
     }
   }
 
   private startBattle(): void {
     if (!this.built.enemy) return;
-    this.clearScoutRevealText();
     this.battleActive = true;
     this.player.setVelocity(0, 0);
     this.scene.launch('Battle', { enemy: this.built.enemy, rng: this.gameRng });
@@ -534,6 +584,8 @@ export class DungeonScene extends Phaser.Scene {
       this.built.objs.push(img);
       this.exitHatch = { x: c.x, y: c.y, img };
       this.floatText(c.x, c.y - 60, 'The way out opens!', '#f1c40f');
+    } else {
+      this.tryRevealScoutOptions();
     }
     this.hud();
   }
@@ -591,10 +643,11 @@ export class DungeonScene extends Phaser.Scene {
     // doors
     for (const door of this.built.doors) {
       if (!door.rect.contains(px, py)) continue;
-      if (this.room.event === 'start' && run.cardCollection.length === 0) {
+      if (this.room.event === 'start' && run.startingCardsTaken < run.startingCardPicks) {
         if (time > this.lastHintAt + 900) {
           this.lastHintAt = time;
-          this.floatText(px, py - 50, 'Choose a card first!', '#ff9944');
+          const remaining = run.startingCardPicks - run.startingCardsTaken;
+          this.floatText(px, py - 50, `Choose ${remaining} more card${remaining === 1 ? '' : 's'}!`, '#ff9944');
         }
         const c = this.cellXY(7, 5);
         const away = new Phaser.Math.Vector2(c.x - px, c.y - py).normalize().scale(60);
@@ -611,16 +664,30 @@ export class DungeonScene extends Phaser.Scene {
       if (Phaser.Math.Distance.Between(px, py, pick.x, pick.y) > 46) continue;
       pick.taken = true;
       run.addCard(pick.card);
+      run.startingCardsTaken++;
       this.floatText(pick.x, pick.y - 40, `Took ${pick.card.name}!`, '#f1c40f');
-      for (const other of this.built.cardPicks) {
-        other.taken = true;
-        this.tweens.add({
-          targets: other.view,
-          alpha: 0,
-          y: (other === pick ? '-=40' : '+=10'),
-          duration: 350,
-          onComplete: () => other.view.destroy(),
-        });
+      this.tweens.add({
+        targets: pick.view,
+        alpha: 0,
+        y: '-=40',
+        duration: 350,
+        onComplete: () => pick.view.destroy(),
+      });
+      const remaining = Math.max(0, run.startingCardPicks - run.startingCardsTaken);
+      if (remaining === 0) {
+        for (const other of this.built.cardPicks) {
+          if (other.taken) continue;
+          other.taken = true;
+          this.tweens.add({
+            targets: other.view,
+            alpha: 0,
+            y: '+=10',
+            duration: 350,
+            onComplete: () => other.view.destroy(),
+          });
+        }
+      } else {
+        this.floatText(pick.x, pick.y - 72, `Choose ${remaining} more`, '#5fe07a');
       }
       this.hud();
     }

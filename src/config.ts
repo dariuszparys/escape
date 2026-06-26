@@ -11,10 +11,10 @@ export const GAME_H = ROOM_H + HUD_H; // 640
 export const MAX_DEPTH = 10;
 export const MAX_HAND = 5;
 export const MAX_INVENTORY = 3;
-export const PLAYER_MAX_HP = 30;
+export const PLAYER_MAX_HP = 34;
 export const POTION_HEAL = 8;
-export const TRAP_DAMAGE = 4;
-export const PUNCH_DAMAGE = 2; // innate attack, always available in battle
+export const TRAP_DAMAGE = 3;
+export const PUNCH_DAMAGE = 3; // innate attack, always available in battle
 export const MAX_ARMOR = 3;
 
 export const PLAYER_SPEED = 210;

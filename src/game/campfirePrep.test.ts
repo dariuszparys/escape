@@ -25,7 +25,9 @@ describe('applyPendingPrepToRun', () => {
       scoutFlame: true,
     });
 
-    expect(run.startingCardChoices).toBe(3);
+    expect(run.startingCardChoices).toBe(4);
+    expect(run.startingCardPicks).toBe(3);
+    expect(run.startingCardsTaken).toBe(0);
     expect(run.scoutCharges).toBe(1);
   });
 });

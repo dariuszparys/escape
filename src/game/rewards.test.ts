@@ -85,7 +85,7 @@ describe('rewards', () => {
     run.addItem(makeItem('bomb'));
     run.addItem(makeItem('smoke_bomb'));
 
-    const result = rollChestReward(run, new SequenceRng([0.4]), 5);
+    const result = rollChestReward(run, new SequenceRng([0.6]), 5);
 
     expect(result.kind).toBe('inventory_full');
     if (result.kind !== 'inventory_full') throw new Error(`Unexpected result: ${result.kind}`);

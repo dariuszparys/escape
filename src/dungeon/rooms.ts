@@ -16,8 +16,8 @@ export interface RoomData {
 
 export function rollRoomEvent(rng: GameRng, depth: number): RoomEvent {
   const table: [RoomEvent, number][] = depth === MAX_DEPTH - 1
-    ? [['encounter', 35], ['chest', 35], ['potion', 25], ['trap', 5]]
-    : [['encounter', 45], ['chest', 25], ['potion', 20], ['trap', 10]];
+    ? [['encounter', 25], ['chest', 40], ['potion', 30], ['trap', 5]]
+    : [['encounter', 35], ['chest', 30], ['potion', 25], ['trap', 10]];
 
   let r = rng.frac() * 100;
   for (const [event, w] of table) {

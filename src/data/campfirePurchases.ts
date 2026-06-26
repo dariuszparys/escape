@@ -71,16 +71,16 @@ export const CAMPFIRE_PURCHASES: CampfirePurchaseDef[] = [
   },
   {
     id: 'extra_starting_choice',
-    name: 'Extra Starting Choice',
-    cost: 8,
-    description: 'The starting room offers three cards instead of two.',
+    name: 'Extra Opening Pick',
+    cost: 10,
+    description: 'Choose three opening cards instead of two.',
     kind: 'extra_starting_choice',
   },
   {
     id: 'scout_flame',
     name: 'Scout Flame',
     cost: 6,
-    description: 'Reveal the next generated room event once.',
+    description: 'Reveal the next room outcome behind each door once.',
     kind: 'scout_flame',
   },
 ];
