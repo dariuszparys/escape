@@ -1,4 +1,3 @@
-import { POTION_HEAL } from '../config';
 import { randomCard } from '../data/cards';
 import { InventoryItem, makeItem, randomItemIdForDepth } from '../data/items';
 import { RunState } from '../state';
@@ -9,20 +8,29 @@ export type RewardResult =
   | { kind: 'item'; item: InventoryItem }
   | { kind: 'armor'; amount: number }
   | { kind: 'gold'; amount: number }
-  | { kind: 'heal'; amount: number };
+  | { kind: 'heal'; amount: number }
+  | { kind: 'inventory_full'; item: InventoryItem };
 
 export type FloorPotionResult =
   | { kind: 'item'; item: InventoryItem }
-  | { kind: 'heal'; amount: number };
+  | { kind: 'heal'; amount: number }
+  | { kind: 'inventory_full'; item: InventoryItem };
 
-export function awardFloorPotion(run: RunState): FloorPotionResult {
-  const item = makeItem('small_potion');
+export function awardPotionItem(run: RunState, item: InventoryItem): FloorPotionResult {
   if (run.addItem(item)) {
     return { kind: 'item', item };
   }
 
-  run.heal(POTION_HEAL);
-  return { kind: 'heal', amount: POTION_HEAL };
+  if (run.hp < run.maxHp) {
+    run.heal(item.amount);
+    return { kind: 'heal', amount: item.amount };
+  }
+
+  return { kind: 'inventory_full', item };
+}
+
+export function awardFloorPotion(run: RunState): FloorPotionResult {
+  return awardPotionItem(run, makeItem('small_potion'));
 }
 
 export function rollChestReward(run: RunState, rng: GameRng, depth: number): RewardResult {
@@ -35,9 +43,7 @@ export function rollChestReward(run: RunState, rng: GameRng, depth: number): Rew
 
   if (roll < 0.6) {
     const item = makeItem(randomItemIdForDepth(depth));
-    if (run.addItem(item)) return { kind: 'item', item };
-    run.heal(item.amount);
-    return { kind: 'heal', amount: item.amount };
+    return awardPotionItem(run, item);
   }
 
   if (roll < 0.8) {

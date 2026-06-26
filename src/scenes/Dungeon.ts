@@ -5,10 +5,11 @@ import {
 } from '../config';
 import { Card, makeCard, CARD_DEFS } from '../data/cards';
 import { EnemyInstance, spawnBoss, spawnEnemy } from '../data/enemies';
+import { InventoryItem, makeItem } from '../data/items';
 import { makeStartRoom, makeNextRoom, RoomData, type RoomEvent } from '../dungeon/rooms';
 import { makeCardView } from '../gfx/cardview';
 import { PhaserGameRng } from '../game/rng';
-import { awardFloorPotion, rollChestReward } from '../game/rewards';
+import { awardPotionItem, rollChestReward } from '../game/rewards';
 import { startingCardIdsForChoiceCount } from '../game/startingCards';
 import { getRun } from '../state';
 
@@ -49,7 +50,7 @@ interface BuiltRoom {
   walls: Phaser.Physics.Arcade.StaticGroup;
   doors: { dir: Dir; rect: Phaser.Geom.Rectangle }[];
   spikeRects: Phaser.Geom.Rectangle[];
-  potionAt: { x: number; y: number; img: Phaser.GameObjects.Image } | null;
+  potionAt: { x: number; y: number; img: Phaser.GameObjects.Image; item: InventoryItem } | null;
   chest: { x: number; y: number; img: Phaser.GameObjects.Image; opened: boolean } | null;
   cardPicks: CardPickup[];
   enemy: EnemyInstance | null;
@@ -72,6 +73,9 @@ export class DungeonScene extends Phaser.Scene {
   private lastHintAt = 0;
   private exitHatch: { x: number; y: number; img: Phaser.GameObjects.Image } | null = null;
   private scoutRevealText: Phaser.GameObjects.Text | null = null;
+  private itemSwapPrompt: Phaser.GameObjects.Container | null = null;
+  private itemSwapKeyHandlers: { event: string; handler: (event: KeyboardEvent) => void }[] = [];
+  private ignoredPotionUid: number | null = null;
 
   constructor() {
     super('Dungeon');
@@ -112,6 +116,7 @@ export class DungeonScene extends Phaser.Scene {
     this.game.events.off('battle-end');
     this.game.events.on('battle-end', (won: boolean) => this.onBattleEnd(won));
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.closeItemSwapPrompt();
       this.game.events.off('battle-end');
     });
   }
@@ -233,9 +238,7 @@ export class DungeonScene extends Phaser.Scene {
         break;
       }
       case 'potion': {
-        const img = this.add.image(center.x, center.y, 'potion').setScale(3).setDepth(2);
-        objs.push(img);
-        built.potionAt = { x: center.x, y: center.y, img };
+        this.spawnFloorPotion(center.x, center.y, makeItem('small_potion'), built);
         break;
       }
       case 'chest': {
@@ -285,6 +288,127 @@ export class DungeonScene extends Phaser.Scene {
     for (const o of b.objs) o.destroy();
     b.walls.clear(true, true);
     b.walls.destroy();
+  }
+
+  private spawnFloorPotion(
+    x: number,
+    y: number,
+    item: InventoryItem,
+    built: BuiltRoom = this.built,
+  ): void {
+    if (built.potionAt) built.potionAt.img.destroy();
+    const img = this.add.image(x, y, 'potion').setScale(3).setDepth(2);
+    built.objs.push(img);
+    built.potionAt = { x, y, img, item };
+  }
+
+  private clearFloorPotion(): void {
+    if (!this.built.potionAt) return;
+    this.built.potionAt.img.destroy();
+    this.built.potionAt = null;
+    this.ignoredPotionUid = null;
+  }
+
+  private closeItemSwapPrompt(): void {
+    for (const { event, handler } of this.itemSwapKeyHandlers) {
+      this.input.keyboard?.off(event, handler);
+    }
+    this.itemSwapKeyHandlers = [];
+    this.itemSwapPrompt?.destroy();
+    this.itemSwapPrompt = null;
+  }
+
+  private onSwapKey(event: string, handler: (event: KeyboardEvent) => void): void {
+    this.input.keyboard?.on(event, handler);
+    this.itemSwapKeyHandlers.push({ event, handler });
+  }
+
+  private leaveItemSwapPrompt(item: InventoryItem): void {
+    this.ignoredPotionUid = item.uid;
+    this.closeItemSwapPrompt();
+  }
+
+  private showItemSwapPrompt(item: InventoryItem, x: number, y: number): void {
+    if (this.itemSwapPrompt) return;
+
+    this.player.setVelocity(0, 0);
+    this.player.anims.stop();
+    const run = getRun();
+    const inventory = [...run.inventory];
+    const cx = this.origin.x + ROOM_W / 2;
+    const cy = this.origin.y + ROOM_H / 2;
+    const prompt = this.add.container(cx, cy).setDepth(200);
+    this.itemSwapPrompt = prompt;
+
+    const bg = this.add.graphics();
+    bg.fillStyle(0x111019, 0.96);
+    bg.fillRoundedRect(-224, -136, 448, 272, 6);
+    bg.lineStyle(2, 0xf1c40f, 0.85);
+    bg.strokeRoundedRect(-224, -136, 448, 272, 6);
+    prompt.add(bg);
+
+    prompt.add(this.add.text(0, -106, 'Inventory full', {
+      fontFamily: 'monospace',
+      fontSize: '22px',
+      fontStyle: 'bold',
+      color: '#f1c40f',
+    }).setOrigin(0.5));
+    prompt.add(this.add.text(0, -76, `Replace one item with ${item.name}?`, {
+      fontFamily: 'monospace',
+      fontSize: '13px',
+      color: '#f5edd8',
+      fixedWidth: 380,
+      align: 'center',
+      wordWrap: { width: 380, useAdvancedWrap: true },
+    }).setOrigin(0.5));
+
+    const replaceWith = (held: InventoryItem): void => {
+      if (!run.replaceItem(held.uid, item)) return;
+      this.clearFloorPotion();
+      this.closeItemSwapPrompt();
+      this.floatText(x, y - 50, `Dropped ${held.name}`, '#f1c40f');
+      this.floatText(x, y - 76, `Took ${item.name}`, '#5fe07a');
+      this.hud();
+    };
+
+    for (const [index, held] of inventory.entries()) {
+      const button = this.add.text(0, -34 + index * 42, `[${index + 1}] Drop ${held.name}`, {
+        fontFamily: 'monospace',
+        fontSize: '14px',
+        fontStyle: 'bold',
+        color: '#f5edd8',
+        backgroundColor: '#221f1e',
+        padding: { x: 12, y: 7 },
+        fixedWidth: 336,
+        align: 'center',
+      }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+      button.on('pointerover', () => button.setColor('#ffe48a'));
+      button.on('pointerout', () => button.setColor('#f5edd8'));
+      button.on('pointerdown', () => replaceWith(held));
+      prompt.add(button);
+    }
+
+    this.onSwapKey('keydown', (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        this.leaveItemSwapPrompt(item);
+        return;
+      }
+      const index = Number(event.key) - 1;
+      const held = inventory[index];
+      if (held) replaceWith(held);
+    });
+
+    const cancel = this.add.text(0, 100, '[ESC] Leave potion', {
+      fontFamily: 'monospace',
+      fontSize: '13px',
+      color: '#b8b0c8',
+      backgroundColor: '#17151c',
+      padding: { x: 12, y: 6 },
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    cancel.on('pointerover', () => cancel.setColor('#f5edd8'));
+    cancel.on('pointerout', () => cancel.setColor('#b8b0c8'));
+    cancel.on('pointerdown', () => this.leaveItemSwapPrompt(item));
+    prompt.add(cancel);
   }
 
   // ------------------------------------------------------------ transitions
@@ -419,6 +543,10 @@ export class DungeonScene extends Phaser.Scene {
   update(time: number): void {
     if (this.transitioning || this.battleActive) return;
     const run = getRun();
+    if (this.itemSwapPrompt) {
+      this.player.setVelocity(0, 0);
+      return;
+    }
 
     // movement
     const left = this.keys.left.isDown || this.keys.a.isDown;
@@ -498,13 +626,23 @@ export class DungeonScene extends Phaser.Scene {
     }
 
     // potion on the floor
-    if (this.built.potionAt && Phaser.Math.Distance.Between(px, py, this.built.potionAt.x, this.built.potionAt.y) < 36) {
-      this.built.potionAt.img.destroy();
-      this.built.potionAt = null;
-      const result = awardFloorPotion(run);
-      const msg = result.kind === 'heal' ? `+${result.amount} HP` : `+${result.item.name}`;
-      this.floatText(px, py - 50, msg, '#5fe07a');
-      this.hud();
+    if (this.built.potionAt) {
+      const potion = this.built.potionAt;
+      const distance = Phaser.Math.Distance.Between(px, py, potion.x, potion.y);
+      if (this.ignoredPotionUid === potion.item.uid && distance >= 48) {
+        this.ignoredPotionUid = null;
+      }
+      if (this.ignoredPotionUid !== potion.item.uid && distance < 36) {
+        const result = awardPotionItem(run, potion.item);
+        if (result.kind === 'inventory_full') {
+          this.showItemSwapPrompt(result.item, potion.x, potion.y);
+        } else {
+          this.clearFloorPotion();
+          const msg = result.kind === 'heal' ? `+${result.amount} HP` : `+${result.item.name}`;
+          this.floatText(px, py - 50, msg, '#5fe07a');
+          this.hud();
+        }
+      }
     }
 
     // chest
@@ -549,7 +687,11 @@ export class DungeonScene extends Phaser.Scene {
       : result.kind === 'item' ? `Found ${result.item.name}!`
         : result.kind === 'armor' ? '+1 Armor'
           : result.kind === 'gold' ? `+${result.amount} Gold`
-            : `+${result.amount} HP`;
+            : result.kind === 'heal' ? `+${result.amount} HP`
+              : `${result.item.name} dropped!`;
+    if (result.kind === 'inventory_full') {
+      this.spawnFloorPotion(x, y + TILE, result.item);
+    }
     this.floatText(x, y - 50, message, result.kind === 'gold' ? '#f1c40f' : '#5fe07a');
     this.hud();
   }

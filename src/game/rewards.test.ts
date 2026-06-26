@@ -37,6 +37,19 @@ describe('rewards', () => {
     expect(run.inventory.map((item) => item.id)).toEqual(['small_potion', 'bomb', 'smoke_bomb']);
   });
 
+  test('inventory can replace an item without changing capacity', () => {
+    const run = new RunState('seed');
+    run.addItem(makeItem('small_potion'));
+    run.addItem(makeItem('bomb'));
+    run.addItem(makeItem('smoke_bomb'));
+    const bomb = run.inventory[1];
+
+    expect(run.replaceItem(bomb.uid, makeItem('large_potion'))).toBe(true);
+
+    expect(run.inventory).toHaveLength(3);
+    expect(run.inventory.map((item) => item.id)).toEqual(['small_potion', 'large_potion', 'smoke_bomb']);
+  });
+
   test('floor potion heals immediately when inventory is full', () => {
     const run = new RunState('seed');
     run.hp = 20;
@@ -49,6 +62,36 @@ describe('rewards', () => {
     expect(result.kind).toBe('heal');
     expect(run.hp).toBe(28);
     expect(run.inventory).toHaveLength(3);
+  });
+
+  test('floor potion waits for a replacement when inventory and health are full', () => {
+    const run = new RunState('seed');
+    run.addItem(makeItem('small_potion'));
+    run.addItem(makeItem('bomb'));
+    run.addItem(makeItem('smoke_bomb'));
+
+    const result = awardFloorPotion(run);
+
+    expect(result.kind).toBe('inventory_full');
+    if (result.kind !== 'inventory_full') throw new Error(`Unexpected result: ${result.kind}`);
+    expect(result.item.id).toBe('small_potion');
+    expect(run.hp).toBe(run.maxHp);
+    expect(run.inventory.map((item) => item.id)).toEqual(['small_potion', 'bomb', 'smoke_bomb']);
+  });
+
+  test('chest potion waits for a replacement when inventory and health are full', () => {
+    const run = new RunState('seed');
+    run.addItem(makeItem('small_potion'));
+    run.addItem(makeItem('bomb'));
+    run.addItem(makeItem('smoke_bomb'));
+
+    const result = rollChestReward(run, new SequenceRng([0.4]), 5);
+
+    expect(result.kind).toBe('inventory_full');
+    if (result.kind !== 'inventory_full') throw new Error(`Unexpected result: ${result.kind}`);
+    expect(result.item.id).toBe('small_potion');
+    expect(run.hp).toBe(run.maxHp);
+    expect(run.inventory.map((item) => item.id)).toEqual(['small_potion', 'bomb', 'smoke_bomb']);
   });
 
   test('chest can award deterministic gold', () => {

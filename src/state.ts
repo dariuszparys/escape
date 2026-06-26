@@ -81,6 +81,13 @@ export class RunState {
     return item;
   }
 
+  replaceItem(uid: number, item: InventoryItem): boolean {
+    const index = this.inventory.findIndex((candidate) => candidate.uid === uid);
+    if (index < 0) return false;
+    this.inventory[index] = item;
+    return true;
+  }
+
   firstUsablePotion(): InventoryItem | null {
     return this.inventory.find((item) => item.kind === 'heal' && item.usableInDungeon) ?? null;
   }
