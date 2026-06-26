@@ -1,7 +1,15 @@
 import Phaser from 'phaser';
 import {
-  Dir, DIR_VEC, GAME_H, PLAYER_SPEED, ROOM_COLS, ROOM_H, ROOM_ROWS, ROOM_W,
-  TILE, TRAP_DAMAGE,
+  Dir,
+  DIR_VEC,
+  GAME_H,
+  PLAYER_SPEED,
+  ROOM_COLS,
+  ROOM_H,
+  ROOM_ROWS,
+  ROOM_W,
+  TILE,
+  TRAP_DAMAGE,
 } from '../config';
 import { Card, makeCard, CARD_DEFS } from '../data/cards';
 import { EnemyInstance, spawnBoss, spawnEnemy } from '../data/enemies';
@@ -112,9 +120,16 @@ export class DungeonScene extends Phaser.Scene {
 
     const kb = this.input.keyboard!;
     this.keys = {
-      up: kb.addKey('UP'), down: kb.addKey('DOWN'), left: kb.addKey('LEFT'), right: kb.addKey('RIGHT'),
-      w: kb.addKey('W'), s: kb.addKey('S'), a: kb.addKey('A'), d: kb.addKey('D'),
-      p: kb.addKey('P'), c: kb.addKey('C'),
+      up: kb.addKey('UP'),
+      down: kb.addKey('DOWN'),
+      left: kb.addKey('LEFT'),
+      right: kb.addKey('RIGHT'),
+      w: kb.addKey('W'),
+      s: kb.addKey('S'),
+      a: kb.addKey('A'),
+      d: kb.addKey('D'),
+      p: kb.addKey('P'),
+      c: kb.addKey('C'),
     };
 
     this.cameras.main.setScroll(this.origin.x, this.origin.y);
@@ -148,13 +163,21 @@ export class DungeonScene extends Phaser.Scene {
   private floatText(x: number, y: number, msg: string, color = '#f5edd8'): Phaser.GameObjects.Text {
     const t = this.add
       .text(x, y, msg, {
-        fontFamily: 'monospace', fontSize: '16px', fontStyle: 'bold', color,
-        stroke: '#16121e', strokeThickness: 4,
+        fontFamily: 'monospace',
+        fontSize: '16px',
+        fontStyle: 'bold',
+        color,
+        stroke: '#16121e',
+        strokeThickness: 4,
       })
       .setOrigin(0.5)
       .setDepth(50);
     this.tweens.add({
-      targets: t, y: y - 44, alpha: 0, duration: 1100, ease: 'Cubic.easeOut',
+      targets: t,
+      y: y - 44,
+      alpha: 0,
+      duration: 1100,
+      ease: 'Cubic.easeOut',
       onComplete: () => {
         if (this.scoutRevealText === t) this.scoutRevealText = null;
         t.destroy();
@@ -220,15 +243,18 @@ export class DungeonScene extends Phaser.Scene {
       return `${dir}: ${label}`;
     });
 
-    this.scoutRevealText = this.add.text(this.origin.x + ROOM_W / 2, this.origin.y + 42, `Scout Flame\n${lines.join('   ')}`, {
-      fontFamily: 'monospace',
-      fontSize: '15px',
-      fontStyle: 'bold',
-      color: '#f1c40f',
-      align: 'center',
-      stroke: '#16121e',
-      strokeThickness: 4,
-    }).setOrigin(0.5).setDepth(60);
+    this.scoutRevealText = this.add
+      .text(this.origin.x + ROOM_W / 2, this.origin.y + 42, `Scout Flame\n${lines.join('   ')}`, {
+        fontFamily: 'monospace',
+        fontSize: '15px',
+        fontStyle: 'bold',
+        color: '#f1c40f',
+        align: 'center',
+        stroke: '#16121e',
+        strokeThickness: 4,
+      })
+      .setOrigin(0.5)
+      .setDepth(60);
     this.built.objs.push(this.scoutRevealText);
 
     run.scoutCharges--;
@@ -264,7 +290,10 @@ export class DungeonScene extends Phaser.Scene {
         const dir = doorCells.get(`${col},${row}`);
         if (dir && room.openDoors.includes(dir)) {
           objs.push(this.add.image(x, y, 'door_open').setScale(3).setDepth(0));
-          doors.push({ dir, rect: new Phaser.Geom.Rectangle(x - TILE / 2, y - TILE / 2, TILE, TILE) });
+          doors.push({
+            dir,
+            rect: new Phaser.Geom.Rectangle(x - TILE / 2, y - TILE / 2, TILE, TILE),
+          });
           continue;
         }
         if (dir && room.blockedDoor === dir) {
@@ -280,7 +309,9 @@ export class DungeonScene extends Phaser.Scene {
     }
 
     const built: BuiltRoom = {
-      objs, walls, doors,
+      objs,
+      walls,
+      doors,
       spikeRects: [],
       potionAt: null,
       chest: null,
@@ -305,8 +336,13 @@ export class DungeonScene extends Phaser.Scene {
           const view = makeCardView(this, card, pos.x, pos.y, 0.62);
           view.setDepth(5);
           this.tweens.add({
-            targets: view, y: pos.y - 8, duration: 800, yoyo: true, repeat: -1,
-            ease: 'Sine.easeInOut', delay: i * 250,
+            targets: view,
+            y: pos.y - 8,
+            duration: 800,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut',
+            delay: i * 250,
           });
           objs.push(view);
           built.cardPicks.push({ card, view, x: pos.x, y: pos.y, taken: false });
@@ -314,7 +350,12 @@ export class DungeonScene extends Phaser.Scene {
         break;
       }
       case 'potion': {
-        this.spawnFloorPotion(center.x, center.y, makeItem(randomItemIdForDepth(room.depth)), built);
+        this.spawnFloorPotion(
+          center.x,
+          center.y,
+          makeItem(randomItemIdForDepth(room.depth)),
+          built,
+        );
         break;
       }
       case 'chest': {
@@ -336,16 +377,36 @@ export class DungeonScene extends Phaser.Scene {
       }
       case 'encounter': {
         built.enemy = spawnEnemy(this.gameRng, room.depth, Math.max(getRun().combatHand.length, 1));
-        const img = this.add.image(center.x, center.y, built.enemy.def.texture).setScale(4).setDepth(5);
-        this.tweens.add({ targets: img, y: center.y - 6, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        const img = this.add
+          .image(center.x, center.y, built.enemy.def.texture)
+          .setScale(4)
+          .setDepth(5);
+        this.tweens.add({
+          targets: img,
+          y: center.y - 6,
+          duration: 600,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
         objs.push(img);
         built.enemySprite = img;
         break;
       }
       case 'boss': {
         built.enemy = spawnBoss(this.gameRng);
-        const img = this.add.image(center.x, center.y - 10, built.enemy.def.texture).setScale(4.5).setDepth(5);
-        this.tweens.add({ targets: img, y: center.y - 18, duration: 800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        const img = this.add
+          .image(center.x, center.y - 10, built.enemy.def.texture)
+          .setScale(4.5)
+          .setDepth(5);
+        this.tweens.add({
+          targets: img,
+          y: center.y - 18,
+          duration: 800,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
         objs.push(img);
         built.enemySprite = img;
         break;
@@ -423,20 +484,28 @@ export class DungeonScene extends Phaser.Scene {
     bg.strokeRoundedRect(-224, -136, 448, 272, 6);
     prompt.add(bg);
 
-    prompt.add(this.add.text(0, -106, 'Inventory full', {
-      fontFamily: 'monospace',
-      fontSize: '22px',
-      fontStyle: 'bold',
-      color: '#f1c40f',
-    }).setOrigin(0.5));
-    prompt.add(this.add.text(0, -76, `Replace one item with ${item.name}?`, {
-      fontFamily: 'monospace',
-      fontSize: '13px',
-      color: '#f5edd8',
-      fixedWidth: 380,
-      align: 'center',
-      wordWrap: { width: 380, useAdvancedWrap: true },
-    }).setOrigin(0.5));
+    prompt.add(
+      this.add
+        .text(0, -106, 'Inventory full', {
+          fontFamily: 'monospace',
+          fontSize: '22px',
+          fontStyle: 'bold',
+          color: '#f1c40f',
+        })
+        .setOrigin(0.5),
+    );
+    prompt.add(
+      this.add
+        .text(0, -76, `Replace one item with ${item.name}?`, {
+          fontFamily: 'monospace',
+          fontSize: '13px',
+          color: '#f5edd8',
+          fixedWidth: 380,
+          align: 'center',
+          wordWrap: { width: 380, useAdvancedWrap: true },
+        })
+        .setOrigin(0.5),
+    );
 
     const replaceWith = (held: InventoryItem): void => {
       if (!run.replaceItem(held.uid, item)) return;
@@ -448,16 +517,19 @@ export class DungeonScene extends Phaser.Scene {
     };
 
     for (const [index, held] of inventory.entries()) {
-      const button = this.add.text(0, -34 + index * 42, `[${index + 1}] Drop ${held.name}`, {
-        fontFamily: 'monospace',
-        fontSize: '14px',
-        fontStyle: 'bold',
-        color: '#f5edd8',
-        backgroundColor: '#221f1e',
-        padding: { x: 12, y: 7 },
-        fixedWidth: 336,
-        align: 'center',
-      }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+      const button = this.add
+        .text(0, -34 + index * 42, `[${index + 1}] Drop ${held.name}`, {
+          fontFamily: 'monospace',
+          fontSize: '14px',
+          fontStyle: 'bold',
+          color: '#f5edd8',
+          backgroundColor: '#221f1e',
+          padding: { x: 12, y: 7 },
+          fixedWidth: 336,
+          align: 'center',
+        })
+        .setOrigin(0.5)
+        .setInteractive({ useHandCursor: true });
       button.on('pointerover', () => button.setColor('#ffe48a'));
       button.on('pointerout', () => button.setColor('#f5edd8'));
       button.on('pointerdown', () => replaceWith(held));
@@ -474,13 +546,16 @@ export class DungeonScene extends Phaser.Scene {
       if (held) replaceWith(held);
     });
 
-    const cancel = this.add.text(0, 100, '[ESC] Leave potion', {
-      fontFamily: 'monospace',
-      fontSize: '13px',
-      color: '#b8b0c8',
-      backgroundColor: '#17151c',
-      padding: { x: 12, y: 6 },
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    const cancel = this.add
+      .text(0, 100, '[ESC] Leave potion', {
+        fontFamily: 'monospace',
+        fontSize: '13px',
+        color: '#b8b0c8',
+        backgroundColor: '#17151c',
+        padding: { x: 12, y: 6 },
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
     cancel.on('pointerover', () => cancel.setColor('#f5edd8'));
     cancel.on('pointerout', () => cancel.setColor('#b8b0c8'));
     cancel.on('pointerdown', () => this.leaveItemSwapPrompt(item));
@@ -518,7 +593,14 @@ export class DungeonScene extends Phaser.Scene {
       y: newOrigin.y + entry.row * TILE + TILE / 2,
     };
 
-    const anim = dir === 'N' ? 'walk_up' : dir === 'S' ? 'walk_down' : dir === 'E' ? 'walk_right' : 'walk_left';
+    const anim =
+      dir === 'N'
+        ? 'walk_up'
+        : dir === 'S'
+          ? 'walk_down'
+          : dir === 'E'
+            ? 'walk_right'
+            : 'walk_left';
     this.player.anims.play(anim, true);
     this.facing = dir;
 
@@ -565,8 +647,12 @@ export class DungeonScene extends Phaser.Scene {
       const s = built.enemySprite!;
       const mark = this.add
         .text(s.x, s.y - 60, '!', {
-          fontFamily: 'monospace', fontSize: '40px', fontStyle: 'bold', color: '#ff5544',
-          stroke: '#16121e', strokeThickness: 6,
+          fontFamily: 'monospace',
+          fontSize: '40px',
+          fontStyle: 'bold',
+          color: '#ff5544',
+          stroke: '#16121e',
+          strokeThickness: 6,
         })
         .setOrigin(0.5)
         .setDepth(50);
@@ -599,7 +685,11 @@ export class DungeonScene extends Phaser.Scene {
     const s = this.built.enemySprite;
     if (s) {
       this.tweens.add({
-        targets: s, alpha: 0, scale: s.scale * 0.3, duration: 500, ease: 'Cubic.easeIn',
+        targets: s,
+        alpha: 0,
+        scale: s.scale * 0.3,
+        duration: 500,
+        ease: 'Cubic.easeIn',
         onComplete: () => s.destroy(),
       });
       this.built.enemySprite = null;
@@ -652,11 +742,25 @@ export class DungeonScene extends Phaser.Scene {
     if (vx !== 0 || vy !== 0) {
       if (Math.abs(vx) >= Math.abs(vy)) this.facing = vx > 0 ? 'E' : 'W';
       else this.facing = vy > 0 ? 'S' : 'N';
-      const anim = this.facing === 'N' ? 'walk_up' : this.facing === 'S' ? 'walk_down' : this.facing === 'E' ? 'walk_right' : 'walk_left';
+      const anim =
+        this.facing === 'N'
+          ? 'walk_up'
+          : this.facing === 'S'
+            ? 'walk_down'
+            : this.facing === 'E'
+              ? 'walk_right'
+              : 'walk_left';
       this.player.anims.play(anim, true);
     } else {
       this.player.anims.stop();
-      const idle = this.facing === 'N' ? 'hero_up_0' : this.facing === 'S' ? 'hero_down_0' : this.facing === 'E' ? 'hero_right_0' : 'hero_left_0';
+      const idle =
+        this.facing === 'N'
+          ? 'hero_up_0'
+          : this.facing === 'S'
+            ? 'hero_down_0'
+            : this.facing === 'E'
+              ? 'hero_right_0'
+              : 'hero_left_0';
       this.player.setTexture(idle);
     }
 
@@ -683,7 +787,12 @@ export class DungeonScene extends Phaser.Scene {
         if (time > this.lastHintAt + 900) {
           this.lastHintAt = time;
           const remaining = run.startingCardPicks - run.startingCardsTaken;
-          this.floatText(px, py - 50, `Choose ${remaining} more card${remaining === 1 ? '' : 's'}!`, '#ff9944');
+          this.floatText(
+            px,
+            py - 50,
+            `Choose ${remaining} more card${remaining === 1 ? '' : 's'}!`,
+            '#ff9944',
+          );
         }
         const c = this.cellXY(7, 5);
         const away = new Phaser.Math.Vector2(c.x - px, c.y - py).normalize().scale(60);
@@ -777,7 +886,10 @@ export class DungeonScene extends Phaser.Scene {
     }
 
     // exit hatch
-    if (this.exitHatch && Phaser.Math.Distance.Between(px, py, this.exitHatch.x, this.exitHatch.y) < 30) {
+    if (
+      this.exitHatch &&
+      Phaser.Math.Distance.Between(px, py, this.exitHatch.x, this.exitHatch.y) < 30
+    ) {
       this.scene.stop('Hud');
       this.scene.start('End', { victory: true });
     }
@@ -786,12 +898,18 @@ export class DungeonScene extends Phaser.Scene {
   private openChest(x: number, y: number): void {
     const run = getRun();
     const result = rollChestReward(run, this.gameRng, run.depth);
-    const message = result.kind === 'card' ? `Found card: ${result.cardName}!`
-      : result.kind === 'item' ? `Found ${result.item.name}!`
-        : result.kind === 'armor' ? '+1 Armor'
-          : result.kind === 'gold' ? `+${result.amount} Gold`
-            : result.kind === 'heal' ? `+${result.amount} HP`
-              : `${result.item.name} dropped!`;
+    const message =
+      result.kind === 'card'
+        ? `Found card: ${result.cardName}!`
+        : result.kind === 'item'
+          ? `Found ${result.item.name}!`
+          : result.kind === 'armor'
+            ? '+1 Armor'
+            : result.kind === 'gold'
+              ? `+${result.amount} Gold`
+              : result.kind === 'heal'
+                ? `+${result.amount} HP`
+                : `${result.item.name} dropped!`;
     if (result.kind === 'inventory_full') {
       this.spawnFloorPotion(x, y + TILE, result.item);
     }

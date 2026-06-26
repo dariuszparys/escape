@@ -9,7 +9,7 @@ describe('room generation', () => {
     expect(rollRoomEvent(new SequenceRng([0.64]), 5)).toBe('chest');
     expect(rollRoomEvent(new SequenceRng([0.65]), 5)).toBe('potion');
     expect(rollRoomEvent(new SequenceRng([0.89]), 5)).toBe('potion');
-    expect(rollRoomEvent(new SequenceRng([0.90]), 5)).toBe('trap');
+    expect(rollRoomEvent(new SequenceRng([0.9]), 5)).toBe('trap');
   });
 
   test('room 9 is biased toward rewards before the boss', () => {

@@ -57,7 +57,12 @@ function cloneCombatant(combatant: CombatantSnapshot): MutableCombatant {
 
 export function combatActionSpeed(action: CombatAction): number {
   if (action.kind === 'card') return action.card.speed;
-  if (action.kind === 'item') return action.item.kind === 'heal' || action.item.kind === 'shield' || action.item.kind === 'skip_attack' ? 10 : 7;
+  if (action.kind === 'item')
+    return action.item.kind === 'heal' ||
+      action.item.kind === 'shield' ||
+      action.item.kind === 'skip_attack'
+      ? 10
+      : 7;
   if (action.kind === 'punch') return 5;
   if (action.kind === 'special') return action.speed;
   return 0;
@@ -110,7 +115,9 @@ function consumeStun(combatant: MutableCombatant): boolean {
   if (!stun) return false;
 
   stun.remainingTurns--;
-  combatant.statuses = combatant.statuses.filter((status) => status.type !== 'stun' || status.remainingTurns > 0);
+  combatant.statuses = combatant.statuses.filter(
+    (status) => status.type !== 'stun' || status.remainingTurns > 0,
+  );
   return true;
 }
 
@@ -201,8 +208,18 @@ export function resolveRound(input: ResolveRoundInput): ResolveRoundResult {
   if (enemyStunned) log.push(`${enemy.name} is stunned`);
 
   const actions = [
-    { action: playerStunned ? { actor: 'player', kind: 'none' } as CombatAction : input.playerAction, actor: player, target: enemy },
-    { action: enemyStunned ? { actor: 'enemy', kind: 'none' } as CombatAction : input.enemyAction, actor: enemy, target: player },
+    {
+      action: playerStunned
+        ? ({ actor: 'player', kind: 'none' } as CombatAction)
+        : input.playerAction,
+      actor: player,
+      target: enemy,
+    },
+    {
+      action: enemyStunned ? ({ actor: 'enemy', kind: 'none' } as CombatAction) : input.enemyAction,
+      actor: enemy,
+      target: player,
+    },
   ].sort((a, b) => {
     const speed = combatActionSpeed(b.action) - combatActionSpeed(a.action);
     if (speed !== 0) return speed;
@@ -237,6 +254,8 @@ export function resolveRound(input: ResolveRoundInput): ResolveRoundResult {
     }
   }
 
-  const trim = ({ roundBlock: _roundBlock, ...combatant }: MutableCombatant): CombatantSnapshot => combatant;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const trim = ({ roundBlock: _roundBlock, ...combatant }: MutableCombatant): CombatantSnapshot =>
+    combatant;
   return { player: trim(player), enemy: trim(enemy), log, playerHpChange, enemyHpChange };
 }

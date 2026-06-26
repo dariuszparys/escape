@@ -59,7 +59,10 @@ export class CampfireScene extends Phaser.Scene {
     for (let y = 0; y < GAME_H; y += 48) {
       for (let x = 0; x < GAME_W; x += 48) {
         const key = (x / 48 + y / 48) % 2 === 0 ? 'floor_a' : 'floor_b';
-        this.add.image(x + 24, y + 24, key).setScale(3).setAlpha(0.18);
+        this.add
+          .image(x + 24, y + 24, key)
+          .setScale(3)
+          .setAlpha(0.18);
       }
     }
 
@@ -110,7 +113,14 @@ export class CampfireScene extends Phaser.Scene {
 
     const inner = this.add.graphics().setDepth(5);
     inner.fillStyle(0xf1c40f, 0.96);
-    inner.fillTriangle(FIRE_X - 14, FIRE_Y + 17, FIRE_X + 10, FIRE_Y - 45, FIRE_X + 24, FIRE_Y + 17);
+    inner.fillTriangle(
+      FIRE_X - 14,
+      FIRE_Y + 17,
+      FIRE_X + 10,
+      FIRE_Y - 45,
+      FIRE_X + 24,
+      FIRE_Y + 17,
+    );
 
     this.tweens.add({
       targets: outer,
@@ -136,38 +146,51 @@ export class CampfireScene extends Phaser.Scene {
     this.dynamic.removeAll(true);
     const meta = getMeta();
 
-    this.dynamic.add(this.add.text(GAME_W / 2, 50, 'THE LAST FIRE', {
-      ...TEXT_STYLE,
-      fontSize: '38px',
-      fontStyle: 'bold',
-      color: '#f1c40f',
-    }).setOrigin(0.5));
+    this.dynamic.add(
+      this.add
+        .text(GAME_W / 2, 50, 'THE LAST FIRE', {
+          ...TEXT_STYLE,
+          fontSize: '38px',
+          fontStyle: 'bold',
+          color: '#f1c40f',
+        })
+        .setOrigin(0.5),
+    );
 
-    this.dynamic.add(this.add.text(GAME_W / 2, 88, `Embers: ${meta.embers}`, {
-      ...TEXT_STYLE,
-      fontSize: '18px',
-      color: '#f5edd8',
-    }).setOrigin(0.5));
+    this.dynamic.add(
+      this.add
+        .text(GAME_W / 2, 88, `Embers: ${meta.embers}`, {
+          ...TEXT_STYLE,
+          fontSize: '18px',
+          color: '#f5edd8',
+        })
+        .setOrigin(0.5),
+    );
 
     for (const [index, purchase] of CAMPFIRE_PURCHASES.entries()) {
       this.addPurchaseButton(purchase, OPTION_X, OPTION_START_Y + index * OPTION_GAP);
     }
 
-    this.dynamic.add(this.add.text(330, 438, this.pendingPrepSummary(), {
-      ...TEXT_STYLE,
-      fontSize: '13px',
-      color: '#b8b0c8',
-      lineSpacing: 8,
-      fixedWidth: OPTION_W,
-      wordWrap: { width: OPTION_W, useAdvancedWrap: true },
-    }));
+    this.dynamic.add(
+      this.add.text(330, 438, this.pendingPrepSummary(), {
+        ...TEXT_STYLE,
+        fontSize: '13px',
+        color: '#b8b0c8',
+        lineSpacing: 8,
+        fixedWidth: OPTION_W,
+        wordWrap: { width: OPTION_W, useAdvancedWrap: true },
+      }),
+    );
 
-    const descend = this.add.text(GAME_W / 2, 584, '[ DESCEND ]', {
-      ...TEXT_STYLE,
-      fontSize: '24px',
-      fontStyle: 'bold',
-      color: '#f1c40f',
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    const descend = this.add
+      .text(GAME_W / 2, 584, '[ DESCEND ]', {
+        ...TEXT_STYLE,
+        fontSize: '24px',
+        fontStyle: 'bold',
+        color: '#f1c40f',
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
 
     descend.on('pointerover', () => descend.setColor('#ffe48a'));
     descend.on('pointerout', () => descend.setColor('#f1c40f'));
@@ -178,8 +201,12 @@ export class CampfireScene extends Phaser.Scene {
   private pendingPrepSummary(): string {
     const prep = getMeta().pendingPrep;
     const names = prep.itemIds.map((id) => ITEM_DEFS.find((item) => item.id === id)?.name ?? id);
-    const openingChoices = prep.extraStartingChoice ? BONUS_STARTING_CARD_CHOICES : DEFAULT_STARTING_CARD_CHOICES;
-    const openingPicks = prep.extraStartingChoice ? BONUS_STARTING_CARD_PICKS : DEFAULT_STARTING_CARD_PICKS;
+    const openingChoices = prep.extraStartingChoice
+      ? BONUS_STARTING_CARD_CHOICES
+      : DEFAULT_STARTING_CARD_CHOICES;
+    const openingPicks = prep.extraStartingChoice
+      ? BONUS_STARTING_CARD_PICKS
+      : DEFAULT_STARTING_CARD_PICKS;
     return [
       `Prepared supplies: ${names.length > 0 ? names.join(', ') : 'none'} (${names.length}/${MAX_INVENTORY})`,
       `Opening picks: ${openingPicks} of ${openingChoices}`,
@@ -203,19 +230,29 @@ export class CampfireScene extends Phaser.Scene {
 
     drawBg(enabled ? 0x221f1e : 0x17151c, enabled ? 0x6f5032 : 0x393344);
 
-    const title = this.add.text(x - OPTION_W / 2 + 16, y - 17, `${purchase.name} - ${purchase.cost} embers`, {
-      ...TEXT_STYLE,
-      fontSize: '14px',
-      fontStyle: 'bold',
-      color: enabled ? '#f5edd8' : '#6f687c',
-    });
-    const detail = this.add.text(x - OPTION_W / 2 + 16, y + 3, this.purchaseDetail(purchase, check), {
-      ...TEXT_STYLE,
-      fontSize: '11px',
-      color: enabled ? '#b8b0c8' : '#5d566d',
-      fixedWidth: OPTION_W - 32,
-      wordWrap: { width: OPTION_W - 32, useAdvancedWrap: true },
-    });
+    const title = this.add.text(
+      x - OPTION_W / 2 + 16,
+      y - 17,
+      `${purchase.name} - ${purchase.cost} embers`,
+      {
+        ...TEXT_STYLE,
+        fontSize: '14px',
+        fontStyle: 'bold',
+        color: enabled ? '#f5edd8' : '#6f687c',
+      },
+    );
+    const detail = this.add.text(
+      x - OPTION_W / 2 + 16,
+      y + 3,
+      this.purchaseDetail(purchase, check),
+      {
+        ...TEXT_STYLE,
+        fontSize: '11px',
+        color: enabled ? '#b8b0c8' : '#5d566d',
+        fixedWidth: OPTION_W - 32,
+        wordWrap: { width: OPTION_W - 32, useAdvancedWrap: true },
+      },
+    );
     const hit = this.add.zone(x, y, OPTION_W, OPTION_H);
 
     if (enabled) {

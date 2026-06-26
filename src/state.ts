@@ -2,10 +2,7 @@ import { MAX_ARMOR, MAX_HAND, MAX_INVENTORY, PLAYER_MAX_HP } from './config';
 import { Card } from './data/cards';
 import { InventoryItem, makeItem } from './data/items';
 import { selectCombatHand } from './game/cardSelection';
-import {
-  DEFAULT_STARTING_CARD_CHOICES,
-  DEFAULT_STARTING_CARD_PICKS,
-} from './game/startingCards';
+import { DEFAULT_STARTING_CARD_CHOICES, DEFAULT_STARTING_CARD_PICKS } from './game/startingCards';
 
 let nextRunId = 1;
 

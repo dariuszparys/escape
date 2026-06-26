@@ -9,8 +9,9 @@ function statusScore(effect: Extract<CardEffect, { kind: 'status' }>): number {
 }
 
 export function isOffensiveCard(card: Pick<Card, 'effects'>): boolean {
-  return cardEffectAmount(card, 'damage') > 0
-    || card.effects.some((effect) => effect.kind === 'status');
+  return (
+    cardEffectAmount(card, 'damage') > 0 || card.effects.some((effect) => effect.kind === 'status')
+  );
 }
 
 export function combatCardScore(card: Pick<Card, 'tier' | 'speed' | 'effects'>): number {
@@ -55,7 +56,5 @@ export function selectCombatHand(collection: readonly Card[]): Card[] {
     selected.add(card.uid);
   }
 
-  return sorted
-    .filter((card) => selected.has(card.uid))
-    .slice(0, MAX_HAND);
+  return sorted.filter((card) => selected.has(card.uid)).slice(0, MAX_HAND);
 }

@@ -11,10 +11,8 @@ export function orderedDeckEntries(
   combatHand: readonly Card[],
 ): OrderedDeckEntry[] {
   const handIds = new Set(combatHand.map((card) => card.uid));
-  return [...collection]
-    .sort(compareCombatCards)
-    .map((card) => ({
-      card,
-      inHand: handIds.has(card.uid),
-    }));
+  return [...collection].sort(compareCombatCards).map((card) => ({
+    card,
+    inHand: handIds.has(card.uid),
+  }));
 }

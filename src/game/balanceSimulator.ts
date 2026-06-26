@@ -86,7 +86,7 @@ class SeededRng implements GameRng {
   }
 
   frac(): number {
-    this.state += 0x6D2B79F5;
+    this.state += 0x6d2b79f5;
     let value = this.state;
     value = Math.imul(value ^ (value >>> 15), value | 1);
     value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
@@ -231,8 +231,9 @@ function chooseRoomEvent(run: RunState, rng: SeededRng, depth: number): RoomEven
   const options = Array.from({ length: 3 }, () => rollRoomEvent(rng, depth));
   run.scoutCharges--;
 
-  return [...options]
-    .sort((left, right) => roomEventScore(run, right) - roomEventScore(run, left))[0];
+  return [...options].sort(
+    (left, right) => roomEventScore(run, right) - roomEventScore(run, left),
+  )[0];
 }
 
 function cloneBattleState(state: SimBattleState): SimBattleState {
@@ -253,7 +254,10 @@ function availablePlayerCards(state: SimBattleState): Card[] {
 }
 
 function listPlayerActions(state: SimBattleState): PlayerAction[] {
-  const actions: PlayerAction[] = availablePlayerCards(state).map((card) => ({ kind: 'card', card }));
+  const actions: PlayerAction[] = availablePlayerCards(state).map((card) => ({
+    kind: 'card',
+    card,
+  }));
   state.inventory
     .filter((item) => item.usableInCombat)
     .forEach((item) => actions.push({ kind: 'item', item }));
@@ -304,7 +308,13 @@ function chooseEnemyDecision(state: SimBattleState): EnemyDecision {
   const special = state.enemyDef.special;
   if (special && state.round % special.interval === 0) {
     return {
-      action: { actor: 'enemy', kind: 'special', name: special.name, speed: special.speed, effects: special.effects },
+      action: {
+        actor: 'enemy',
+        kind: 'special',
+        name: special.name,
+        speed: special.speed,
+        effects: special.effects,
+      },
       used: new Set(state.enemyUsed),
       nextRng,
     };
@@ -326,17 +336,24 @@ function statusScore(statuses: SimBattleState['playerStatuses'], multiplier = 1)
 }
 
 function evaluateBattleState(state: SimBattleState): number {
-  if (state.enemyHp <= 0) return 1_000_000 + state.playerHp * 1000 + inventoryValue(state.inventory) * 10;
+  if (state.enemyHp <= 0)
+    return 1_000_000 + state.playerHp * 1000 + inventoryValue(state.inventory) * 10;
   if (state.playerHp <= 0) return -1_000_000 - state.enemyHp * 100;
 
-  return state.playerHp * 120
-    - state.enemyHp * 105
-    + statusScore(state.enemyStatuses, 1)
-    - statusScore(state.playerStatuses, 1.2)
-    + inventoryValue(state.inventory) * 12;
+  return (
+    state.playerHp * 120 -
+    state.enemyHp * 105 +
+    statusScore(state.enemyStatuses, 1) -
+    statusScore(state.playerStatuses, 1.2) +
+    inventoryValue(state.inventory) * 12
+  );
 }
 
-function applyRound(state: SimBattleState, action: PlayerAction, enemyDecision: EnemyDecision): SimBattleState {
+function applyRound(
+  state: SimBattleState,
+  action: PlayerAction,
+  enemyDecision: EnemyDecision,
+): SimBattleState {
   const next = cloneBattleState(state);
   next.rng = enemyDecision.nextRng.clone();
   next.enemyUsed = new Set(enemyDecision.used);
@@ -379,7 +396,10 @@ function applyRound(state: SimBattleState, action: PlayerAction, enemyDecision: 
   return next;
 }
 
-function choosePlayerAction(state: SimBattleState): { action: PlayerAction; enemyDecision: EnemyDecision } {
+function choosePlayerAction(state: SimBattleState): {
+  action: PlayerAction;
+  enemyDecision: EnemyDecision;
+} {
   const enemyDecision = chooseEnemyDecision(state);
   let bestAction = listPlayerActions(state)[0];
   let bestScore = -Infinity;
@@ -403,7 +423,11 @@ function choosePlayerAction(state: SimBattleState): { action: PlayerAction; enem
   return { action: bestAction, enemyDecision };
 }
 
-function simulateBattle(run: RunState, enemy: ReturnType<typeof spawnEnemy>, rng: SeededRng): { won: boolean; enemyCards: Card[] } {
+function simulateBattle(
+  run: RunState,
+  enemy: ReturnType<typeof spawnEnemy>,
+  rng: SeededRng,
+): { won: boolean; enemyCards: Card[] } {
   const state: SimBattleState = {
     rng,
     round: 1,
@@ -455,7 +479,11 @@ export function simulateRun(seed: number, scenario: BalanceScenario): SimRunResu
     const event = chooseRoomEvent(run, rng, depth);
     if (event === 'encounter') {
       encounters++;
-      const battle = simulateBattle(run, spawnEnemy(rng, depth, Math.max(run.combatHand.length, 1)), rng);
+      const battle = simulateBattle(
+        run,
+        spawnEnemy(rng, depth, Math.max(run.combatHand.length, 1)),
+        rng,
+      );
       if (!battle.won) {
         return {
           victory: false,

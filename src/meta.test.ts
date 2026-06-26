@@ -44,7 +44,9 @@ describe('meta state', () => {
   });
 
   test('normalizes invalid saved data to defaults', () => {
-    expect(normalizeMetaState({ embers: -10, pendingPrep: null })).toEqual(createDefaultMetaState());
+    expect(normalizeMetaState({ embers: -10, pendingPrep: null })).toEqual(
+      createDefaultMetaState(),
+    );
   });
 
   test('filters saved item ids to campfire items and inventory capacity', () => {
@@ -63,28 +65,33 @@ describe('meta state', () => {
       ...Array.from({ length: MAX_INVENTORY }, () => 'small_potion'),
     ].slice(0, MAX_INVENTORY);
 
-    expect(normalizeMetaState({
-      embers: 7,
-      pendingPrep: {
-        itemIds: savedItemIds,
-        extraStartingChoice: false,
-        scoutFlame: true,
-      },
-      lastAwardedRunId: null,
-    }).pendingPrep.itemIds).toEqual(expectedItemIds);
+    expect(
+      normalizeMetaState({
+        embers: 7,
+        pendingPrep: {
+          itemIds: savedItemIds,
+          extraStartingChoice: false,
+          scoutFlame: true,
+        },
+        lastAwardedRunId: null,
+      }).pendingPrep.itemIds,
+    ).toEqual(expectedItemIds);
   });
 
   test('loads saved embers and pending prep', () => {
     const storage = new MemoryStorage();
-    saveMetaState({
-      embers: 12,
-      pendingPrep: {
-        itemIds: ['small_potion'],
-        extraStartingChoice: true,
-        scoutFlame: false,
+    saveMetaState(
+      {
+        embers: 12,
+        pendingPrep: {
+          itemIds: ['small_potion'],
+          extraStartingChoice: true,
+          scoutFlame: false,
+        },
+        lastAwardedRunId: 'run-1',
       },
-      lastAwardedRunId: 'run-1',
-    }, storage);
+      storage,
+    );
 
     expect(loadMetaState(storage)).toEqual({
       embers: 12,
@@ -105,15 +112,17 @@ describe('meta state', () => {
   });
 
   test('normalizes set meta and composes update meta from current state', () => {
-    expect(setMeta({
-      embers: 4.8,
-      pendingPrep: {
-        itemIds: ['large_potion', 'bomb'],
-        extraStartingChoice: true,
-        scoutFlame: false,
-      },
-      lastAwardedRunId: null,
-    })).toEqual({
+    expect(
+      setMeta({
+        embers: 4.8,
+        pendingPrep: {
+          itemIds: ['large_potion', 'bomb'],
+          extraStartingChoice: true,
+          scoutFlame: false,
+        },
+        lastAwardedRunId: null,
+      }),
+    ).toEqual({
       embers: 4,
       pendingPrep: {
         itemIds: ['bomb'],
@@ -123,15 +132,17 @@ describe('meta state', () => {
       lastAwardedRunId: null,
     });
 
-    expect(updateMeta((meta) => ({
-      ...meta,
-      embers: meta.embers + 3,
-      pendingPrep: {
-        ...meta.pendingPrep,
-        scoutFlame: true,
-      },
-      lastAwardedRunId: 'run-2',
-    }))).toEqual({
+    expect(
+      updateMeta((meta) => ({
+        ...meta,
+        embers: meta.embers + 3,
+        pendingPrep: {
+          ...meta.pendingPrep,
+          scoutFlame: true,
+        },
+        lastAwardedRunId: 'run-2',
+      })),
+    ).toEqual({
       embers: 7,
       pendingPrep: {
         itemIds: ['bomb'],

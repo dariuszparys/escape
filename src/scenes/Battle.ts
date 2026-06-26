@@ -6,7 +6,13 @@ import { InventoryItem } from '../data/items';
 import { CARD_H, CARD_W, makeCardBack, makeCardView } from '../gfx/cardview';
 import { createDeckPanel } from '../gfx/deckPanel';
 import { buildBattleRoundHistory, orderedBattleActions } from '../game/battleLog';
-import { ActiveStatusEffect, CombatAction, combatActionLabel, combatActionSpeed, resolveRound } from '../game/combat';
+import {
+  ActiveStatusEffect,
+  CombatAction,
+  combatActionLabel,
+  combatActionSpeed,
+  resolveRound,
+} from '../game/combat';
 import { GameRng } from '../game/rng';
 import { awardEnemyGold } from '../game/rewards';
 import { getRun } from '../state';
@@ -79,7 +85,9 @@ export class BattleScene extends Phaser.Scene {
     bg.strokeRoundedRect(12, 12, GAME_W - 24, GAME_H - 24, 10);
 
     const isBoss = this.enemy.def.boss;
-    this.enemySprite = this.add.image(cx, isBoss ? 158 : 150, this.enemy.def.texture).setScale(isBoss ? 5.5 : 6);
+    this.enemySprite = this.add
+      .image(cx, isBoss ? 158 : 150, this.enemy.def.texture)
+      .setScale(isBoss ? 5.5 : 6);
     this.tweens.add({
       targets: this.enemySprite,
       y: this.enemySprite.y - 8,
@@ -97,30 +105,38 @@ export class BattleScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
     this.enemyHpBar = this.add.graphics();
-    this.enemyHpText = this.add.text(cx, 68, '', {
-      fontFamily: 'monospace',
-      fontSize: '13px',
-      color: '#f5edd8',
-    }).setOrigin(0.5);
+    this.enemyHpText = this.add
+      .text(cx, 68, '', {
+        fontFamily: 'monospace',
+        fontSize: '13px',
+        color: '#f5edd8',
+      })
+      .setOrigin(0.5);
 
     this.heroSprite = this.add.image(110, 408, 'hero_up_0').setScale(5);
     this.playerHpBar = this.add.graphics();
-    this.playerHpText = this.add.text(110, 472, '', {
-      fontFamily: 'monospace',
-      fontSize: '13px',
-      color: '#f5edd8',
-    }).setOrigin(0.5);
-    this.armorText = this.add.text(110, 350, run.armor > 0 ? `Armor +${run.armor}` : '', {
-      fontFamily: 'monospace',
-      fontSize: '12px',
-      color: '#aab2bd',
-    }).setOrigin(0.5);
-    this.statusText = this.add.text(cx, 306, '', {
-      fontFamily: 'monospace',
-      fontSize: '12px',
-      color: '#b8b0c8',
-      align: 'center',
-    }).setOrigin(0.5);
+    this.playerHpText = this.add
+      .text(110, 472, '', {
+        fontFamily: 'monospace',
+        fontSize: '13px',
+        color: '#f5edd8',
+      })
+      .setOrigin(0.5);
+    this.armorText = this.add
+      .text(110, 350, run.armor > 0 ? `Armor +${run.armor}` : '', {
+        fontFamily: 'monospace',
+        fontSize: '12px',
+        color: '#aab2bd',
+      })
+      .setOrigin(0.5);
+    this.statusText = this.add
+      .text(cx, 306, '', {
+        fontFamily: 'monospace',
+        fontSize: '12px',
+        color: '#b8b0c8',
+        align: 'center',
+      })
+      .setOrigin(0.5);
 
     const historyBg = this.add.graphics();
     historyBg.fillStyle(0x16121e, 0.82);
@@ -147,21 +163,25 @@ export class BattleScene extends Phaser.Scene {
     orderBg.fillRoundedRect(520, 124, 168, 94, 6);
     orderBg.lineStyle(1, 0x3a3544, 1);
     orderBg.strokeRoundedRect(520, 124, 168, 94, 6);
-    this.add.text(604, 136, 'Turn order', {
-      fontFamily: 'monospace',
-      fontSize: '14px',
-      fontStyle: 'bold',
-      color: '#f1c40f',
-    }).setOrigin(0.5, 0);
-    this.orderText = this.add.text(604, 162, 'Order appears here.', {
-      fontFamily: 'monospace',
-      fontSize: '11px',
-      color: '#d8d2e4',
-      fixedWidth: 140,
-      align: 'center',
-      lineSpacing: 4,
-      wordWrap: { width: 140, useAdvancedWrap: true },
-    }).setOrigin(0.5, 0);
+    this.add
+      .text(604, 136, 'Turn order', {
+        fontFamily: 'monospace',
+        fontSize: '14px',
+        fontStyle: 'bold',
+        color: '#f1c40f',
+      })
+      .setOrigin(0.5, 0);
+    this.orderText = this.add
+      .text(604, 162, 'Order appears here.', {
+        fontFamily: 'monospace',
+        fontSize: '11px',
+        color: '#d8d2e4',
+        fixedWidth: 140,
+        align: 'center',
+        lineSpacing: 4,
+        wordWrap: { width: 140, useAdvancedWrap: true },
+      })
+      .setOrigin(0.5, 0);
 
     this.logText = this.add
       .text(cx, 352, 'Choose a card, item, or punch. [C] deck', {
@@ -208,7 +228,14 @@ export class BattleScene extends Phaser.Scene {
 
   private redrawBars(): void {
     const run = getRun();
-    const bar = (g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, frac: number, color: number) => {
+    const bar = (
+      g: Phaser.GameObjects.Graphics,
+      x: number,
+      y: number,
+      w: number,
+      frac: number,
+      color: number,
+    ) => {
       g.clear();
       g.fillStyle(0x16121e, 1);
       g.fillRoundedRect(x, y, w, 14, 4);
@@ -220,9 +247,15 @@ export class BattleScene extends Phaser.Scene {
       g.strokeRoundedRect(x, y, w, 14, 4);
     };
     bar(this.enemyHpBar, GAME_W / 2 - 110, 78, 220, this.enemy.hp / this.enemy.maxHp, 0xe23b4e);
-    this.enemyHpText.setY(85).setText(`${Math.max(0, this.enemy.hp)} / ${this.enemy.maxHp}`).setDepth(1);
+    this.enemyHpText
+      .setY(85)
+      .setText(`${Math.max(0, this.enemy.hp)} / ${this.enemy.maxHp}`)
+      .setDepth(1);
     bar(this.playerHpBar, 40, 452, 140, run.hp / run.maxHp, 0x5fe07a);
-    this.playerHpText.setY(459).setText(`${Math.max(0, run.hp)} / ${run.maxHp}`).setDepth(1);
+    this.playerHpText
+      .setY(459)
+      .setText(`${Math.max(0, run.hp)} / ${run.maxHp}`)
+      .setDepth(1);
     this.armorText.setText(run.armor > 0 ? `Armor +${run.armor}` : '');
   }
 
@@ -321,13 +354,15 @@ export class BattleScene extends Phaser.Scene {
 
   private updateOrderText(playerAction: CombatAction, enemyAction: CombatAction): void {
     const order = orderedBattleActions(playerAction, enemyAction);
-    this.orderText.setText([
-      `${order[0].actor === 'player' ? '1. You' : `1. ${this.enemy.def.name}`}`,
-      `${order[0].label} [${order[0].speed}]`,
-      '',
-      `${order[1].actor === 'player' ? '2. You' : `2. ${this.enemy.def.name}`}`,
-      `${order[1].label} [${order[1].speed}]`,
-    ].join('\n'));
+    this.orderText.setText(
+      [
+        `${order[0].actor === 'player' ? '1. You' : `1. ${this.enemy.def.name}`}`,
+        `${order[0].label} [${order[0].speed}]`,
+        '',
+        `${order[1].actor === 'player' ? '2. You' : `2. ${this.enemy.def.name}`}`,
+        `${order[1].label} [${order[1].speed}]`,
+      ].join('\n'),
+    );
   }
 
   private createActionPreview(
@@ -338,14 +373,16 @@ export class BattleScene extends Phaser.Scene {
   ): Phaser.GameObjects.Container {
     if (action.kind === 'card') {
       const view = makeCardView(this, action.card, x, y, 0.78);
-      const label = this.add.text(x, y - 76, `${rankLabel} • spd ${action.card.speed}`, {
-        fontFamily: 'monospace',
-        fontSize: '11px',
-        fontStyle: 'bold',
-        color: '#f1c40f',
-        backgroundColor: '#16121e',
-        padding: { x: 6, y: 2 },
-      }).setOrigin(0.5);
+      const label = this.add
+        .text(x, y - 76, `${rankLabel} • spd ${action.card.speed}`, {
+          fontFamily: 'monospace',
+          fontSize: '11px',
+          fontStyle: 'bold',
+          color: '#f1c40f',
+          backgroundColor: '#16121e',
+          padding: { x: 6, y: 2 },
+        })
+        .setOrigin(0.5);
       return this.add.container(0, 0, [view, label]);
     }
 
@@ -354,31 +391,42 @@ export class BattleScene extends Phaser.Scene {
     panel.fillRoundedRect(-68, -40, 136, 80, 8);
     panel.lineStyle(2, 0xcab98a, 1);
     panel.strokeRoundedRect(-68, -40, 136, 80, 8);
-    const rank = this.add.text(0, -24, `${rankLabel} • spd ${combatActionSpeed(action)}`, {
-      fontFamily: 'monospace',
-      fontSize: '10px',
-      color: '#f1c40f',
-    }).setOrigin(0.5);
-    const title = this.add.text(0, -4, combatActionLabel(action), {
-      fontFamily: 'monospace',
-      fontSize: '14px',
-      fontStyle: 'bold',
-      color: '#f5edd8',
-      align: 'center',
-    }).setOrigin(0.5);
-    const desc = this.add.text(0, 18, action.kind === 'item'
-      ? action.item.description
-      : action.kind === 'punch'
-        ? `${PUNCH_DAMAGE} damage`
-        : action.kind === 'special'
-          ? 'Boss special'
-          : '', {
-      fontFamily: 'monospace',
-      fontSize: '10px',
-      color: '#b8b0c8',
-      align: 'center',
-      wordWrap: { width: 116, useAdvancedWrap: true },
-    }).setOrigin(0.5);
+    const rank = this.add
+      .text(0, -24, `${rankLabel} • spd ${combatActionSpeed(action)}`, {
+        fontFamily: 'monospace',
+        fontSize: '10px',
+        color: '#f1c40f',
+      })
+      .setOrigin(0.5);
+    const title = this.add
+      .text(0, -4, combatActionLabel(action), {
+        fontFamily: 'monospace',
+        fontSize: '14px',
+        fontStyle: 'bold',
+        color: '#f5edd8',
+        align: 'center',
+      })
+      .setOrigin(0.5);
+    const desc = this.add
+      .text(
+        0,
+        18,
+        action.kind === 'item'
+          ? action.item.description
+          : action.kind === 'punch'
+            ? `${PUNCH_DAMAGE} damage`
+            : action.kind === 'special'
+              ? 'Boss special'
+              : '',
+        {
+          fontFamily: 'monospace',
+          fontSize: '10px',
+          color: '#b8b0c8',
+          align: 'center',
+          wordWrap: { width: 116, useAdvancedWrap: true },
+        },
+      )
+      .setOrigin(0.5);
     return this.add.container(x, y, [panel, rank, title, desc]);
   }
 
@@ -398,9 +446,12 @@ export class BattleScene extends Phaser.Scene {
 
   private updateStatusText(): void {
     const format = (label: string, statuses: ActiveStatusEffect[]) =>
-      statuses.length === 0 ? `${label}: none`
+      statuses.length === 0
+        ? `${label}: none`
         : `${label}: ${statuses.map((status) => `${status.type} ${status.remainingTurns}`).join(', ')}`;
-    this.statusText.setText(`${format('You', this.playerStatuses)}\n${format('Enemy', this.enemyStatuses)}`);
+    this.statusText.setText(
+      `${format('You', this.playerStatuses)}\n${format('Enemy', this.enemyStatuses)}`,
+    );
   }
 
   private pickEnemyCard(): Card {
@@ -435,13 +486,20 @@ export class BattleScene extends Phaser.Scene {
     if (special && this.isSpecialRound(this.round)) {
       return {
         card: null,
-        action: { actor: 'enemy', kind: 'special', name: special.name, speed: special.speed, effects: special.effects },
+        action: {
+          actor: 'enemy',
+          kind: 'special',
+          name: special.name,
+          speed: special.speed,
+          effects: special.effects,
+        },
       };
     }
 
     const card = this.pickEnemyCard();
     this.enemyUsed.add(card.uid);
-    if (this.enemy.cards.every((candidate) => this.enemyUsed.has(candidate.uid))) this.enemyUsed.clear();
+    if (this.enemy.cards.every((candidate) => this.enemyUsed.has(candidate.uid)))
+      this.enemyUsed.clear();
     return { card, action: { actor: 'enemy', kind: 'card', card } };
   }
 
@@ -471,8 +529,18 @@ export class BattleScene extends Phaser.Scene {
     const enemyTurn = this.enemyAction();
     const order = orderedBattleActions(playerAction, enemyTurn.action);
     const shown: Phaser.GameObjects.GameObject[] = [
-      this.createActionPreview(playerAction, cx - 108, 218, `${order.findIndex((entry) => entry.actor === 'player') + 1}${order.findIndex((entry) => entry.actor === 'player') === 0 ? 'st' : 'nd'}`),
-      this.createActionPreview(enemyTurn.action, cx + 108, 218, `${order.findIndex((entry) => entry.actor === 'enemy') + 1}${order.findIndex((entry) => entry.actor === 'enemy') === 0 ? 'st' : 'nd'}`),
+      this.createActionPreview(
+        playerAction,
+        cx - 108,
+        218,
+        `${order.findIndex((entry) => entry.actor === 'player') + 1}${order.findIndex((entry) => entry.actor === 'player') === 0 ? 'st' : 'nd'}`,
+      ),
+      this.createActionPreview(
+        enemyTurn.action,
+        cx + 108,
+        218,
+        `${order.findIndex((entry) => entry.actor === 'enemy') + 1}${order.findIndex((entry) => entry.actor === 'enemy') === 0 ? 'st' : 'nd'}`,
+      ),
     ];
     this.updateOrderText(playerAction, enemyTurn.action);
     this.setPrompt('Resolving round...');
@@ -511,31 +579,53 @@ export class BattleScene extends Phaser.Scene {
     this.renderEnemyCards();
     this.renderItems();
     this.telegraphText.setText('');
-    this.appendHistory(buildBattleRoundHistory({
-      round: this.round,
-      playerAction,
-      enemyAction: enemyTurn.action,
-      resolvedLog: resolved.log,
-      playerHpChange,
-      enemyHpChange,
-      enemyName: this.enemy.def.name,
-    }));
+    this.appendHistory(
+      buildBattleRoundHistory({
+        round: this.round,
+        playerAction,
+        enemyAction: enemyTurn.action,
+        resolvedLog: resolved.log,
+        playerHpChange,
+        enemyHpChange,
+        enemyName: this.enemy.def.name,
+      }),
+    );
 
     this.time.delayedCall(900, () => {
       if (enemyHpChange.damage > 0) {
-        this.combatPop(this.enemySprite.x + 40, this.enemySprite.y - 30, `-${enemyHpChange.damage}`, '#ff5544');
+        this.combatPop(
+          this.enemySprite.x + 40,
+          this.enemySprite.y - 30,
+          `-${enemyHpChange.damage}`,
+          '#ff5544',
+        );
         this.flash(this.enemySprite);
       }
       if (enemyHpChange.heal > 0) {
-        this.combatPop(this.enemySprite.x + 40, this.enemySprite.y - 30, `+${enemyHpChange.heal} HP`, '#5fe07a');
+        this.combatPop(
+          this.enemySprite.x + 40,
+          this.enemySprite.y - 30,
+          `+${enemyHpChange.heal} HP`,
+          '#5fe07a',
+        );
       }
       if (playerHpChange.damage > 0) {
-        this.combatPop(this.heroSprite.x + 36, this.heroSprite.y - 30, `-${playerHpChange.damage}`, '#ff5544');
+        this.combatPop(
+          this.heroSprite.x + 36,
+          this.heroSprite.y - 30,
+          `-${playerHpChange.damage}`,
+          '#ff5544',
+        );
         this.flash(this.heroSprite);
         this.cameras.main.shake(120, 0.006);
       }
       if (playerHpChange.heal > 0) {
-        this.combatPop(this.heroSprite.x + 36, this.heroSprite.y - 30, `+${playerHpChange.heal} HP`, '#5fe07a');
+        this.combatPop(
+          this.heroSprite.x + 36,
+          this.heroSprite.y - 30,
+          `+${playerHpChange.heal} HP`,
+          '#5fe07a',
+        );
       }
       this.redrawBars();
       this.updateStatusText();
@@ -575,7 +665,14 @@ export class BattleScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(20);
-    this.tweens.add({ targets: t, y: y - 40, alpha: 0, duration: 900, ease: 'Cubic.easeOut', onComplete: () => t.destroy() });
+    this.tweens.add({
+      targets: t,
+      y: y - 40,
+      alpha: 0,
+      duration: 900,
+      ease: 'Cubic.easeOut',
+      onComplete: () => t.destroy(),
+    });
   }
 
   private flash(img: Phaser.GameObjects.Image): void {
@@ -605,19 +702,23 @@ export class BattleScene extends Phaser.Scene {
     g.fillRect(0, 0, GAME_W, GAME_H);
     overlay.add(g);
     overlay.add(
-      this.add.text(GAME_W / 2, 86, 'VICTORY!', {
-        fontFamily: 'monospace',
-        fontSize: '40px',
-        fontStyle: 'bold',
-        color: '#f1c40f',
-      }).setOrigin(0.5),
+      this.add
+        .text(GAME_W / 2, 86, 'VICTORY!', {
+          fontFamily: 'monospace',
+          fontSize: '40px',
+          fontStyle: 'bold',
+          color: '#f1c40f',
+        })
+        .setOrigin(0.5),
     );
     overlay.add(
-      this.add.text(GAME_W / 2, 132, `+${gold} gold. Take one enemy card:`, {
-        fontFamily: 'monospace',
-        fontSize: '17px',
-        color: '#d8d2e4',
-      }).setOrigin(0.5),
+      this.add
+        .text(GAME_W / 2, 132, `+${gold} gold. Take one enemy card:`, {
+          fontFamily: 'monospace',
+          fontSize: '17px',
+          color: '#d8d2e4',
+        })
+        .setOrigin(0.5),
     );
 
     const n = this.enemy.cards.length;

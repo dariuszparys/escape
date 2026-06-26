@@ -31,12 +31,12 @@ npm run dev      # http://localhost:5173
 
 ## Controls
 
-| Input | Action |
-| --- | --- |
-| WASD / arrows | move |
-| walk into things | pick up / open / choose |
-| P | drink a potion in the dungeon |
-| mouse | play cards in battle |
+| Input            | Action                        |
+| ---------------- | ----------------------------- |
+| WASD / arrows    | move                          |
+| walk into things | pick up / open / choose       |
+| P                | drink a potion in the dungeon |
+| mouse            | play cards in battle          |
 
 ## Tech
 

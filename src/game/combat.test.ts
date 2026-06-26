@@ -3,13 +3,92 @@ import { makeCard } from '../data/cards';
 import { makeItem } from '../data/items';
 import { resolveRound } from './combat';
 
-const strike = makeCard({ id: 'strike', name: 'Strike', type: 'attack', tier: 1, cost: 0, speed: 5, color: 0, description: 'Deal 6', effects: [{ kind: 'damage', amount: 6 }] });
-const quick = makeCard({ id: 'quick', name: 'Quick Jab', type: 'attack', tier: 1, cost: 0, speed: 8, color: 0, description: 'Deal 4', effects: [{ kind: 'damage', amount: 4 }] });
-const slow = makeCard({ id: 'slow', name: 'Heavy Strike', type: 'attack', tier: 2, cost: 0, speed: 1, color: 0, description: 'Deal 10', effects: [{ kind: 'damage', amount: 10 }] });
-const poison = makeCard({ id: 'poison', name: 'Poison Dagger', type: 'status', tier: 2, cost: 0, speed: 6, color: 0, description: 'Poison', effects: [{ kind: 'damage', amount: 3 }, { kind: 'status', status: 'poison', amount: 2, duration: 3 }] });
-const heal = makeCard({ id: 'heal', name: 'Minor Heal', type: 'heal', tier: 1, cost: 0, speed: 4, color: 0, description: 'Restore 5', effects: [{ kind: 'heal', amount: 5 }] });
-const vampiricStrike = makeCard({ id: 'vampiric-strike', name: 'Vampiric Strike', type: 'utility', tier: 2, cost: 0, speed: 5, color: 0, description: 'Deal 4 and heal 5', effects: [{ kind: 'damage', amount: 4 }, { kind: 'heal', amount: 5 }] });
-const shieldBash = makeCard({ id: 'shield-bash', name: 'Shield Bash', type: 'utility', tier: 2, cost: 0, speed: 6, color: 0, description: 'Deal 3, gain 4 block', effects: [{ kind: 'damage', amount: 3 }, { kind: 'block', amount: 4 }] });
+const strike = makeCard({
+  id: 'strike',
+  name: 'Strike',
+  type: 'attack',
+  tier: 1,
+  cost: 0,
+  speed: 5,
+  color: 0,
+  description: 'Deal 6',
+  effects: [{ kind: 'damage', amount: 6 }],
+});
+const quick = makeCard({
+  id: 'quick',
+  name: 'Quick Jab',
+  type: 'attack',
+  tier: 1,
+  cost: 0,
+  speed: 8,
+  color: 0,
+  description: 'Deal 4',
+  effects: [{ kind: 'damage', amount: 4 }],
+});
+const slow = makeCard({
+  id: 'slow',
+  name: 'Heavy Strike',
+  type: 'attack',
+  tier: 2,
+  cost: 0,
+  speed: 1,
+  color: 0,
+  description: 'Deal 10',
+  effects: [{ kind: 'damage', amount: 10 }],
+});
+const poison = makeCard({
+  id: 'poison',
+  name: 'Poison Dagger',
+  type: 'status',
+  tier: 2,
+  cost: 0,
+  speed: 6,
+  color: 0,
+  description: 'Poison',
+  effects: [
+    { kind: 'damage', amount: 3 },
+    { kind: 'status', status: 'poison', amount: 2, duration: 3 },
+  ],
+});
+const heal = makeCard({
+  id: 'heal',
+  name: 'Minor Heal',
+  type: 'heal',
+  tier: 1,
+  cost: 0,
+  speed: 4,
+  color: 0,
+  description: 'Restore 5',
+  effects: [{ kind: 'heal', amount: 5 }],
+});
+const vampiricStrike = makeCard({
+  id: 'vampiric-strike',
+  name: 'Vampiric Strike',
+  type: 'utility',
+  tier: 2,
+  cost: 0,
+  speed: 5,
+  color: 0,
+  description: 'Deal 4 and heal 5',
+  effects: [
+    { kind: 'damage', amount: 4 },
+    { kind: 'heal', amount: 5 },
+  ],
+});
+const shieldBash = makeCard({
+  id: 'shield-bash',
+  name: 'Shield Bash',
+  type: 'utility',
+  tier: 2,
+  cost: 0,
+  speed: 6,
+  color: 0,
+  description: 'Deal 3, gain 4 block',
+  effects: [
+    { kind: 'damage', amount: 3 },
+    { kind: 'block', amount: 4 },
+  ],
+});
 
 describe('resolveRound', () => {
   test('higher speed resolves first and skips the slower action if lethal', () => {

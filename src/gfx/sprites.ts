@@ -383,7 +383,13 @@ const HEART = [
 
 // ---------------------------------------------------------------- tiles (programmatic)
 
-function makeFloor(scene: Phaser.Scene, key: string, base: string, speck: string, seed: number): void {
+function makeFloor(
+  scene: Phaser.Scene,
+  key: string,
+  base: string,
+  speck: string,
+  seed: number,
+): void {
   const tex = scene.textures.createCanvas(key, 16, 16);
   if (!tex) return;
   const ctx = tex.getContext();

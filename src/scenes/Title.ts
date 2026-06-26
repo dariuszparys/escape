@@ -26,7 +26,14 @@ export class TitleScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     const hero = this.add.image(cx, 290, 'hero_down_0').setScale(5);
-    this.tweens.add({ targets: hero, y: 280, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.tweens.add({
+      targets: hero,
+      y: 280,
+      duration: 700,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
 
     const lines = [
       'Descend 10 rooms. Slay the boss. Escape.',

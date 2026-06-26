@@ -8,10 +8,13 @@ import {
 
 describe('campfire purchases', () => {
   test('buys repeatable starting items while inventory space remains', () => {
-    const first = buyCampfirePurchase({
-      embers: 20,
-      pendingPrep: createDefaultPendingPrep(),
-    }, 'small_potion');
+    const first = buyCampfirePurchase(
+      {
+        embers: 20,
+        pendingPrep: createDefaultPendingPrep(),
+      },
+      'small_potion',
+    );
 
     expect(first.ok).toBe(true);
     expect(first.state).toEqual({
@@ -46,10 +49,13 @@ describe('campfire purchases', () => {
   });
 
   test('rejects duplicate one-off prep purchases', () => {
-    const first = buyCampfirePurchase({
-      embers: 20,
-      pendingPrep: createDefaultPendingPrep(),
-    }, 'extra_starting_choice');
+    const first = buyCampfirePurchase(
+      {
+        embers: 20,
+        pendingPrep: createDefaultPendingPrep(),
+      },
+      'extra_starting_choice',
+    );
 
     expect(first.ok).toBe(true);
 
@@ -60,10 +66,13 @@ describe('campfire purchases', () => {
   });
 
   test('buys scout flame once and rejects duplicate preparation', () => {
-    const first = buyCampfirePurchase({
-      embers: 20,
-      pendingPrep: createDefaultPendingPrep(),
-    }, 'scout_flame');
+    const first = buyCampfirePurchase(
+      {
+        embers: 20,
+        pendingPrep: createDefaultPendingPrep(),
+      },
+      'scout_flame',
+    );
 
     expect(first.ok).toBe(true);
     expect(first.state).toEqual({

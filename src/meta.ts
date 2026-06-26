@@ -4,10 +4,7 @@ import type {
   PendingPrep,
 } from './data/campfirePurchases';
 import { MAX_INVENTORY } from './config';
-import {
-  CAMPFIRE_PURCHASES,
-  createDefaultPendingPrep,
-} from './data/campfirePurchases';
+import { CAMPFIRE_PURCHASES, createDefaultPendingPrep } from './data/campfirePurchases';
 
 export const META_STORAGE_KEY = 'escape.meta.v1';
 
@@ -36,26 +33,26 @@ function isCampfireItemPurchase(
 }
 
 const CAMPFIRE_ITEM_IDS = new Set<PendingPrep['itemIds'][number]>(
-  CAMPFIRE_PURCHASES
-    .filter(isCampfireItemPurchase)
-    .map((purchase) => purchase.itemId),
+  CAMPFIRE_PURCHASES.filter(isCampfireItemPurchase).map((purchase) => purchase.itemId),
 );
 
 function normalizeItemIds(value: unknown): PendingPrep['itemIds'] {
   if (!Array.isArray(value)) return [];
   return value
-    .filter((item): item is PendingPrep['itemIds'][number] => (
-      typeof item === 'string' && CAMPFIRE_ITEM_IDS.has(item)
-    ))
+    .filter(
+      (item): item is PendingPrep['itemIds'][number] =>
+        typeof item === 'string' && CAMPFIRE_ITEM_IDS.has(item),
+    )
     .slice(0, MAX_INVENTORY);
 }
 
 export function normalizeMetaState(value: unknown): MetaState {
   if (!isRecord(value)) return createDefaultMetaState();
 
-  const embers = typeof value.embers === 'number' && Number.isFinite(value.embers)
-    ? Math.max(0, Math.floor(value.embers))
-    : 0;
+  const embers =
+    typeof value.embers === 'number' && Number.isFinite(value.embers)
+      ? Math.max(0, Math.floor(value.embers))
+      : 0;
   const pending = isRecord(value.pendingPrep) ? value.pendingPrep : {};
 
   return {

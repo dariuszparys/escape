@@ -36,9 +36,7 @@ export interface CampfirePurchaseState {
   pendingPrep: PendingPrep;
 }
 
-export type PurchaseCheck =
-  | { ok: true }
-  | { ok: false; reason: string };
+export type PurchaseCheck = { ok: true } | { ok: false; reason: string };
 
 export type PurchaseResult =
   | { ok: true; state: CampfirePurchaseState }

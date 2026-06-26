@@ -58,7 +58,10 @@ describe('selectCombatHand', () => {
         speed: 4,
         color: 0,
         description: 'Deal 6 and stun',
-        effects: [{ kind: 'damage', amount: 6 }, { kind: 'status', status: 'stun', amount: 1, duration: 1 }],
+        effects: [
+          { kind: 'damage', amount: 6 },
+          { kind: 'status', status: 'stun', amount: 1, duration: 1 },
+        ],
       }),
       makeCard({
         id: 'heavy_strike',

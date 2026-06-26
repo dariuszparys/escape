@@ -13,11 +13,14 @@ describe('balance simulator', () => {
 
   test('full prep materially improves the chance to escape', () => {
     const baseline = simulateScenarioSummary({}, 400);
-    const prepared = simulateScenarioSummary({
-      prepItemIds: ['bomb', 'bomb', 'bomb'],
-      extraStartingChoice: true,
-      scoutFlame: true,
-    }, 400);
+    const prepared = simulateScenarioSummary(
+      {
+        prepItemIds: ['bomb', 'bomb', 'bomb'],
+        extraStartingChoice: true,
+        scoutFlame: true,
+      },
+      400,
+    );
 
     expect(prepared.winRate).toBeGreaterThanOrEqual(0.24);
     expect(prepared.winRate).toBeLessThanOrEqual(0.33);

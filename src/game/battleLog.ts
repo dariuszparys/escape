@@ -55,7 +55,8 @@ function normalizeActorLine(line: string): string {
   if (line.startsWith('Player gains ')) return line.replace('Player gains ', 'You gain ');
   if (line.startsWith('Player blocks ')) return line.replace('Player blocks ', 'You block ');
   if (line.startsWith('Player is ')) return line.replace('Player is ', 'You are ');
-  if (line.startsWith('Player attack is ')) return line.replace('Player attack is ', 'Your attack is ');
+  if (line.startsWith('Player attack is '))
+    return line.replace('Player attack is ', 'Your attack is ');
   return line;
 }
 
@@ -74,9 +75,7 @@ function splitResolvedLog(resolvedLog: string[]): { start: string[]; actions: st
 export function buildBattleRoundHistory(input: BattleRoundHistoryInput): string[] {
   const order = orderedBattleActions(input.playerAction, input.enemyAction);
   const sections = splitResolvedLog(input.resolvedLog);
-  const lines = [
-    `Round ${input.round}`,
-  ];
+  const lines = [`Round ${input.round}`];
 
   lines.push(...sections.start.map((line) => `Start: ${normalizeActorLine(line)}`));
   lines.push(

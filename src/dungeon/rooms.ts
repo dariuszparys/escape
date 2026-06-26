@@ -15,9 +15,20 @@ export interface RoomData {
 }
 
 export function rollRoomEvent(rng: GameRng, depth: number): RoomEvent {
-  const table: [RoomEvent, number][] = depth === MAX_DEPTH - 1
-    ? [['encounter', 25], ['chest', 40], ['potion', 30], ['trap', 5]]
-    : [['encounter', 35], ['chest', 30], ['potion', 25], ['trap', 10]];
+  const table: [RoomEvent, number][] =
+    depth === MAX_DEPTH - 1
+      ? [
+          ['encounter', 25],
+          ['chest', 40],
+          ['potion', 30],
+          ['trap', 5],
+        ]
+      : [
+          ['encounter', 35],
+          ['chest', 30],
+          ['potion', 25],
+          ['trap', 10],
+        ];
 
   let r = rng.frac() * 100;
   for (const [event, w] of table) {
@@ -55,11 +66,7 @@ export function makeStartRoom(): RoomData {
 }
 
 /** Build the room behind a door. Entered moving `travelDir`, so the door at OPPOSITE(travelDir) is blocked. */
-export function makeNextRoom(
-  rng: GameRng,
-  depth: number,
-  travelDir: Dir,
-): RoomData {
+export function makeNextRoom(rng: GameRng, depth: number, travelDir: Dir): RoomData {
   const entry = OPPOSITE[travelDir];
   if (depth >= MAX_DEPTH) {
     return { depth, event: 'boss', openDoors: [], blockedDoor: entry, spikes: [], cleared: false };

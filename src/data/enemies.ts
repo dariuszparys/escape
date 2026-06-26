@@ -37,9 +37,23 @@ export const ENEMIES: EnemyDef[] = [
   { id: 'skeleton', name: 'Skeleton', texture: 'skeleton', baseHp: 12, tier: 'weak', boss: false },
   { id: 'bandit', name: 'Bandit', texture: 'skeleton', baseHp: 16, tier: 'medium', boss: false },
   { id: 'cultist', name: 'Cultist', texture: 'bat', baseHp: 17, tier: 'medium', boss: false },
-  { id: 'armored_goblin', name: 'Armored Goblin', texture: 'slime', baseHp: 19, tier: 'medium', boss: false },
+  {
+    id: 'armored_goblin',
+    name: 'Armored Goblin',
+    texture: 'slime',
+    baseHp: 19,
+    tier: 'medium',
+    boss: false,
+  },
   { id: 'knight', name: 'Knight', texture: 'skeleton', baseHp: 23, tier: 'strong', boss: false },
-  { id: 'necromancer', name: 'Necromancer', texture: 'bat', baseHp: 24, tier: 'strong', boss: false },
+  {
+    id: 'necromancer',
+    name: 'Necromancer',
+    texture: 'bat',
+    baseHp: 24,
+    tier: 'strong',
+    boss: false,
+  },
   { id: 'ogre', name: 'Ogre', texture: 'slime', baseHp: 27, tier: 'strong', boss: false },
 ];
 
@@ -55,7 +69,10 @@ export const BOSSES: EnemyDef[] = [
       telegraph: 'The Iron Warden braces behind iron plates...',
       interval: 5,
       speed: 4,
-      effects: [{ kind: 'block', amount: 3 }, { kind: 'damage', amount: 6 }],
+      effects: [
+        { kind: 'block', amount: 3 },
+        { kind: 'damage', amount: 6 },
+      ],
     },
   },
   {
@@ -83,7 +100,10 @@ export const BOSSES: EnemyDef[] = [
       telegraph: 'The Flame Tyrant gathers heat around its axe...',
       interval: 5,
       speed: 5,
-      effects: [{ kind: 'damage', amount: 5 }, { kind: 'status', status: 'burn', amount: 1, duration: 2 }],
+      effects: [
+        { kind: 'damage', amount: 5 },
+        { kind: 'status', status: 'burn', amount: 1, duration: 2 },
+      ],
     },
   },
 ];
@@ -95,11 +115,7 @@ export function getEnemyTierForDepth(depth: number): EnemyTier {
 }
 
 /** Enemy mirrors the player combat hand size, capped to keep fights readable. */
-export function spawnEnemy(
-  rng: GameRng,
-  depth: number,
-  playerHandSize: number,
-): EnemyInstance {
+export function spawnEnemy(rng: GameRng, depth: number, playerHandSize: number): EnemyInstance {
   const tier = getEnemyTierForDepth(depth);
   const def = rng.pick(ENEMIES.filter((enemy) => enemy.tier === tier));
   const hp = def.baseHp + depth;

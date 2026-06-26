@@ -37,7 +37,10 @@ const poisonDagger = makeCard({
   speed: 6,
   color: 0,
   description: 'Deal 3 and poison',
-  effects: [{ kind: 'damage', amount: 3 }, { kind: 'status', status: 'poison', amount: 2, duration: 3 }],
+  effects: [
+    { kind: 'damage', amount: 3 },
+    { kind: 'status', status: 'poison', amount: 2, duration: 3 },
+  ],
 });
 
 describe('battle log helpers', () => {

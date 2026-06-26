@@ -58,42 +58,73 @@ export class EndScene extends Phaser.Scene {
     if (this.victory) {
       this.add
         .text(cx, 150, 'YOU ESCAPED!', {
-          fontFamily: 'monospace', fontSize: '54px', fontStyle: 'bold', color: '#f1c40f',
+          fontFamily: 'monospace',
+          fontSize: '54px',
+          fontStyle: 'bold',
+          color: '#f1c40f',
         })
         .setOrigin(0.5);
       const hero = this.add.image(cx, 270, 'hero_down_0').setScale(6);
-      this.tweens.add({ targets: hero, y: 258, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      this.tweens.add({
+        targets: hero,
+        y: 258,
+        duration: 600,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
       this.add
-        .text(cx, 380, [
-          'The dungeon falls silent behind you.',
-          'Sunlight. Fresh air. Freedom.',
-          '',
-          `Escaped with ${run.hp}/${run.maxHp} HP and ${run.hand.length} cards.`,
-          emberLine,
-        ].join('\n'), {
-          fontFamily: 'monospace', fontSize: '17px', color: '#d8d2e4', align: 'center', lineSpacing: 6,
-        })
+        .text(
+          cx,
+          380,
+          [
+            'The dungeon falls silent behind you.',
+            'Sunlight. Fresh air. Freedom.',
+            '',
+            `Escaped with ${run.hp}/${run.maxHp} HP and ${run.hand.length} cards.`,
+            emberLine,
+          ].join('\n'),
+          {
+            fontFamily: 'monospace',
+            fontSize: '17px',
+            color: '#d8d2e4',
+            align: 'center',
+            lineSpacing: 6,
+          },
+        )
         .setOrigin(0.5);
     } else {
       this.add
         .text(cx, 170, 'YOU DIED', {
-          fontFamily: 'monospace', fontSize: '54px', fontStyle: 'bold', color: '#ff5544',
+          fontFamily: 'monospace',
+          fontSize: '54px',
+          fontStyle: 'bold',
+          color: '#ff5544',
         })
         .setOrigin(0.5);
       this.add.image(cx, 280, 'skeleton').setScale(6).setAlpha(0.8);
       this.add
-        .text(cx, 390, [
-          `The dungeon claims another soul in room ${run.depth}.`,
-          emberLine,
-        ].join('\n'), {
-          fontFamily: 'monospace', fontSize: '17px', color: '#b8b0c8', align: 'center', lineSpacing: 6,
-        })
+        .text(
+          cx,
+          390,
+          [`The dungeon claims another soul in room ${run.depth}.`, emberLine].join('\n'),
+          {
+            fontFamily: 'monospace',
+            fontSize: '17px',
+            color: '#b8b0c8',
+            align: 'center',
+            lineSpacing: 6,
+          },
+        )
         .setOrigin(0.5);
     }
 
     const retry = this.add
       .text(cx, 500, '[ SPACE: RETURN TO THE FIRE ]', {
-        fontFamily: 'monospace', fontSize: '20px', fontStyle: 'bold', color: '#f5edd8',
+        fontFamily: 'monospace',
+        fontSize: '20px',
+        fontStyle: 'bold',
+        color: '#f5edd8',
       })
       .setOrigin(0.5);
     this.tweens.add({ targets: retry, alpha: 0.3, duration: 600, yoyo: true, repeat: -1 });

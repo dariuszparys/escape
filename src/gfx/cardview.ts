@@ -72,7 +72,12 @@ export function makeCardView(
 }
 
 /** Face-down card back. */
-export function makeCardBack(scene: Phaser.Scene, x: number, y: number, scale = 1): Phaser.GameObjects.Container {
+export function makeCardBack(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  scale = 1,
+): Phaser.GameObjects.Container {
   const w = CARD_W;
   const h = CARD_H;
   const g = scene.add.graphics();
