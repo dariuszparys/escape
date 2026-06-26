@@ -5,10 +5,11 @@ import {
 } from '../config';
 import { Card, makeCard, CARD_DEFS } from '../data/cards';
 import { EnemyInstance, spawnBoss, spawnEnemy } from '../data/enemies';
-import { makeStartRoom, makeNextRoom, RoomData } from '../dungeon/rooms';
+import { makeStartRoom, makeNextRoom, RoomData, type RoomEvent } from '../dungeon/rooms';
 import { makeCardView } from '../gfx/cardview';
 import { PhaserGameRng } from '../game/rng';
 import { awardFloorPotion, rollChestReward } from '../game/rewards';
+import { startingCardIdsForChoiceCount } from '../game/startingCards';
 import { getRun } from '../state';
 
 const DOOR_CELL: Record<Dir, { col: number; row: number }> = {
@@ -24,6 +25,15 @@ const ENTRY_CELL: Record<Dir, { col: number; row: number }> = {
   S: { col: 7, row: 1 },
   E: { col: 1, row: 5 },
   W: { col: ROOM_COLS - 2, row: 5 },
+};
+
+const ROOM_EVENT_LABEL: Record<RoomEvent, string> = {
+  start: 'camp',
+  encounter: 'enemy',
+  chest: 'chest',
+  potion: 'potion',
+  trap: 'trap',
+  boss: 'boss',
 };
 
 interface CardPickup {
@@ -189,10 +199,15 @@ export class DungeonScene extends Phaser.Scene {
 
     switch (room.event) {
       case 'start': {
-        const slash = makeCard(CARD_DEFS.find((c) => c.id === 'slash')!);
-        const guard = makeCard(CARD_DEFS.find((c) => c.id === 'guard')!);
-        for (const [i, card] of [slash, guard].entries()) {
-          const pos = at(i === 0 ? 4 : 10, 4);
+        const run = getRun();
+        const cardIds = startingCardIdsForChoiceCount(run.startingCardChoices);
+        const cols = cardIds.length === 2 ? [4, 10] : [3, 7, 11];
+
+        for (const [i, cardId] of cardIds.entries()) {
+          const def = CARD_DEFS.find((candidate) => candidate.id === cardId);
+          if (!def) throw new Error(`Unknown starting card: ${cardId}`);
+          const card = makeCard(def);
+          const pos = at(cols[i], 4);
           const view = makeCardView(this, card, pos.x, pos.y, 0.62);
           view.setDepth(5);
           this.tweens.add({
@@ -270,6 +285,10 @@ export class DungeonScene extends Phaser.Scene {
     const run = getRun();
     const nextDepth = run.depth + 1;
     const nextRoom = makeNextRoom(this.gameRng, nextDepth, dir);
+    const scoutMessage = run.scoutCharges > 0
+      ? `Scout Flame: ${ROOM_EVENT_LABEL[nextRoom.event]} ahead`
+      : null;
+    if (scoutMessage) run.scoutCharges--;
     const vec = DIR_VEC[dir];
     const newOrigin = {
       x: this.origin.x + vec.x * ROOM_W,
@@ -318,6 +337,9 @@ export class DungeonScene extends Phaser.Scene {
         this.player.body.reset(target.x, target.y);
         this.transitioning = false;
         this.hud();
+        if (scoutMessage) {
+          this.floatText(target.x, target.y - 50, scoutMessage, '#f1c40f');
+        }
         this.onRoomEntered();
       },
     });

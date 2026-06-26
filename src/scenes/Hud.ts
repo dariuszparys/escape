@@ -103,11 +103,19 @@ export class HudScene extends Phaser.Scene {
         fontFamily: 'monospace', fontSize: '15px', fontStyle: 'bold', color: '#f5edd8',
       }).setOrigin(0, 0.5),
     );
-    this.dynamic.add(
-      this.add.text(invX, y0 + 94, '[P] drink potion', {
-        fontFamily: 'monospace', fontSize: '10px', color: '#6a6478',
-      }).setOrigin(0, 0.5),
-    );
+    if (run.scoutCharges > 0) {
+      this.dynamic.add(
+        this.add.text(invX, y0 + 94, `SCOUT x${run.scoutCharges}`, {
+          fontFamily: 'monospace', fontSize: '10px', color: '#f1c40f',
+        }).setOrigin(0, 0.5),
+      );
+    } else {
+      this.dynamic.add(
+        this.add.text(invX, y0 + 94, '[P] drink potion', {
+          fontFamily: 'monospace', fontSize: '10px', color: '#6a6478',
+        }).setOrigin(0, 0.5),
+      );
+    }
 
     this.dynamic.add(
       this.add.text(GAME_W - 24, y0 + 30, `ROOM ${Math.min(run.depth, MAX_DEPTH)}/${MAX_DEPTH}`, {
