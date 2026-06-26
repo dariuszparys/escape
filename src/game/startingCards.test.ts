@@ -12,6 +12,7 @@ describe('startingCardIdsForChoiceCount', () => {
 
   test('clamps invalid counts to the supported range', () => {
     expect(startingCardIdsForChoiceCount(0)).toEqual(['slash', 'guard']);
+    expect(startingCardIdsForChoiceCount(Number.NaN)).toEqual(['slash', 'guard']);
     expect(startingCardIdsForChoiceCount(99)).toEqual(['slash', 'guard', 'quick_jab']);
   });
 });
