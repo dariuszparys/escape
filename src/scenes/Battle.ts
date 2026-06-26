@@ -5,6 +5,7 @@ import { EnemyInstance } from '../data/enemies';
 import { InventoryItem } from '../data/items';
 import { CARD_H, CARD_W, makeCardBack, makeCardView } from '../gfx/cardview';
 import { ActiveStatusEffect, CombatAction, resolveRound } from '../game/combat';
+import { hpChange } from '../game/combatFeedback';
 import { GameRng } from '../game/rng';
 import { awardEnemyGold } from '../game/rewards';
 import { getRun } from '../state';
@@ -361,16 +362,22 @@ export class BattleScene extends Phaser.Scene {
     this.logText.setText(resolved.log.join('\n'));
 
     this.time.delayedCall(700, () => {
-      const enemyDamage = Math.max(0, beforeEnemyHp - this.enemy.hp);
-      const playerDamage = Math.max(0, beforePlayerHp - run.hp);
-      if (enemyDamage > 0) {
-        this.damagePop(this.enemySprite.x + 40, this.enemySprite.y - 30, `-${enemyDamage}`, '#ff5544');
+      const enemyHpChange = hpChange(beforeEnemyHp, this.enemy.hp);
+      const playerHpChange = hpChange(beforePlayerHp, run.hp);
+      if (enemyHpChange.damage > 0) {
+        this.combatPop(this.enemySprite.x + 40, this.enemySprite.y - 30, `-${enemyHpChange.damage}`, '#ff5544');
         this.flash(this.enemySprite);
       }
-      if (playerDamage > 0) {
-        this.damagePop(this.heroSprite.x + 36, this.heroSprite.y - 30, `-${playerDamage}`, '#ff5544');
+      if (enemyHpChange.heal > 0) {
+        this.combatPop(this.enemySprite.x + 40, this.enemySprite.y - 30, `+${enemyHpChange.heal} HP`, '#5fe07a');
+      }
+      if (playerHpChange.damage > 0) {
+        this.combatPop(this.heroSprite.x + 36, this.heroSprite.y - 30, `-${playerHpChange.damage}`, '#ff5544');
         this.flash(this.heroSprite);
         this.cameras.main.shake(120, 0.006);
+      }
+      if (playerHpChange.heal > 0) {
+        this.combatPop(this.heroSprite.x + 36, this.heroSprite.y - 30, `+${playerHpChange.heal} HP`, '#5fe07a');
       }
       this.redrawBars();
       this.updateStatusText();
@@ -398,7 +405,7 @@ export class BattleScene extends Phaser.Scene {
     });
   }
 
-  private damagePop(x: number, y: number, msg: string, color: string): void {
+  private combatPop(x: number, y: number, msg: string, color: string): void {
     const t = this.add
       .text(x, y, msg, {
         fontFamily: 'monospace',
