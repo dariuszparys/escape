@@ -1,4 +1,4 @@
-import { Dir, DIRS, MAX_DEPTH, OPPOSITE, ROOM_COLS, ROOM_ROWS } from '../config';
+import { Dir, DIRS, DIR_VEC, MAX_DEPTH, OPPOSITE, ROOM_COLS, ROOM_ROWS } from '../config';
 import { GameRng } from '../game/rng';
 
 export type RoomEvent = 'start' | 'encounter' | 'chest' | 'potion' | 'trap' | 'boss';
@@ -38,19 +38,66 @@ export function rollRoomEvent(rng: GameRng, depth: number): RoomEvent {
   return 'trap';
 }
 
-function rollSpikes(rng: GameRng): { col: number; row: number }[] {
+/** Cells directly inside each door, kept trap-free for fairness. */
+const DOOR_ENTRY_CELL: Record<Dir, { col: number; row: number }> = {
+  N: { col: 7, row: 1 },
+  S: { col: 7, row: ROOM_ROWS - 2 },
+  W: { col: 1, row: 5 },
+  E: { col: ROOM_COLS - 2, row: 5 },
+};
+
+function rollSpikes(rng: GameRng, entry: Dir): { col: number; row: number }[] {
   const spikes: { col: number; row: number }[] = [];
-  const count = rng.between(5, 8);
   const midCol = Math.floor(ROOM_COLS / 2);
   const midRow = Math.floor(ROOM_ROWS / 2);
-  for (let i = 0; i < count; i++) {
-    const col = rng.between(2, ROOM_COLS - 3);
-    const row = rng.between(2, ROOM_ROWS - 3);
-    // Keep the door corridors walkable so traps are avoidable.
-    if (col === midCol || row === midRow) continue;
-    if (spikes.some((s) => s.col === col && s.row === row)) continue;
-    spikes.push({ col, row });
+
+  // Cells that must stay trap-free: just inside every door, plus one
+  // extra tile of breathing room behind the player's spawn point.
+  const fair = new Set<string>();
+  for (const dir of DIRS) {
+    const c = DOOR_ENTRY_CELL[dir];
+    fair.add(`${c.col},${c.row}`);
   }
+  const spawn = DOOR_ENTRY_CELL[entry];
+  fair.add(`${spawn.col - DIR_VEC[entry].x},${spawn.row - DIR_VEC[entry].y}`);
+
+  const has = (col: number, row: number) =>
+    spikes.some((s) => s.col === col && s.row === row);
+
+  // Eligible interior cells (existing wall buffer, minus fair cells).
+  const eligible: { col: number; row: number }[] = [];
+  for (let row = 2; row <= ROOM_ROWS - 3; row++) {
+    for (let col = 2; col <= ROOM_COLS - 3; col++) {
+      if (fair.has(`${col},${row}`)) continue;
+      eligible.push({ col, row });
+    }
+  }
+
+  // Seed at least one mandatory blocker on the center column.
+  const centerColCells = eligible.filter((c) => c.col === midCol);
+  if (centerColCells.length > 0) {
+    spikes.push(rng.pick(centerColCells));
+  }
+
+  // Add 1-2 middle-band blockers to pressure the center lane.
+  const midBand = eligible.filter(
+    (c) => c.row >= midRow - 1 && c.row <= midRow + 1 && !has(c.col, c.row),
+  );
+  const extraBlockers = Math.min(midBand.length, rng.between(1, 2));
+  for (let i = 0; i < extraBlockers; i++) {
+    const remaining = midBand.filter((c) => !has(c.col, c.row));
+    if (remaining.length === 0) break;
+    spikes.push(rng.pick(remaining));
+  }
+
+  // Fill remaining spikes up to the target count.
+  const count = rng.between(5, 8);
+  while (spikes.length < count) {
+    const remaining = eligible.filter((c) => !has(c.col, c.row));
+    if (remaining.length === 0) break;
+    spikes.push(rng.pick(remaining));
+  }
+
   return spikes;
 }
 
@@ -77,7 +124,7 @@ export function makeNextRoom(rng: GameRng, depth: number, travelDir: Dir): RoomD
     event,
     openDoors: DIRS.filter((d) => d !== entry),
     blockedDoor: entry,
-    spikes: event === 'trap' ? rollSpikes(rng) : [],
+    spikes: event === 'trap' ? rollSpikes(rng, entry) : [],
     cleared: false,
   };
 }

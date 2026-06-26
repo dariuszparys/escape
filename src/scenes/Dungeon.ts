@@ -10,6 +10,7 @@ import {
   ROOM_W,
   TILE,
   TRAP_DAMAGE,
+  VISION_RADIUS,
 } from '../config';
 import { Card, makeCard, CARD_DEFS } from '../data/cards';
 import { EnemyInstance, spawnBoss, spawnEnemy } from '../data/enemies';
@@ -92,6 +93,7 @@ export class DungeonScene extends Phaser.Scene {
   private itemSwapKeyHandlers: { event: string; handler: (event: KeyboardEvent) => void }[] = [];
   private ignoredPotionUid: number | null = null;
   private deckOverlay: Phaser.GameObjects.Container | null = null;
+  private visionGraphics: Phaser.GameObjects.Graphics | null = null;
 
   constructor() {
     super('Dungeon');
@@ -143,6 +145,7 @@ export class DungeonScene extends Phaser.Scene {
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.closeDeckOverlay();
       this.closeItemSwapPrompt();
+      this.disableDarknessOverlay();
       this.game.events.off('battle-end');
     });
   }
@@ -214,6 +217,22 @@ export class DungeonScene extends Phaser.Scene {
   private closeDeckOverlay(): void {
     this.deckOverlay?.destroy();
     this.deckOverlay = null;
+  }
+
+  private enableDarknessOverlay(): void {
+    if (this.visionGraphics) return;
+    this.visionGraphics = this.make.graphics(undefined, false);
+    this.visionGraphics.fillStyle(0xffffff, 1);
+    this.visionGraphics.fillCircle(this.player.x, this.player.y, VISION_RADIUS);
+    const mask = this.visionGraphics.createGeometryMask();
+    this.cameras.main.setMask(mask, false);
+  }
+
+  private disableDarknessOverlay(): void {
+    if (!this.visionGraphics) return;
+    this.cameras.main.clearMask(true);
+    this.visionGraphics.destroy();
+    this.visionGraphics = null;
   }
 
   private branchSeed(dir: Dir): string {
@@ -568,6 +587,7 @@ export class DungeonScene extends Phaser.Scene {
     if (this.transitioning) return;
     this.transitioning = true;
     this.closeDeckOverlay();
+    this.disableDarknessOverlay();
     this.player.setVelocity(0, 0);
     this.player.body.enable = false;
     this.clearScoutRevealText();
@@ -662,6 +682,7 @@ export class DungeonScene extends Phaser.Scene {
         this.startBattle();
       });
     } else if (room.event === 'trap') {
+      this.enableDarknessOverlay();
       this.floatText(this.player.x, this.player.y - 50, 'Watch your step!', '#ff9944');
       this.tryRevealScoutOptions();
     } else {
@@ -712,6 +733,11 @@ export class DungeonScene extends Phaser.Scene {
 
   update(time: number): void {
     if (this.transitioning || this.battleActive) return;
+    if (this.visionGraphics) {
+      this.visionGraphics.clear();
+      this.visionGraphics.fillStyle(0xffffff, 1);
+      this.visionGraphics.fillCircle(this.player.x, this.player.y, VISION_RADIUS);
+    }
     const run = getRun();
     if (Phaser.Input.Keyboard.JustDown(this.keys.c)) {
       this.toggleDeckOverlay();
