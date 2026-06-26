@@ -71,6 +71,7 @@ export class DungeonScene extends Phaser.Scene {
   private invulnUntil = 0;
   private lastHintAt = 0;
   private exitHatch: { x: number; y: number; img: Phaser.GameObjects.Image } | null = null;
+  private scoutRevealText: Phaser.GameObjects.Text | null = null;
 
   constructor() {
     super('Dungeon');
@@ -83,6 +84,7 @@ export class DungeonScene extends Phaser.Scene {
     this.transitioning = false;
     this.battleActive = false;
     this.exitHatch = null;
+    this.scoutRevealText = null;
 
     this.room = makeStartRoom();
     this.origin = { x: 0, y: 0 };
@@ -127,7 +129,7 @@ export class DungeonScene extends Phaser.Scene {
     this.game.events.emit('hud-update');
   }
 
-  private floatText(x: number, y: number, msg: string, color = '#f5edd8'): void {
+  private floatText(x: number, y: number, msg: string, color = '#f5edd8'): Phaser.GameObjects.Text {
     const t = this.add
       .text(x, y, msg, {
         fontFamily: 'monospace', fontSize: '16px', fontStyle: 'bold', color,
@@ -137,8 +139,19 @@ export class DungeonScene extends Phaser.Scene {
       .setDepth(50);
     this.tweens.add({
       targets: t, y: y - 44, alpha: 0, duration: 1100, ease: 'Cubic.easeOut',
-      onComplete: () => t.destroy(),
+      onComplete: () => {
+        if (this.scoutRevealText === t) this.scoutRevealText = null;
+        t.destroy();
+      },
     });
+    return t;
+  }
+
+  private clearScoutRevealText(): void {
+    if (!this.scoutRevealText) return;
+    this.tweens.killTweensOf(this.scoutRevealText);
+    this.scoutRevealText.destroy();
+    this.scoutRevealText = null;
   }
 
   // ------------------------------------------------------------ room construction
@@ -338,7 +351,8 @@ export class DungeonScene extends Phaser.Scene {
         this.transitioning = false;
         this.hud();
         if (scoutMessage) {
-          this.floatText(target.x, target.y - 50, scoutMessage, '#f1c40f');
+          this.clearScoutRevealText();
+          this.scoutRevealText = this.floatText(target.x, target.y - 50, scoutMessage, '#f1c40f');
         }
         this.onRoomEntered();
       },
@@ -369,6 +383,7 @@ export class DungeonScene extends Phaser.Scene {
 
   private startBattle(): void {
     if (!this.built.enemy) return;
+    this.clearScoutRevealText();
     this.battleActive = true;
     this.player.setVelocity(0, 0);
     this.scene.launch('Battle', { enemy: this.built.enemy, rng: this.gameRng });
