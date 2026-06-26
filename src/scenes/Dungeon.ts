@@ -772,7 +772,9 @@ export class DungeonScene extends Phaser.Scene {
         run.heal(potion.amount);
         this.floatText(this.player.x, this.player.y - 50, `+${potion.amount} HP`, '#5fe07a');
         this.hud();
-      } else if (!potion) {
+      } else if (potion) {
+        this.floatText(this.player.x, this.player.y - 50, 'Already at full HP', '#b8b0c8');
+      } else {
         this.floatText(this.player.x, this.player.y - 50, 'No potions!', '#b8b0c8');
       }
     }
