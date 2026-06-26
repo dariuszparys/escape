@@ -420,6 +420,7 @@ export class BattleScene extends Phaser.Scene {
 
   private victory(): void {
     const run = getRun();
+    run.enemiesDefeated++;
     const gold = awardEnemyGold(run, this.rng, run.depth);
     this.tweens.add({
       targets: this.enemySprite,

@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { GAME_W } from '../config';
-import { getRun, newRun } from '../state';
+import { calculateEmberReward, EmberRewardBreakdown } from '../game/metaRewards';
+import { getMeta, setMeta } from '../meta';
+import { getRun } from '../state';
 
 export class EndScene extends Phaser.Scene {
   private victory = false;
@@ -13,8 +15,43 @@ export class EndScene extends Phaser.Scene {
     this.victory = data.victory;
   }
 
+  private awardEmbersOnce(): { awarded: boolean; reward: EmberRewardBreakdown } {
+    const run = getRun();
+    const meta = getMeta();
+    const zeroReward: EmberRewardBreakdown = {
+      roomEmbers: 0,
+      enemyEmbers: 0,
+      goldEmbers: 0,
+      victoryEmbers: 0,
+      total: 0,
+    };
+
+    if (meta.lastAwardedRunId === run.runId) {
+      return { awarded: false, reward: zeroReward };
+    }
+
+    const reward = calculateEmberReward({
+      depth: run.depth,
+      enemiesDefeated: run.enemiesDefeated,
+      gold: run.gold,
+      escaped: this.victory,
+    });
+
+    setMeta({
+      ...meta,
+      embers: meta.embers + reward.total,
+      lastAwardedRunId: run.runId,
+    });
+
+    return { awarded: true, reward };
+  }
+
   create(): void {
     const run = getRun();
+    const emberAward = this.awardEmbersOnce();
+    const emberLine = emberAward.awarded
+      ? `Recovered ${emberAward.reward.total} embers.`
+      : 'Embers already recovered.';
     const cx = GAME_W / 2;
     this.cameras.main.fadeIn(600, 11, 10, 18);
 
@@ -32,6 +69,7 @@ export class EndScene extends Phaser.Scene {
           'Sunlight. Fresh air. Freedom.',
           '',
           `Escaped with ${run.hp}/${run.maxHp} HP and ${run.hand.length} cards.`,
+          emberLine,
         ].join('\n'), {
           fontFamily: 'monospace', fontSize: '17px', color: '#d8d2e4', align: 'center', lineSpacing: 6,
         })
@@ -44,23 +82,24 @@ export class EndScene extends Phaser.Scene {
         .setOrigin(0.5);
       this.add.image(cx, 280, 'skeleton').setScale(6).setAlpha(0.8);
       this.add
-        .text(cx, 390, `The dungeon claims another soul in room ${run.depth}.`, {
-          fontFamily: 'monospace', fontSize: '17px', color: '#b8b0c8',
+        .text(cx, 390, [
+          `The dungeon claims another soul in room ${run.depth}.`,
+          emberLine,
+        ].join('\n'), {
+          fontFamily: 'monospace', fontSize: '17px', color: '#b8b0c8', align: 'center', lineSpacing: 6,
         })
         .setOrigin(0.5);
     }
 
     const retry = this.add
-      .text(cx, 500, this.victory ? '[ SPACE: DELVE AGAIN ]' : '[ SPACE: TRY AGAIN ]', {
+      .text(cx, 500, '[ SPACE: RETURN TO THE FIRE ]', {
         fontFamily: 'monospace', fontSize: '20px', fontStyle: 'bold', color: '#f5edd8',
       })
       .setOrigin(0.5);
     this.tweens.add({ targets: retry, alpha: 0.3, duration: 600, yoyo: true, repeat: -1 });
 
     const restart = () => {
-      const seed = new URLSearchParams(window.location.search).get('seed') ?? String(Math.random());
-      newRun(seed);
-      this.scene.start('Dungeon');
+      this.scene.start('Campfire');
     };
     this.input.keyboard?.once('keydown-SPACE', restart);
     this.input.once('pointerdown', restart);
