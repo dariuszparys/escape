@@ -24,7 +24,7 @@ export function combatCardScore(card: Pick<Card, 'tier' | 'speed' | 'effects'>):
   return card.tier * 100 + damage * 8 + block * 4 + heal * 4 + statuses + card.speed;
 }
 
-function compareCards(a: Card, b: Card): number {
+export function compareCombatCards(a: Card, b: Card): number {
   const tier = b.tier - a.tier;
   if (tier !== 0) return tier;
 
@@ -41,7 +41,7 @@ function compareCards(a: Card, b: Card): number {
 }
 
 export function selectCombatHand(collection: readonly Card[]): Card[] {
-  const sorted = [...collection].sort(compareCards);
+  const sorted = [...collection].sort(compareCombatCards);
   const offensive = sorted.filter(isOffensiveCard);
   const selected = new Set<number>();
   const guaranteedOffense = Math.min(MIN_OFFENSIVE_CARDS, MAX_HAND, offensive.length);

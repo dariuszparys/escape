@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import {
-  Dir, DIR_VEC, PLAYER_SPEED, ROOM_COLS, ROOM_H, ROOM_ROWS, ROOM_W,
+  Dir, DIR_VEC, GAME_H, PLAYER_SPEED, ROOM_COLS, ROOM_H, ROOM_ROWS, ROOM_W,
   TILE, TRAP_DAMAGE,
 } from '../config';
 import { Card, makeCard, CARD_DEFS } from '../data/cards';
@@ -8,6 +8,7 @@ import { EnemyInstance, spawnBoss, spawnEnemy } from '../data/enemies';
 import { InventoryItem, makeItem, randomItemIdForDepth } from '../data/items';
 import { makeStartRoom, makeNextRoom, RoomData, type RoomEvent } from '../dungeon/rooms';
 import { makeCardView } from '../gfx/cardview';
+import { createDeckPanel } from '../gfx/deckPanel';
 import { PhaserGameRng } from '../game/rng';
 import { awardPotionItem, rollChestReward } from '../game/rewards';
 import { startingCardIdsForChoiceCount } from '../game/startingCards';
@@ -82,6 +83,7 @@ export class DungeonScene extends Phaser.Scene {
   private itemSwapPrompt: Phaser.GameObjects.Container | null = null;
   private itemSwapKeyHandlers: { event: string; handler: (event: KeyboardEvent) => void }[] = [];
   private ignoredPotionUid: number | null = null;
+  private deckOverlay: Phaser.GameObjects.Container | null = null;
 
   constructor() {
     super('Dungeon');
@@ -112,7 +114,7 @@ export class DungeonScene extends Phaser.Scene {
     this.keys = {
       up: kb.addKey('UP'), down: kb.addKey('DOWN'), left: kb.addKey('LEFT'), right: kb.addKey('RIGHT'),
       w: kb.addKey('W'), s: kb.addKey('S'), a: kb.addKey('A'), d: kb.addKey('D'),
-      p: kb.addKey('P'),
+      p: kb.addKey('P'), c: kb.addKey('C'),
     };
 
     this.cameras.main.setScroll(this.origin.x, this.origin.y);
@@ -124,6 +126,7 @@ export class DungeonScene extends Phaser.Scene {
     this.game.events.off('battle-end');
     this.game.events.on('battle-end', (won: boolean) => this.onBattleEnd(won));
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.closeDeckOverlay();
       this.closeItemSwapPrompt();
       this.game.events.off('battle-end');
     });
@@ -165,6 +168,29 @@ export class DungeonScene extends Phaser.Scene {
     this.tweens.killTweensOf(this.scoutRevealText);
     this.scoutRevealText.destroy();
     this.scoutRevealText = null;
+  }
+
+  private toggleDeckOverlay(): void {
+    if (this.deckOverlay) {
+      this.closeDeckOverlay();
+      return;
+    }
+
+    this.closeItemSwapPrompt();
+    const run = getRun();
+    this.deckOverlay = createDeckPanel(
+      this,
+      'Deck order',
+      this.origin.x + ROOM_W / 2,
+      this.origin.y + GAME_H / 2 - 12,
+      run.cardCollection,
+      run.combatHand,
+    );
+  }
+
+  private closeDeckOverlay(): void {
+    this.deckOverlay?.destroy();
+    this.deckOverlay = null;
   }
 
   private branchSeed(dir: Dir): string {
@@ -466,6 +492,7 @@ export class DungeonScene extends Phaser.Scene {
   private startTransition(dir: Dir): void {
     if (this.transitioning) return;
     this.transitioning = true;
+    this.closeDeckOverlay();
     this.player.setVelocity(0, 0);
     this.player.body.enable = false;
     this.clearScoutRevealText();
@@ -558,6 +585,7 @@ export class DungeonScene extends Phaser.Scene {
 
   private startBattle(): void {
     if (!this.built.enemy) return;
+    this.closeDeckOverlay();
     this.battleActive = true;
     this.player.setVelocity(0, 0);
     this.scene.launch('Battle', { enemy: this.built.enemy, rng: this.gameRng });
@@ -595,6 +623,14 @@ export class DungeonScene extends Phaser.Scene {
   update(time: number): void {
     if (this.transitioning || this.battleActive) return;
     const run = getRun();
+    if (Phaser.Input.Keyboard.JustDown(this.keys.c)) {
+      this.toggleDeckOverlay();
+      return;
+    }
+    if (this.deckOverlay) {
+      this.player.setVelocity(0, 0);
+      return;
+    }
     if (this.itemSwapPrompt) {
       this.player.setVelocity(0, 0);
       return;

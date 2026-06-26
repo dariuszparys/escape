@@ -35,6 +35,7 @@ describe('resolveRound', () => {
     });
 
     expect(applied.enemy.statuses).toEqual([{ type: 'poison', amount: 2, remainingTurns: 3 }]);
+    expect(applied.log).toContain('Enemy is poisoned (2 for 3 rounds)');
 
     const ticked = resolveRound({
       player: applied.player,
@@ -45,6 +46,7 @@ describe('resolveRound', () => {
 
     expect(ticked.enemy.hp).toBe(9);
     expect(ticked.enemy.statuses).toEqual([{ type: 'poison', amount: 2, remainingTurns: 2 }]);
+    expect(ticked.log[0]).toBe('Enemy takes 2 poison damage');
   });
 
   test('combat items can skip enemy attacks', () => {
@@ -106,5 +108,17 @@ describe('resolveRound', () => {
 
     expect(result.player.hp).toBe(14);
     expect(result.enemy.hp).toBe(17);
+  });
+
+  test('punch uses the configured base damage', () => {
+    const result = resolveRound({
+      player: { id: 'player', name: 'Player', hp: 20, maxHp: 20, armor: 0, statuses: [] },
+      enemy: { id: 'enemy', name: 'Enemy', hp: 10, maxHp: 10, armor: 0, statuses: [] },
+      playerAction: { actor: 'player', kind: 'punch' },
+      enemyAction: { actor: 'enemy', kind: 'none' },
+    });
+
+    expect(result.enemy.hp).toBe(7);
+    expect(result.log).toContain('Enemy takes 3 damage');
   });
 });

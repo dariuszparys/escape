@@ -4,7 +4,9 @@ import { Card, cardEffectAmount } from '../data/cards';
 import { EnemyInstance } from '../data/enemies';
 import { InventoryItem } from '../data/items';
 import { CARD_H, CARD_W, makeCardBack, makeCardView } from '../gfx/cardview';
-import { ActiveStatusEffect, CombatAction, resolveRound } from '../game/combat';
+import { createDeckPanel } from '../gfx/deckPanel';
+import { buildBattleRoundHistory, orderedBattleActions } from '../game/battleLog';
+import { ActiveStatusEffect, CombatAction, combatActionLabel, combatActionSpeed, resolveRound } from '../game/combat';
 import { hpChange } from '../game/combatFeedback';
 import { GameRng } from '../game/rng';
 import { awardEnemyGold } from '../game/rewards';
@@ -35,9 +37,14 @@ export class BattleScene extends Phaser.Scene {
   private enemyHpText!: Phaser.GameObjects.Text;
   private playerHpText!: Phaser.GameObjects.Text;
   private logText!: Phaser.GameObjects.Text;
+  private historyText!: Phaser.GameObjects.Text;
+  private orderText!: Phaser.GameObjects.Text;
   private telegraphText!: Phaser.GameObjects.Text;
   private armorText!: Phaser.GameObjects.Text;
   private statusText!: Phaser.GameObjects.Text;
+  private historyLines: string[] = [];
+  private deckOverlay: Phaser.GameObjects.Container | null = null;
+  private toggleDeckKey!: Phaser.Input.Keyboard.Key;
 
   constructor() {
     super('Battle');
@@ -55,11 +62,14 @@ export class BattleScene extends Phaser.Scene {
     this.handViews = [];
     this.itemButtons = [];
     this.enemyCardBacks = [];
+    this.historyLines = [];
+    this.deckOverlay = null;
   }
 
   create(): void {
     const run = getRun();
     const cx = GAME_W / 2;
+    this.toggleDeckKey = this.input.keyboard!.addKey('C');
 
     this.scene.sleep('Hud');
 
@@ -106,23 +116,64 @@ export class BattleScene extends Phaser.Scene {
       fontSize: '12px',
       color: '#aab2bd',
     }).setOrigin(0.5);
-    this.statusText = this.add.text(cx, 285, '', {
+    this.statusText = this.add.text(cx, 306, '', {
       fontFamily: 'monospace',
       fontSize: '12px',
       color: '#b8b0c8',
       align: 'center',
     }).setOrigin(0.5);
 
+    const historyBg = this.add.graphics();
+    historyBg.fillStyle(0x16121e, 0.82);
+    historyBg.fillRoundedRect(24, 112, 250, 220, 6);
+    historyBg.lineStyle(1, 0x3a3544, 1);
+    historyBg.strokeRoundedRect(24, 112, 250, 220, 6);
+    this.add.text(36, 122, 'Battle log', {
+      fontFamily: 'monospace',
+      fontSize: '14px',
+      fontStyle: 'bold',
+      color: '#f1c40f',
+    });
+    this.historyText = this.add.text(36, 146, 'Battle history appears here.', {
+      fontFamily: 'monospace',
+      fontSize: '10px',
+      color: '#d8d2e4',
+      fixedWidth: 226,
+      lineSpacing: 3,
+      wordWrap: { width: 226, useAdvancedWrap: true },
+    });
+
+    const orderBg = this.add.graphics();
+    orderBg.fillStyle(0x16121e, 0.82);
+    orderBg.fillRoundedRect(520, 124, 168, 94, 6);
+    orderBg.lineStyle(1, 0x3a3544, 1);
+    orderBg.strokeRoundedRect(520, 124, 168, 94, 6);
+    this.add.text(604, 136, 'Turn order', {
+      fontFamily: 'monospace',
+      fontSize: '14px',
+      fontStyle: 'bold',
+      color: '#f1c40f',
+    }).setOrigin(0.5, 0);
+    this.orderText = this.add.text(604, 162, 'Order appears here.', {
+      fontFamily: 'monospace',
+      fontSize: '11px',
+      color: '#d8d2e4',
+      fixedWidth: 140,
+      align: 'center',
+      lineSpacing: 4,
+      wordWrap: { width: 140, useAdvancedWrap: true },
+    }).setOrigin(0.5, 0);
+
     this.logText = this.add
-      .text(cx, 330, 'Choose a card, item, or punch.', {
+      .text(cx, 352, 'Choose a card, item, or punch. [C] deck', {
         fontFamily: 'monospace',
-        fontSize: '15px',
+        fontSize: '14px',
         color: '#d8d2e4',
         align: 'center',
       })
       .setOrigin(0.5);
     this.telegraphText = this.add
-      .text(cx, 240, '', {
+      .text(cx, 214, '', {
         fontFamily: 'monospace',
         fontSize: '14px',
         fontStyle: 'bold',
@@ -144,7 +195,7 @@ export class BattleScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => {
-        if (!this.busy) this.playRound({ kind: 'punch' });
+        if (!this.busy && !this.deckOverlay) this.playRound({ kind: 'punch' });
       });
 
     this.redrawBars();
@@ -153,6 +204,7 @@ export class BattleScene extends Phaser.Scene {
     this.renderItems();
     this.updateTelegraph();
     this.updateStatusText();
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.closeDeckOverlay());
   }
 
   private redrawBars(): void {
@@ -202,10 +254,10 @@ export class BattleScene extends Phaser.Scene {
         view.setAlpha(0.3);
       } else {
         view.setInteractive({ useHandCursor: true });
-        view.on('pointerover', () => !this.busy && view.setY(y - 16));
+        view.on('pointerover', () => !this.busy && !this.deckOverlay && view.setY(y - 16));
         view.on('pointerout', () => view.setY(y));
         view.on('pointerdown', () => {
-          if (!this.busy) this.playRound({ kind: 'card', card });
+          if (!this.busy && !this.deckOverlay) this.playRound({ kind: 'card', card });
         });
       }
       this.handViews.push(view);
@@ -230,10 +282,105 @@ export class BattleScene extends Phaser.Scene {
         .setOrigin(0.5)
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => {
-          if (!this.busy) this.playRound({ kind: 'item', item });
+          if (!this.busy && !this.deckOverlay) this.playRound({ kind: 'item', item });
         });
       this.itemButtons.push(button);
     }
+  }
+
+  private toggleDeckOverlay(): void {
+    if (this.deckOverlay) {
+      this.closeDeckOverlay();
+      return;
+    }
+
+    const run = getRun();
+    this.deckOverlay = createDeckPanel(
+      this,
+      'Deck order',
+      GAME_W / 2,
+      GAME_H / 2 - 8,
+      run.cardCollection,
+      run.combatHand,
+    );
+  }
+
+  private closeDeckOverlay(): void {
+    this.deckOverlay?.destroy();
+    this.deckOverlay = null;
+  }
+
+  private setPrompt(text: string): void {
+    this.logText.setText(text);
+  }
+
+  private appendHistory(lines: string[]): void {
+    this.historyLines.push(...lines.filter((line) => line.length > 0));
+    this.historyLines = this.historyLines.slice(-14);
+    this.historyText.setText(this.historyLines.join('\n'));
+  }
+
+  private updateOrderText(playerAction: CombatAction, enemyAction: CombatAction): void {
+    const order = orderedBattleActions(playerAction, enemyAction);
+    this.orderText.setText([
+      `${order[0].actor === 'player' ? '1. You' : `1. ${this.enemy.def.name}`}`,
+      `${order[0].label} [${order[0].speed}]`,
+      '',
+      `${order[1].actor === 'player' ? '2. You' : `2. ${this.enemy.def.name}`}`,
+      `${order[1].label} [${order[1].speed}]`,
+    ].join('\n'));
+  }
+
+  private createActionPreview(
+    action: CombatAction,
+    x: number,
+    y: number,
+    rankLabel: string,
+  ): Phaser.GameObjects.Container {
+    if (action.kind === 'card') {
+      const view = makeCardView(this, action.card, x, y, 0.78);
+      const label = this.add.text(x, y - 76, `${rankLabel} • spd ${action.card.speed}`, {
+        fontFamily: 'monospace',
+        fontSize: '11px',
+        fontStyle: 'bold',
+        color: '#f1c40f',
+        backgroundColor: '#16121e',
+        padding: { x: 6, y: 2 },
+      }).setOrigin(0.5);
+      return this.add.container(0, 0, [view, label]);
+    }
+
+    const panel = this.add.graphics();
+    panel.fillStyle(0x1c1826, 1);
+    panel.fillRoundedRect(-68, -40, 136, 80, 8);
+    panel.lineStyle(2, 0xcab98a, 1);
+    panel.strokeRoundedRect(-68, -40, 136, 80, 8);
+    const rank = this.add.text(0, -24, `${rankLabel} • spd ${combatActionSpeed(action)}`, {
+      fontFamily: 'monospace',
+      fontSize: '10px',
+      color: '#f1c40f',
+    }).setOrigin(0.5);
+    const title = this.add.text(0, -4, combatActionLabel(action), {
+      fontFamily: 'monospace',
+      fontSize: '14px',
+      fontStyle: 'bold',
+      color: '#f5edd8',
+      align: 'center',
+    }).setOrigin(0.5);
+    const desc = this.add.text(0, 18, action.kind === 'item'
+      ? action.item.description
+      : action.kind === 'punch'
+        ? `${PUNCH_DAMAGE} damage`
+        : action.kind === 'special'
+          ? 'Boss special'
+          : '', {
+      fontFamily: 'monospace',
+      fontSize: '10px',
+      color: '#b8b0c8',
+      align: 'center',
+      wordWrap: { width: 116, useAdvancedWrap: true },
+    }).setOrigin(0.5);
+    return this.add.container(x, y, [panel, rank, title, desc]);
   }
 
   private isSpecialRound(round: number): boolean {
@@ -299,16 +446,24 @@ export class BattleScene extends Phaser.Scene {
     return { card, action: { actor: 'enemy', kind: 'card', card } };
   }
 
+  update(): void {
+    if (Phaser.Input.Keyboard.JustDown(this.toggleDeckKey)) {
+      this.toggleDeckOverlay();
+    }
+  }
+
   private playRound(action: PlayerAction): void {
     this.busy = true;
+    this.closeDeckOverlay();
     const run = getRun();
     const cx = GAME_W / 2;
+    const playerAction = this.toCombatAction(action);
 
     if (action.kind === 'card') {
       this.playerUsed.add(action.card.uid);
       if (run.combatHand.every((card) => this.playerUsed.has(card.uid))) {
         this.playerUsed.clear();
-        this.time.delayedCall(1200, () => this.logText.setText('Your cards refresh!'));
+        this.time.delayedCall(1700, () => this.setPrompt('Your cards refresh!'));
       }
     } else if (action.kind === 'item') {
       run.removeItem(action.item.uid);
@@ -317,16 +472,13 @@ export class BattleScene extends Phaser.Scene {
     const beforePlayerHp = run.hp;
     const beforeEnemyHp = this.enemy.hp;
     const enemyTurn = this.enemyAction();
-    const shown: Phaser.GameObjects.Container[] = [];
-    if (action.kind === 'card') shown.push(makeCardView(this, action.card, cx - 100, 250, 0.8));
-    if (enemyTurn.card) {
-      const back = makeCardBack(this, cx + 100, 250, 0.8);
-      shown.push(back);
-      this.time.delayedCall(250, () => {
-        back.destroy();
-        shown.push(makeCardView(this, enemyTurn.card!, cx + 100, 250, 0.8));
-      });
-    }
+    const order = orderedBattleActions(playerAction, enemyTurn.action);
+    const shown: Phaser.GameObjects.GameObject[] = [
+      this.createActionPreview(playerAction, cx - 108, 218, `${order.findIndex((entry) => entry.actor === 'player') + 1}${order.findIndex((entry) => entry.actor === 'player') === 0 ? 'st' : 'nd'}`),
+      this.createActionPreview(enemyTurn.action, cx + 108, 218, `${order.findIndex((entry) => entry.actor === 'enemy') + 1}${order.findIndex((entry) => entry.actor === 'enemy') === 0 ? 'st' : 'nd'}`),
+    ];
+    this.updateOrderText(playerAction, enemyTurn.action);
+    this.setPrompt('Resolving round...');
 
     const resolved = resolveRound({
       player: {
@@ -345,9 +497,12 @@ export class BattleScene extends Phaser.Scene {
         armor: this.enemy.armor,
         statuses: this.enemyStatuses,
       },
-      playerAction: this.toCombatAction(action),
+      playerAction,
       enemyAction: enemyTurn.action,
     });
+
+    const enemyHpChange = hpChange(beforeEnemyHp, resolved.enemy.hp);
+    const playerHpChange = hpChange(beforePlayerHp, resolved.player.hp);
 
     run.hp = resolved.player.hp;
     this.enemy.hp = resolved.enemy.hp;
@@ -359,11 +514,17 @@ export class BattleScene extends Phaser.Scene {
     this.renderEnemyCards();
     this.renderItems();
     this.telegraphText.setText('');
-    this.logText.setText(resolved.log.join('\n'));
+    this.appendHistory(buildBattleRoundHistory({
+      round: this.round,
+      playerAction,
+      enemyAction: enemyTurn.action,
+      resolvedLog: resolved.log,
+      playerHpChange,
+      enemyHpChange,
+      enemyName: this.enemy.def.name,
+    }));
 
-    this.time.delayedCall(700, () => {
-      const enemyHpChange = hpChange(beforeEnemyHp, this.enemy.hp);
-      const playerHpChange = hpChange(beforePlayerHp, run.hp);
+    this.time.delayedCall(900, () => {
       if (enemyHpChange.damage > 0) {
         this.combatPop(this.enemySprite.x + 40, this.enemySprite.y - 30, `-${enemyHpChange.damage}`, '#ff5544');
         this.flash(this.enemySprite);
@@ -384,7 +545,7 @@ export class BattleScene extends Phaser.Scene {
       this.game.events.emit('hud-update');
     });
 
-    this.time.delayedCall(1500, () => {
+    this.time.delayedCall(2300, () => {
       for (const view of shown) view.destroy();
       if (this.enemy.hp <= 0) {
         this.victory();
@@ -401,7 +562,7 @@ export class BattleScene extends Phaser.Scene {
       this.renderItems();
       this.updateTelegraph();
       this.updateStatusText();
-      this.logText.setText('Choose a card, item, or punch.');
+      this.setPrompt('Choose a card, item, or punch. [C] deck');
     });
   }
 
@@ -427,6 +588,7 @@ export class BattleScene extends Phaser.Scene {
 
   private victory(): void {
     const run = getRun();
+    this.closeDeckOverlay();
     run.enemiesDefeated++;
     const gold = awardEnemyGold(run, this.rng, run.depth);
     this.tweens.add({
@@ -494,6 +656,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private endBattle(won: boolean): void {
+    this.closeDeckOverlay();
     this.scene.wake('Hud');
     this.scene.resume('Dungeon');
     this.game.events.emit('battle-end', won);
@@ -502,6 +665,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private defeat(): void {
+    this.closeDeckOverlay();
     this.cameras.main.fadeOut(700, 11, 10, 18);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       this.scene.stop('Dungeon');

@@ -1,3 +1,4 @@
+import { PUNCH_DAMAGE } from '../config';
 import { Card, CardEffect, StatusEffectType } from '../data/cards';
 import { InventoryItem } from '../data/items';
 
@@ -51,7 +52,7 @@ function cloneCombatant(combatant: CombatantSnapshot): MutableCombatant {
   };
 }
 
-function actionSpeed(action: CombatAction): number {
+export function combatActionSpeed(action: CombatAction): number {
   if (action.kind === 'card') return action.card.speed;
   if (action.kind === 'item') return action.item.kind === 'heal' || action.item.kind === 'shield' || action.item.kind === 'skip_attack' ? 10 : 7;
   if (action.kind === 'punch') return 5;
@@ -59,7 +60,7 @@ function actionSpeed(action: CombatAction): number {
   return 0;
 }
 
-function actionLabel(action: CombatAction): string {
+export function combatActionLabel(action: CombatAction): string {
   if (action.kind === 'card') return action.card.name;
   if (action.kind === 'item') return action.item.name;
   if (action.kind === 'punch') return 'Punch';
@@ -69,7 +70,7 @@ function actionLabel(action: CombatAction): string {
 
 function actionEffects(action: CombatAction): CardEffect[] {
   if (action.kind === 'card') return action.card.effects;
-  if (action.kind === 'punch') return [{ kind: 'damage', amount: 2 }];
+  if (action.kind === 'punch') return [{ kind: 'damage', amount: PUNCH_DAMAGE }];
   if (action.kind === 'special') return action.effects;
   if (action.kind === 'item') {
     if (action.item.kind === 'heal') return [{ kind: 'heal', amount: action.item.amount }];
@@ -77,6 +78,12 @@ function actionEffects(action: CombatAction): CardEffect[] {
     if (action.item.kind === 'shield') return [{ kind: 'block', amount: action.item.amount }];
   }
   return [];
+}
+
+function formatStatusLine(status: ActiveStatusEffect): string {
+  if (status.type === 'stun') return 'stunned';
+  const rounds = `${status.remainingTurns} round${status.remainingTurns === 1 ? '' : 's'}`;
+  return `${status.type}ed (${status.amount} for ${rounds})`;
 }
 
 function applyStartOfRoundStatuses(combatant: MutableCombatant, log: string[]): void {
@@ -122,7 +129,7 @@ function applyAction(
 ): 'skip_target' | 'normal' {
   if (action.kind === 'none') return 'normal';
 
-  log.push(`${actor.name} uses ${actionLabel(action)}`);
+  log.push(`${actor.name} uses ${combatActionLabel(action)}`);
 
   if (action.kind === 'item' && action.item.kind === 'skip_attack') {
     return 'skip_target';
@@ -131,17 +138,25 @@ function applyAction(
   for (const effect of actionEffects(action)) {
     if (effect.kind === 'block') {
       actor.roundBlock += effect.amount;
+      log.push(`${actor.name} gains ${effect.amount} block`);
     } else if (effect.kind === 'heal') {
-      actor.hp = Math.min(actor.maxHp, actor.hp + effect.amount);
+      const healed = Math.min(actor.maxHp, actor.hp + effect.amount) - actor.hp;
+      actor.hp += healed;
+      if (healed > 0) log.push(`${actor.name} heals ${healed} HP`);
     } else if (effect.kind === 'damage') {
       const reduction = target.armor + target.roundBlock;
-      target.hp = Math.max(0, target.hp - Math.max(0, effect.amount - reduction));
+      const dealt = Math.max(0, effect.amount - reduction);
+      target.hp = Math.max(0, target.hp - dealt);
+      if (dealt > 0) log.push(`${target.name} takes ${dealt} damage`);
+      else log.push(`${target.name} blocks the hit`);
     } else if (effect.kind === 'status') {
       addStatus(target, {
         type: effect.status,
         amount: effect.amount,
         remainingTurns: effect.duration,
       });
+      const current = target.statuses.find((status) => status.type === effect.status);
+      if (current) log.push(`${target.name} is ${formatStatusLine(current)}`);
     }
   }
 
@@ -162,14 +177,14 @@ export function resolveRound(input: ResolveRoundInput): ResolveRoundResult {
 
   const playerStunned = consumeStun(player);
   const enemyStunned = consumeStun(enemy);
-  if (playerStunned) log.push('Player is stunned');
-  if (enemyStunned) log.push('Enemy is stunned');
+  if (playerStunned) log.push(`${player.name} is stunned`);
+  if (enemyStunned) log.push(`${enemy.name} is stunned`);
 
   const actions = [
     { action: playerStunned ? { actor: 'player', kind: 'none' } as CombatAction : input.playerAction, actor: player, target: enemy },
     { action: enemyStunned ? { actor: 'enemy', kind: 'none' } as CombatAction : input.enemyAction, actor: enemy, target: player },
   ].sort((a, b) => {
-    const speed = actionSpeed(b.action) - actionSpeed(a.action);
+    const speed = combatActionSpeed(b.action) - combatActionSpeed(a.action);
     if (speed !== 0) return speed;
     return a.action.actor === 'player' ? -1 : 1;
   });
@@ -181,11 +196,11 @@ export function resolveRound(input: ResolveRoundInput): ResolveRoundResult {
     if (turn.action.kind === 'none') continue;
 
     if (turn.action.actor === 'enemy' && skipEnemyAction) {
-      log.push('Enemy attack is skipped');
+      log.push(`${enemy.name} attack is skipped`);
       continue;
     }
     if (turn.action.actor === 'player' && skipPlayerAction) {
-      log.push('Player attack is skipped');
+      log.push(`${player.name} attack is skipped`);
       continue;
     }
 
