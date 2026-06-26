@@ -105,7 +105,3 @@ export function setMeta(next: MetaState): MetaState {
   saveMetaState(current);
   return current;
 }
-
-export function updateMeta(update: (meta: MetaState) => MetaState): MetaState {
-  return setMeta(update(current));
-}

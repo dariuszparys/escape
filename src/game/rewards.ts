@@ -29,10 +29,6 @@ export function awardPotionItem(run: RunState, item: InventoryItem): FloorPotion
   return { kind: 'inventory_full', item };
 }
 
-export function awardFloorPotion(run: RunState): FloorPotionResult {
-  return awardPotionItem(run, makeItem('small_potion'));
-}
-
 export function rollChestReward(run: RunState, rng: GameRng, depth: number): RewardResult {
   const roll = rng.frac();
   if (roll < 0.55) {

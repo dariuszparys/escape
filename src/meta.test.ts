@@ -7,7 +7,6 @@ import {
   normalizeMetaState,
   saveMetaState,
   setMeta,
-  updateMeta,
 } from './meta';
 
 class MemoryStorage implements Storage {
@@ -111,7 +110,7 @@ describe('meta state', () => {
     expect(loadMetaState(storage)).toEqual(createDefaultMetaState());
   });
 
-  test('normalizes set meta and composes update meta from current state', () => {
+  test('normalizes set meta and applies sequential setMeta calls', () => {
     expect(
       setMeta({
         embers: 4.8,
@@ -133,15 +132,15 @@ describe('meta state', () => {
     });
 
     expect(
-      updateMeta((meta) => ({
-        ...meta,
-        embers: meta.embers + 3,
+      setMeta({
+        embers: 7,
         pendingPrep: {
-          ...meta.pendingPrep,
+          itemIds: ['bomb'],
+          extraStartingChoice: true,
           scoutFlame: true,
         },
         lastAwardedRunId: 'run-2',
-      })),
+      }),
     ).toEqual({
       embers: 7,
       pendingPrep: {

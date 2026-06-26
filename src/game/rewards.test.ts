@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import { makeCard } from '../data/cards';
 import { makeItem } from '../data/items';
 import { RunState } from '../state';
-import { awardFloorPotion, rollChestReward } from './rewards';
+import { awardPotionItem, rollChestReward } from './rewards';
 import { SequenceRng } from './test-rng';
 
 describe('rewards', () => {
@@ -15,7 +15,6 @@ describe('rewards', () => {
           name: `Card ${i}`,
           type: 'attack',
           tier: i < 2 ? 1 : 2,
-          cost: 0,
           speed: 5,
           color: 0,
           description: 'card',
@@ -62,27 +61,27 @@ describe('rewards', () => {
     ]);
   });
 
-  test('floor potion heals immediately when inventory is full', () => {
+  test('potion item heals immediately when inventory is full', () => {
     const run = new RunState('seed');
     run.hp = 20;
     run.addItem(makeItem('small_potion'));
     run.addItem(makeItem('bomb'));
     run.addItem(makeItem('smoke_bomb'));
 
-    const result = awardFloorPotion(run);
+    const result = awardPotionItem(run, makeItem('small_potion'));
 
     expect(result.kind).toBe('heal');
     expect(run.hp).toBe(28);
     expect(run.inventory).toHaveLength(3);
   });
 
-  test('floor potion waits for a replacement when inventory and health are full', () => {
+  test('potion item waits for replacement when inventory and health are full', () => {
     const run = new RunState('seed');
     run.addItem(makeItem('small_potion'));
     run.addItem(makeItem('bomb'));
     run.addItem(makeItem('smoke_bomb'));
 
-    const result = awardFloorPotion(run);
+    const result = awardPotionItem(run, makeItem('small_potion'));
 
     expect(result.kind).toBe('inventory_full');
     if (result.kind !== 'inventory_full') throw new Error(`Unexpected result: ${result.kind}`);
