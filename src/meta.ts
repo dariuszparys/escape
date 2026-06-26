@@ -1,8 +1,13 @@
 import type {
+  CampfirePurchaseDef,
   CampfirePurchaseState,
   PendingPrep,
 } from './data/campfirePurchases';
-import { createDefaultPendingPrep } from './data/campfirePurchases';
+import { MAX_INVENTORY } from './config';
+import {
+  CAMPFIRE_PURCHASES,
+  createDefaultPendingPrep,
+} from './data/campfirePurchases';
 
 export const META_STORAGE_KEY = 'escape.meta.v1';
 
@@ -24,9 +29,25 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
+function isCampfireItemPurchase(
+  purchase: CampfirePurchaseDef,
+): purchase is Extract<CampfirePurchaseDef, { kind: 'item' }> {
+  return purchase.kind === 'item';
+}
+
+const CAMPFIRE_ITEM_IDS = new Set<PendingPrep['itemIds'][number]>(
+  CAMPFIRE_PURCHASES
+    .filter(isCampfireItemPurchase)
+    .map((purchase) => purchase.itemId),
+);
+
 function normalizeItemIds(value: unknown): PendingPrep['itemIds'] {
   if (!Array.isArray(value)) return [];
-  return value.filter((item): item is PendingPrep['itemIds'][number] => typeof item === 'string');
+  return value
+    .filter((item): item is PendingPrep['itemIds'][number] => (
+      typeof item === 'string' && CAMPFIRE_ITEM_IDS.has(item)
+    ))
+    .slice(0, MAX_INVENTORY);
 }
 
 export function normalizeMetaState(value: unknown): MetaState {
