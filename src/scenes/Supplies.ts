@@ -113,8 +113,7 @@ export class SuppliesScene extends Phaser.Scene {
     this.addStatusText(formatChronicleLine(chronicle), STATUS_X, 310, '#b8b0c8', '12px', false);
     this.addStatusText('TODAY', STATUS_X, 382, '#f1c40f', '16px', true);
     this.addStatusText(formatDailyRecordLine(dailyRecord), STATUS_X, 414, '#b8b0c8', '12px', false);
-    this.addStatusText('BARGAINS', STATUS_X, 486, '#6f5032', '16px', true);
-    this.addStatusText('None tonight.', STATUS_X, 518, '#6f687c', '12px', false);
+    this.addBargainShortcut();
   }
 
   private addBackButton(): void {
@@ -153,6 +152,25 @@ export class SuppliesScene extends Phaser.Scene {
         lineSpacing: 8,
       }),
     );
+  }
+
+  private addBargainShortcut(): void {
+    this.addStatusText('BARGAINS', STATUS_X, 486, '#f1c40f', '16px', true);
+    this.addStatusText('Risk a curse for embers.', STATUS_X, 518, '#b8b0c8', '12px', false);
+
+    const button = this.add
+      .text(STATUS_X, 558, '[ OPEN ]', {
+        ...TEXT_STYLE,
+        fontSize: '15px',
+        fontStyle: 'bold',
+        color: '#f1c40f',
+      })
+      .setInteractive({ useHandCursor: true });
+
+    button.on('pointerover', () => button.setColor('#ffe48a'));
+    button.on('pointerout', () => button.setColor('#f1c40f'));
+    button.on('pointerdown', () => this.scene.start('Campfire', { openBargains: true }));
+    this.dynamic.add(button);
   }
 
   private addPurchaseRow(purchase: CampfirePurchaseDef, y: number): void {

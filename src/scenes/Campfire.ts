@@ -38,9 +38,14 @@ const ACTION_Y = 584;
 export class CampfireScene extends Phaser.Scene {
   private dynamic!: Phaser.GameObjects.Container;
   private bargainOverlay?: Phaser.GameObjects.Container;
+  private openBargainsOnCreate = false;
 
   constructor() {
     super('Campfire');
+  }
+
+  init(data?: { openBargains?: boolean }): void {
+    this.openBargainsOnCreate = data?.openBargains === true;
   }
 
   create(): void {
@@ -53,6 +58,10 @@ export class CampfireScene extends Phaser.Scene {
       this.closeBargainOverlay();
     });
     this.redraw();
+    if (this.openBargainsOnCreate) {
+      this.openBargainsOnCreate = false;
+      this.openBargainOverlay();
+    }
   }
 
   private drawCell(): void {
