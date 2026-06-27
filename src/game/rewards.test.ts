@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'vitest';
 import { makeCard } from '../data/cards';
 import { makeItem } from '../data/items';
+import { makeRelic } from '../data/relics';
 import { RunState } from '../state';
-import { awardPotionItem, rollChestReward } from './rewards';
+import { awardEnemyGold, awardPotionItem, rollChestReward } from './rewards';
 import { SequenceRng } from './test-rng';
 
 describe('rewards', () => {
@@ -112,5 +113,28 @@ describe('rewards', () => {
 
     expect(result.kind).toBe('gold');
     expect(run.gold).toBe(17);
+  });
+
+  test('chest can award a relic and store it on the run', () => {
+    const run = new RunState('seed');
+
+    const result = rollChestReward(run, new SequenceRng([0.85], []), 5);
+
+    expect(result.kind).toBe('relic');
+    if (result.kind !== 'relic') throw new Error(`Unexpected result: ${result.kind}`);
+    expect(run.relics).toHaveLength(1);
+    expect(['Swift Boots', 'Iron Will', 'Lucky Coin', 'Vampiric Blade']).toContain(
+      result.relicName,
+    );
+  });
+
+  test('lucky_coin increases all gold rewards by 50%', () => {
+    const run = new RunState('seed');
+    run.addRelic(makeRelic('lucky_coin'));
+
+    const gold = awardEnemyGold(run, new SequenceRng([], [10]), 5);
+
+    expect(gold).toBe(15);
+    expect(run.gold).toBe(15);
   });
 });

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { makeCard } from './data/cards';
+import { makeRelic } from './data/relics';
 import { RunState } from './state';
 
 describe('RunState.removeCard', () => {
@@ -101,5 +102,64 @@ describe('RunState.removeCard', () => {
 
     expect(removed).toBe(false);
     expect(run.cardCollection).toHaveLength(1);
+  });
+
+  test('adds swift boots and expands combat hand size to 6', () => {
+    const run = new RunState('seed');
+    for (let i = 0; i < 7; i++) {
+      run.addCard(
+        makeCard({
+          id: `card-${i}`,
+          name: `Card ${i}`,
+          type: 'attack',
+          tier: i < 2 ? 1 : 2,
+          speed: 5,
+          color: 0,
+          description: 'card',
+          effects: [{ kind: 'damage', amount: i + 1 }],
+        }),
+      );
+    }
+
+    run.addRelic(makeRelic('swift_boots'));
+
+    expect(run.handLimit).toBe(6);
+    expect(run.combatHand).toHaveLength(6);
+  });
+
+  test('adds iron will to increase max armor to 4', () => {
+    const run = new RunState('seed');
+    run.addRelic(makeRelic('iron_will'));
+    const added = [run.addArmor(), run.addArmor(), run.addArmor(), run.addArmor(), run.addArmor()];
+
+    expect(run.maxArmor).toBe(4);
+    expect(added).toEqual([true, true, true, true, false]);
+  });
+
+  test('does not duplicate relics by id', () => {
+    const run = new RunState('seed');
+    run.addRelic(makeRelic('swift_boots'));
+    run.addRelic(makeRelic('swift_boots'));
+
+    expect(run.relics).toHaveLength(1);
+    expect(run.relics[0]?.id).toBe('swift_boots');
+  });
+
+  test('provides a 1.5 gold multiplier when lucky coin is owned', () => {
+    const run = new RunState('seed');
+
+    expect(run.goldMultiplier).toBe(1);
+
+    run.addRelic(makeRelic('lucky_coin'));
+
+    expect(run.goldMultiplier).toBe(1.5);
+  });
+
+  test('still caps armor without iron will', () => {
+    const run = new RunState('seed');
+    const added = [run.addArmor(), run.addArmor(), run.addArmor(), run.addArmor()];
+
+    expect(run.maxArmor).toBe(3);
+    expect(added).toEqual([true, true, true, false]);
   });
 });

@@ -1,5 +1,6 @@
 import { randomCard } from '../data/cards';
 import { InventoryItem, makeItem, randomItemIdForDepth } from '../data/items';
+import { randomRelic } from '../data/relics';
 import { RunState } from '../state';
 import { GameRng } from './rng';
 
@@ -9,6 +10,7 @@ export type RewardResult =
   | { kind: 'armor'; amount: number }
   | { kind: 'gold'; amount: number }
   | { kind: 'heal'; amount: number }
+  | { kind: 'relic'; relicName: string }
   | { kind: 'inventory_full'; item: InventoryItem };
 
 export type FloorPotionResult =
@@ -31,31 +33,40 @@ export function awardPotionItem(run: RunState, item: InventoryItem): FloorPotion
 
 export function rollChestReward(run: RunState, rng: GameRng, depth: number): RewardResult {
   const roll = rng.frac();
-  if (roll < 0.55) {
+  if (roll < 0.5) {
     const card = randomCard(rng, depth);
     run.addCard(card);
     return { kind: 'card', cardName: card.name };
   }
 
-  if (roll < 0.75) {
+  if (roll < 0.68) {
     const item = makeItem(randomItemIdForDepth(depth));
     return awardPotionItem(run, item);
   }
 
-  if (roll < 0.9) {
+  if (roll < 0.8) {
     if (run.addArmor()) return { kind: 'armor', amount: 1 };
-    const amount = rng.between(8, 18);
+    const amount = Math.floor(rng.between(8, 18) * run.goldMultiplier);
     run.addGold(amount);
     return { kind: 'gold', amount };
   }
 
-  const amount = rng.between(10, 24);
+  if (roll < 0.88) {
+    const relic = randomRelic(rng, new Set(run.relics.map((relic) => relic.id)));
+    if (relic) {
+      run.addRelic(relic);
+      return { kind: 'relic', relicName: relic.name };
+    }
+  }
+
+  const amount = Math.floor(rng.between(10, 24) * run.goldMultiplier);
   run.addGold(amount);
   return { kind: 'gold', amount };
 }
 
 export function awardEnemyGold(run: RunState, rng: GameRng, depth: number): number {
-  const amount = rng.between(4 + depth, 8 + depth * 2);
+  const base = rng.between(4 + depth, 8 + depth * 2);
+  const amount = Math.floor(base * run.goldMultiplier);
   run.addGold(amount);
   return amount;
 }

@@ -48,6 +48,7 @@ export class BattleScene extends Phaser.Scene {
   private telegraphText!: Phaser.GameObjects.Text;
   private armorText!: Phaser.GameObjects.Text;
   private statusText!: Phaser.GameObjects.Text;
+  private relicText!: Phaser.GameObjects.Text;
   private historyLines: string[] = [];
   private deckOverlay: Phaser.GameObjects.Container | null = null;
   private toggleDeckKey!: Phaser.Input.Keyboard.Key;
@@ -130,6 +131,12 @@ export class BattleScene extends Phaser.Scene {
         color: '#aab2bd',
       })
       .setOrigin(0.5);
+    this.relicText = this.add.text(110, 365, '', {
+      fontFamily: 'monospace',
+      fontSize: '9px',
+      color: '#b8b0c8',
+      fixedWidth: 180,
+    });
     this.statusText = this.add
       .text(cx, 306, '', {
         fontFamily: 'monospace',
@@ -258,6 +265,12 @@ export class BattleScene extends Phaser.Scene {
       .setText(`${Math.max(0, run.hp)} / ${run.maxHp}`)
       .setDepth(1);
     this.armorText.setText(run.armor > 0 ? `Armor +${run.armor}` : '');
+
+    if (run.relics.length > 0) {
+      this.relicText.setText(run.relics.map((relic) => relic.name).join(' / '));
+    } else {
+      this.relicText.setText('');
+    }
   }
 
   private renderEnemyCards(): void {
@@ -701,6 +714,13 @@ export class BattleScene extends Phaser.Scene {
     const run = getRun();
     this.closeDeckOverlay();
     run.enemiesDefeated++;
+    if (run.hasRelic('vampiric_blade')) {
+      const before = run.hp;
+      run.heal(2);
+      if (run.hp > before) {
+        this.combatPop(this.heroSprite.x + 40, this.heroSprite.y - 30, '+2 HP', '#5fe07a');
+      }
+    }
     playSfx(this, 'victory');
     const gold = awardEnemyGold(run, this.rng, run.depth);
     this.tweens.add({

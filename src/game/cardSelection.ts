@@ -41,20 +41,20 @@ export function compareCombatCards(a: Card, b: Card): number {
   return a.uid - b.uid;
 }
 
-export function selectCombatHand(collection: readonly Card[]): Card[] {
+export function selectCombatHand(collection: readonly Card[], maxHand: number = MAX_HAND): Card[] {
   const sorted = [...collection].sort(compareCombatCards);
   const offensive = sorted.filter(isOffensiveCard);
   const selected = new Set<number>();
-  const guaranteedOffense = Math.min(MIN_OFFENSIVE_CARDS, MAX_HAND, offensive.length);
+  const guaranteedOffense = Math.min(MIN_OFFENSIVE_CARDS, maxHand, offensive.length);
 
   for (const card of offensive.slice(0, guaranteedOffense)) {
     selected.add(card.uid);
   }
 
   for (const card of sorted) {
-    if (selected.size >= MAX_HAND) break;
+    if (selected.size >= maxHand) break;
     selected.add(card.uid);
   }
 
-  return sorted.filter((card) => selected.has(card.uid)).slice(0, MAX_HAND);
+  return sorted.filter((card) => selected.has(card.uid)).slice(0, maxHand);
 }

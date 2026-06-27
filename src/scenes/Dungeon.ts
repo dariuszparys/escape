@@ -982,7 +982,9 @@ export class DungeonScene extends Phaser.Scene {
               ? `+${result.amount} Gold`
               : result.kind === 'heal'
                 ? `+${result.amount} HP`
-                : `${result.item.name} dropped!`;
+                : result.kind === 'relic'
+                  ? `Relic: ${result.relicName}`
+                  : `${result.item.name} dropped!`;
     if (result.kind === 'inventory_full') {
       this.spawnFloorPotion(x, y + TILE, result.item);
     }

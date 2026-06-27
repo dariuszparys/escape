@@ -512,6 +512,9 @@ export function simulateRun(seed: number, scenario: BalanceScenario): SimRunResu
           encounters,
         };
       }
+      if (run.hasRelic('vampiric_blade')) {
+        run.heal(2);
+      }
       chooseRewardCard(run, battle.enemyCards);
       continue;
     }

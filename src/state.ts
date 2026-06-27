@@ -1,6 +1,7 @@
 import { MAX_ARMOR, MAX_HAND, MAX_INVENTORY, PLAYER_MAX_HP } from './config';
 import { Card } from './data/cards';
 import { InventoryItem, makeItem } from './data/items';
+import { RelicId, Relic } from './data/relics';
 import { selectCombatHand } from './game/cardSelection';
 import { DEFAULT_STARTING_CARD_CHOICES, DEFAULT_STARTING_CARD_PICKS } from './game/startingCards';
 
@@ -23,6 +24,9 @@ export class RunState {
   armor = 0; // each point = 1 flat damage reduction in battle
   depth = 1;
   enemiesDefeated = 0;
+  relics: Relic[] = [];
+  handLimit = MAX_HAND;
+  maxArmor = MAX_ARMOR;
   startingCardChoices = DEFAULT_STARTING_CARD_CHOICES;
   startingCardPicks = DEFAULT_STARTING_CARD_PICKS;
   startingCardsTaken = 0;
@@ -56,7 +60,7 @@ export class RunState {
   }
 
   get handFull(): boolean {
-    return this.combatHand.length >= MAX_HAND;
+    return this.combatHand.length >= this.handLimit;
   }
 
   get inventoryFull(): boolean {
@@ -79,7 +83,7 @@ export class RunState {
   }
 
   refreshCombatHand(): void {
-    this.combatHand = selectCombatHand(this.cardCollection);
+    this.combatHand = selectCombatHand(this.cardCollection, this.handLimit);
   }
 
   addItem(item: InventoryItem): boolean {
@@ -115,9 +119,26 @@ export class RunState {
   }
 
   addArmor(): boolean {
-    if (this.armor >= MAX_ARMOR) return false;
+    if (this.armor >= this.maxArmor) return false;
     this.armor++;
     return true;
+  }
+
+  get goldMultiplier(): number {
+    return this.hasRelic('lucky_coin') ? 1.5 : 1;
+  }
+
+  hasRelic(id: RelicId): boolean {
+    return this.relics.some((relic) => relic.id === id);
+  }
+
+  addRelic(relic: Relic): void {
+    if (this.hasRelic(relic.id)) return;
+
+    this.relics.push(relic);
+    this.handLimit = this.hasRelic('swift_boots') ? MAX_HAND + 1 : MAX_HAND;
+    this.maxArmor = this.hasRelic('iron_will') ? MAX_ARMOR + 1 : MAX_ARMOR;
+    this.refreshCombatHand();
   }
 }
 

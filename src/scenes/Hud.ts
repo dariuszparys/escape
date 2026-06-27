@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { GAME_W, MAX_HAND, MAX_DEPTH, ROOM_H, HUD_H, MAX_INVENTORY } from '../config';
+import { GAME_W, MAX_DEPTH, ROOM_H, HUD_H, MAX_INVENTORY } from '../config';
 import { primaryCardValue } from '../data/cards';
 import { getRun } from '../state';
 
@@ -64,7 +64,7 @@ export class HudScene extends Phaser.Scene {
       this.add.text(
         cardX0,
         y0 + 10,
-        `HAND ${run.combatHand.length}/${MAX_HAND}  DECK ${run.cardCollection.length}`,
+        `HAND ${run.combatHand.length}/${run.handLimit}  DECK ${run.cardCollection.length}`,
         {
           fontFamily: 'monospace',
           fontSize: '12px',
@@ -158,6 +158,24 @@ export class HudScene extends Phaser.Scene {
         )
         .setOrigin(0, 0.5),
     );
+
+    const relicNames = run.relics.map((relic) => relic.name);
+    if (relicNames.length > 0) {
+      const relicLine =
+        relicNames.length <= 2
+          ? relicNames.join(' / ')
+          : `${relicNames.slice(0, 2).join(' / ')} +${relicNames.length - 2}`;
+      this.dynamic.add(
+        this.add
+          .text(cardX0, y0 + 101, relicLine, {
+            fontFamily: 'monospace',
+            fontSize: '9px',
+            color: '#b8b0c8',
+            fixedWidth: 320,
+          })
+          .setOrigin(0, 0.5),
+      );
+    }
 
     this.dynamic.add(
       this.add
