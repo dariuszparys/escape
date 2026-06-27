@@ -61,8 +61,7 @@ function rollSpikes(rng: GameRng, entry: Dir): { col: number; row: number }[] {
   const spawn = DOOR_ENTRY_CELL[entry];
   fair.add(`${spawn.col - DIR_VEC[entry].x},${spawn.row - DIR_VEC[entry].y}`);
 
-  const has = (col: number, row: number) =>
-    spikes.some((s) => s.col === col && s.row === row);
+  const has = (col: number, row: number) => spikes.some((s) => s.col === col && s.row === row);
 
   // Eligible interior cells (existing wall buffer, minus fair cells).
   const eligible: { col: number; row: number }[] = [];
