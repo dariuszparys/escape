@@ -5,20 +5,25 @@ import { ROOM_COLS, ROOM_ROWS } from '../config';
 
 describe('room generation', () => {
   test('rooms 2 through 8 use the MVP event thresholds without empty rooms', () => {
-    expect(rollRoomEvent(new SequenceRng([0.34]), 5)).toBe('encounter');
-    expect(rollRoomEvent(new SequenceRng([0.35]), 5)).toBe('chest');
-    expect(rollRoomEvent(new SequenceRng([0.64]), 5)).toBe('chest');
-    expect(rollRoomEvent(new SequenceRng([0.65]), 5)).toBe('potion');
-    expect(rollRoomEvent(new SequenceRng([0.89]), 5)).toBe('potion');
-    expect(rollRoomEvent(new SequenceRng([0.9]), 5)).toBe('trap');
+    expect(rollRoomEvent(new SequenceRng([0.31]), 5)).toBe('encounter');
+    expect(rollRoomEvent(new SequenceRng([0.32]), 5)).toBe('chest');
+    expect(rollRoomEvent(new SequenceRng([0.58]), 5)).toBe('chest');
+    expect(rollRoomEvent(new SequenceRng([0.59]), 5)).toBe('potion');
+    expect(rollRoomEvent(new SequenceRng([0.79]), 5)).toBe('potion');
+    expect(rollRoomEvent(new SequenceRng([0.8]), 5)).toBe('rest');
+    expect(rollRoomEvent(new SequenceRng([0.93]), 5)).toBe('rest');
+    expect(rollRoomEvent(new SequenceRng([0.94]), 5)).toBe('trap');
   });
 
   test('room 9 is biased toward rewards before the boss', () => {
-    expect(rollRoomEvent(new SequenceRng([0.24]), 9)).toBe('encounter');
-    expect(rollRoomEvent(new SequenceRng([0.25]), 9)).toBe('chest');
-    expect(rollRoomEvent(new SequenceRng([0.64]), 9)).toBe('chest');
-    expect(rollRoomEvent(new SequenceRng([0.65]), 9)).toBe('potion');
-    expect(rollRoomEvent(new SequenceRng([0.95]), 9)).toBe('trap');
+    expect(rollRoomEvent(new SequenceRng([0.21]), 9)).toBe('encounter');
+    expect(rollRoomEvent(new SequenceRng([0.22]), 9)).toBe('chest');
+    expect(rollRoomEvent(new SequenceRng([0.59]), 9)).toBe('chest');
+    expect(rollRoomEvent(new SequenceRng([0.6]), 9)).toBe('potion');
+    expect(rollRoomEvent(new SequenceRng([0.85]), 9)).toBe('potion');
+    expect(rollRoomEvent(new SequenceRng([0.86]), 9)).toBe('rest');
+    expect(rollRoomEvent(new SequenceRng([0.93]), 9)).toBe('rest');
+    expect(rollRoomEvent(new SequenceRng([0.94]), 9)).toBe('trap');
   });
 
   test('room 10 always becomes the boss room', () => {
@@ -79,7 +84,7 @@ describe('trap room spike placement', () => {
 
   test('denser spike layout still satisfies fairness rules', () => {
     const rng = new SequenceRng(
-      [0.92, 0.3, 0.8, 0.15, 0.6, 0.4, 0.9, 0.2, 0.7, 0.5, 0.1, 0.85, 0.35, 0.65, 0.25, 0.75],
+      [0.96, 0.3, 0.8, 0.15, 0.6, 0.4, 0.9, 0.2, 0.7, 0.5, 0.1, 0.85, 0.35, 0.65, 0.25, 0.75],
       [2, 8],
     );
     const room = makeNextRoom(rng, 5, 'N');
@@ -103,5 +108,13 @@ describe('trap room spike placement', () => {
 
     const keys = room.spikes.map((s) => `${s.col},${s.row}`);
     expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  test('rest rooms have no spikes and block only the entry door', () => {
+    const room = makeNextRoom(new SequenceRng([0.85]), 5, 'N');
+
+    expect(room.event).toBe('rest');
+    expect(room.spikes).toEqual([]);
+    expect(room.blockedDoor).toBe('S');
   });
 });

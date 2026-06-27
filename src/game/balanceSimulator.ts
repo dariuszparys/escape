@@ -11,6 +11,7 @@ import { resolveRound } from './combat';
 import { awardPotionItem, rollChestReward } from './rewards';
 import { GameRng } from './rng';
 import { startingCardIdsForChoiceCount } from './startingCards';
+import { upgradeCard } from './cardUpgrade';
 
 export interface BalanceScenario {
   prepItemIds?: InventoryItemDef['id'][];
@@ -170,6 +171,20 @@ function chooseRewardCard(run: RunState, enemyCards: readonly Card[]): void {
   if (best) run.addCard(best);
 }
 
+function applySimulatedRest(run: RunState): void {
+  const handIds = new Set(run.combatHand.map((card) => card.uid));
+  const removable = [...run.cardCollection]
+    .filter((card) => !handIds.has(card.uid))
+    .sort((a, b) => combatCardScore(a) - combatCardScore(b))[0];
+
+  if (removable && run.removeCard(removable.uid)) return;
+
+  const best = [...run.combatHand].sort((a, b) => combatCardScore(b) - combatCardScore(a))[0];
+  if (!best) return;
+  upgradeCard(best);
+  run.refreshCombatHand();
+}
+
 function maybeUseDungeonPotion(run: RunState, beforeBoss = false): void {
   const potions = run.inventory
     .filter((item) => item.kind === 'heal')
@@ -214,6 +229,8 @@ function roomEventScore(run: RunState, event: RoomEvent): number {
       return run.hp < run.maxHp * 0.6 ? 38 : 30;
     case 'encounter':
       return run.hp >= run.maxHp * 0.75 ? 20 : 8;
+    case 'rest':
+      return run.cardCollection.length > run.combatHand.length ? 42 : 34;
     case 'trap':
       return -8;
     case 'boss':
@@ -502,6 +519,11 @@ export function simulateRun(seed: number, scenario: BalanceScenario): SimRunResu
     if (event === 'chest') {
       const reward = rollChestReward(run, rng, depth);
       if (reward.kind === 'inventory_full') replaceInventoryItem(run, reward.item);
+      continue;
+    }
+
+    if (event === 'rest') {
+      applySimulatedRest(run);
       continue;
     }
 

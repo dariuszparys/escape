@@ -1,7 +1,7 @@
 import { Dir, DIRS, DIR_VEC, MAX_DEPTH, OPPOSITE, ROOM_COLS, ROOM_ROWS } from '../config';
 import { GameRng } from '../game/rng';
 
-export type RoomEvent = 'start' | 'encounter' | 'chest' | 'potion' | 'trap' | 'boss';
+export type RoomEvent = 'start' | 'encounter' | 'chest' | 'potion' | 'rest' | 'trap' | 'boss';
 
 export interface RoomData {
   depth: number;
@@ -18,16 +18,18 @@ export function rollRoomEvent(rng: GameRng, depth: number): RoomEvent {
   const table: [RoomEvent, number][] =
     depth === MAX_DEPTH - 1
       ? [
-          ['encounter', 25],
-          ['chest', 40],
-          ['potion', 30],
-          ['trap', 5],
+          ['encounter', 22],
+          ['chest', 38],
+          ['potion', 26],
+          ['rest', 8],
+          ['trap', 6],
         ]
       : [
-          ['encounter', 35],
-          ['chest', 30],
-          ['potion', 25],
-          ['trap', 10],
+          ['encounter', 32],
+          ['chest', 27],
+          ['potion', 21],
+          ['rest', 14],
+          ['trap', 6],
         ];
 
   let r = rng.frac() * 100;

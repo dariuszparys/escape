@@ -22,6 +22,8 @@ import { PhaserGameRng } from '../game/rng';
 import { playSfx } from '../audio/sfx';
 import { awardPotionItem, rollChestReward } from '../game/rewards';
 import { startingCardIdsForChoiceCount } from '../game/startingCards';
+import { orderedDeckEntries } from '../game/deckOrdering';
+import { upgradeCard } from '../game/cardUpgrade';
 import { getRun } from '../state';
 
 const DOOR_CELL: Record<Dir, { col: number; row: number }> = {
@@ -44,6 +46,7 @@ const ROOM_EVENT_LABEL: Record<RoomEvent, string> = {
   encounter: 'enemy',
   chest: 'chest',
   potion: 'potion',
+  rest: 'rest',
   trap: 'trap',
   boss: 'boss',
 };
@@ -63,6 +66,7 @@ interface BuiltRoom {
   spikeRects: Phaser.Geom.Rectangle[];
   potionAt: { x: number; y: number; img: Phaser.GameObjects.Image; item: InventoryItem } | null;
   chest: { x: number; y: number; img: Phaser.GameObjects.Image; opened: boolean } | null;
+  restAt: { x: number; y: number; img: Phaser.GameObjects.Image; opened: boolean } | null;
   cardPicks: CardPickup[];
   enemy: EnemyInstance | null;
   enemySprite: Phaser.GameObjects.Image | null;
@@ -95,6 +99,8 @@ export class DungeonScene extends Phaser.Scene {
   private ignoredPotionUid: number | null = null;
   private deckOverlay: Phaser.GameObjects.Container | null = null;
   private visionGraphics: Phaser.GameObjects.Graphics | null = null;
+  private restActionPanel: Phaser.GameObjects.Container | null = null;
+  private restCardPanel: Phaser.GameObjects.Container | null = null;
 
   constructor() {
     super('Dungeon');
@@ -147,6 +153,8 @@ export class DungeonScene extends Phaser.Scene {
       this.closeDeckOverlay();
       this.closeItemSwapPrompt();
       this.disableDarknessOverlay();
+      this.closeRestActionPanel();
+      this.closeRestCardPanel();
       this.game.events.off('battle-end');
     });
   }
@@ -218,6 +226,16 @@ export class DungeonScene extends Phaser.Scene {
   private closeDeckOverlay(): void {
     this.deckOverlay?.destroy();
     this.deckOverlay = null;
+  }
+
+  private closeRestActionPanel(): void {
+    this.restActionPanel?.destroy();
+    this.restActionPanel = null;
+  }
+
+  private closeRestCardPanel(): void {
+    this.restCardPanel?.destroy();
+    this.restCardPanel = null;
   }
 
   private enableDarknessOverlay(): void {
@@ -335,6 +353,7 @@ export class DungeonScene extends Phaser.Scene {
       spikeRects: [],
       potionAt: null,
       chest: null,
+      restAt: null,
       cardPicks: [],
       enemy: null,
       enemySprite: null,
@@ -384,6 +403,16 @@ export class DungeonScene extends Phaser.Scene {
         img.setDepth(2);
         objs.push(img);
         built.chest = { x: center.x, y: center.y, img, opened: false };
+        break;
+      }
+      case 'rest': {
+        const img = this.add
+          .image(center.x, center.y, 'floor_b')
+          .setScale(3)
+          .setTint(0x6f5c32)
+          .setDepth(2);
+        objs.push(img);
+        built.restAt = { x: center.x, y: center.y, img, opened: false };
         break;
       }
       case 'trap': {
@@ -754,6 +783,10 @@ export class DungeonScene extends Phaser.Scene {
       this.player.setVelocity(0, 0);
       return;
     }
+    if (this.restActionPanel || this.restCardPanel) {
+      this.player.setVelocity(0, 0);
+      return;
+    }
 
     // movement
     const left = this.keys.left.isDown || this.keys.a.isDown;
@@ -898,6 +931,12 @@ export class DungeonScene extends Phaser.Scene {
       this.openChest(chest.x, chest.y);
     }
 
+    const restAt = this.built.restAt;
+    if (restAt && !restAt.opened && Phaser.Math.Distance.Between(px, py, restAt.x, restAt.y) < 64) {
+      restAt.opened = true;
+      this.openRestChoices();
+    }
+
     // spikes
     if (time > this.invulnUntil) {
       for (const rect of this.built.spikeRects) {
@@ -948,6 +987,208 @@ export class DungeonScene extends Phaser.Scene {
       this.spawnFloorPotion(x, y + TILE, result.item);
     }
     this.floatText(x, y - 50, message, result.kind === 'gold' ? '#f1c40f' : '#5fe07a');
+    this.hud();
+  }
+
+  private openRestChoices(): void {
+    if (this.restActionPanel || this.restCardPanel) return;
+    const run = getRun();
+    if (run.cardCollection.length === 0) return;
+
+    this.closeDeckOverlay();
+    this.closeItemSwapPrompt();
+    this.transitioning = true;
+    this.player.setVelocity(0, 0);
+    this.player.anims.stop();
+
+    const cx = this.origin.x + ROOM_W / 2;
+    const cy = this.origin.y + ROOM_H / 2;
+    const panel = this.add.container(cx, cy).setDepth(260);
+    this.restActionPanel = panel;
+
+    const w = 300;
+    const h = 170;
+    const bg = this.add.graphics();
+    bg.fillStyle(0x111019, 0.98);
+    bg.fillRoundedRect(-w / 2, -h / 2, w, h, 8);
+    bg.lineStyle(2, 0xf1c40f, 0.85);
+    bg.strokeRoundedRect(-w / 2, -h / 2, w, h, 8);
+    panel.add(bg);
+
+    panel.add(
+      this.add
+        .text(0, -h / 2 + 26, 'Rest Room', {
+          fontFamily: 'monospace',
+          fontSize: '24px',
+          fontStyle: 'bold',
+          color: '#f1c40f',
+        })
+        .setOrigin(0.5),
+    );
+    panel.add(
+      this.add
+        .text(0, -h / 2 + 56, 'Choose a campfire action for this room:', {
+          fontFamily: 'monospace',
+          fontSize: '11px',
+          color: '#b8b0c8',
+          align: 'center',
+        })
+        .setOrigin(0.5),
+    );
+
+    const addChoice = (label: string, y: number, mode: 'upgrade' | 'remove'): void => {
+      const button = this.add
+        .text(0, y, `[ ${label} ]`, {
+          fontFamily: 'monospace',
+          fontSize: '14px',
+          fontStyle: 'bold',
+          color: '#f5edd8',
+          backgroundColor: '#221f1e',
+          padding: { x: 12, y: 8 },
+        })
+        .setOrigin(0.5)
+        .setInteractive({ useHandCursor: true });
+
+      button.on('pointerover', () => button.setColor('#ffe48a'));
+      button.on('pointerout', () => button.setColor('#f5edd8'));
+      button.on('pointerdown', () => this.openRestCardPicker(mode));
+      panel.add(button);
+    };
+
+    addChoice('UPGRADE A CARD', -6, 'upgrade');
+    addChoice('REMOVE A CARD', 32, 'remove');
+
+    panel.add(
+      this.add
+        .text(0, h / 2 - 20, 'Choose once. No retreat.', {
+          fontFamily: 'monospace',
+          fontSize: '10px',
+          color: '#6a6478',
+        })
+        .setOrigin(0.5),
+    );
+  }
+
+  private openRestCardPicker(mode: 'upgrade' | 'remove'): void {
+    if (!this.restActionPanel) return;
+    const run = getRun();
+
+    this.closeRestActionPanel();
+    const entries = orderedDeckEntries(run.cardCollection, run.combatHand);
+    const cx = this.origin.x + ROOM_W / 2;
+    const cy = this.origin.y + ROOM_H / 2;
+    const w = 520;
+    const h = 420;
+
+    const panel = this.add.container(cx, cy).setDepth(320);
+    this.restCardPanel = panel;
+
+    const bg = this.add.graphics();
+    bg.fillStyle(0x111019, 0.98);
+    bg.fillRoundedRect(-w / 2, -h / 2, w, h, 8);
+    bg.lineStyle(2, 0xcab98a, 0.85);
+    bg.strokeRoundedRect(-w / 2, -h / 2, w, h, 8);
+    panel.add(bg);
+
+    panel.add(
+      this.add
+        .text(0, -h / 2 + 24, mode === 'upgrade' ? 'Upgrade a card' : 'Remove a card', {
+          fontFamily: 'monospace',
+          fontSize: '20px',
+          fontStyle: 'bold',
+          color: '#f1c40f',
+        })
+        .setOrigin(0.5),
+    );
+    panel.add(
+      this.add
+        .text(0, -h / 2 + 50, 'Pick one card to continue.', {
+          fontFamily: 'monospace',
+          fontSize: '11px',
+          color: '#b8b0c8',
+          align: 'center',
+        })
+        .setOrigin(0.5),
+    );
+
+    const visibleEntries = entries.slice(0, 12);
+    for (const [index, entry] of visibleEntries.entries()) {
+      const y = -h / 2 + 80 + index * 23;
+      const badge = entry.inHand ? 'HAND' : 'RES ';
+      const row = `${String(index + 1).padStart(2, ' ')}. ${badge} ${entry.card.name.padEnd(
+        16,
+        ' ',
+      )}`;
+      const button = this.add
+        .text(-w / 2 + 18, y, row, {
+          fontFamily: 'monospace',
+          fontSize: '12px',
+          color: entry.inHand ? '#f5edd8' : '#8e889a',
+          padding: { x: 6, y: 4 },
+          fixedWidth: 464,
+        })
+        .setOrigin(0, 0.5)
+        .setInteractive({ useHandCursor: true });
+
+      button.on('pointerover', () => button.setColor('#ffe48a'));
+      button.on('pointerout', () => button.setColor(entry.inHand ? '#f5edd8' : '#8e889a'));
+      button.on('pointerdown', () => this.applyRestCardChoice(mode, entry.card));
+      panel.add(button);
+    }
+
+    panel.add(
+      this.add
+        .text(0, h / 2 - 30, '[ BACK ]', {
+          fontFamily: 'monospace',
+          fontSize: '11px',
+          color: '#b8b0c8',
+          backgroundColor: '#221f1e',
+          padding: { x: 10, y: 6 },
+        })
+        .setOrigin(0.5)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => {
+          this.closeRestCardPanel();
+          this.openRestChoices();
+        }),
+    );
+
+    if (entries.length > visibleEntries.length) {
+      panel.add(
+        this.add
+          .text(0, h / 2 - 50, `+${entries.length - visibleEntries.length} more cards`, {
+            fontFamily: 'monospace',
+            fontSize: '11px',
+            color: '#6a6478',
+          })
+          .setOrigin(0.5),
+      );
+    }
+  }
+
+  private applyRestCardChoice(mode: 'upgrade' | 'remove', card: Card): void {
+    const run = getRun();
+
+    if (mode === 'upgrade') {
+      const name = card.name.endsWith('+') ? card.name : `${card.name}+`;
+      upgradeCard(card);
+      run.refreshCombatHand();
+      this.floatText(this.player.x, this.player.y - 42, `${name} upgraded`, '#5fe07a');
+    } else {
+      const ok = run.removeCard(card.uid);
+      if (!ok) {
+        this.floatText(this.player.x, this.player.y - 42, 'Cannot remove last card', '#ff9944');
+        this.closeRestCardPanel();
+        this.openRestChoices();
+        return;
+      }
+      const name = card.name;
+      this.floatText(this.player.x, this.player.y - 42, `${name} removed`, '#f1c40f');
+    }
+
+    this.closeRestCardPanel();
+    this.room.cleared = true;
+    this.transitioning = false;
     this.hud();
   }
 }

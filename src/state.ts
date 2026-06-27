@@ -69,6 +69,15 @@ export class RunState {
     return true;
   }
 
+  removeCard(uid: number): boolean {
+    if (this.cardCollection.length <= 1) return false;
+    const index = this.cardCollection.findIndex((candidate) => candidate.uid === uid);
+    if (index < 0) return false;
+    this.cardCollection.splice(index, 1);
+    this.refreshCombatHand();
+    return true;
+  }
+
   refreshCombatHand(): void {
     this.combatHand = selectCombatHand(this.cardCollection);
   }
