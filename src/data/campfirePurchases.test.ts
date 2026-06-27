@@ -23,6 +23,7 @@ describe('campfire purchases', () => {
         itemIds: ['small_potion'],
         extraStartingChoice: false,
         scoutFlame: false,
+        curseIds: [],
       },
     });
 
@@ -39,6 +40,7 @@ describe('campfire purchases', () => {
         itemIds: Array.from({ length: MAX_INVENTORY }, () => 'small_potion'),
         extraStartingChoice: false,
         scoutFlame: false,
+        curseIds: [],
       },
     };
 
@@ -81,6 +83,7 @@ describe('campfire purchases', () => {
         itemIds: [],
         extraStartingChoice: false,
         scoutFlame: true,
+        curseIds: [],
       },
     });
 

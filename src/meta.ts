@@ -4,6 +4,8 @@ import type {
   PendingPrep,
 } from './data/campfirePurchases';
 import { MAX_INVENTORY } from './config';
+import { CAMPFIRE_BARGAINS } from './data/campfireBargains';
+import type { CampfireCurseId } from './data/campfireBargains';
 import { CAMPFIRE_PURCHASES, createDefaultPendingPrep } from './data/campfirePurchases';
 
 export const META_STORAGE_KEY = 'escape.meta.v1';
@@ -35,6 +37,7 @@ function isCampfireItemPurchase(
 const CAMPFIRE_ITEM_IDS = new Set<PendingPrep['itemIds'][number]>(
   CAMPFIRE_PURCHASES.filter(isCampfireItemPurchase).map((purchase) => purchase.itemId),
 );
+const CAMPFIRE_CURSE_IDS = new Set<string>(CAMPFIRE_BARGAINS.map((bargain) => bargain.curseId));
 
 function normalizeItemIds(value: unknown): PendingPrep['itemIds'] {
   if (!Array.isArray(value)) return [];
@@ -44,6 +47,15 @@ function normalizeItemIds(value: unknown): PendingPrep['itemIds'] {
         typeof item === 'string' && CAMPFIRE_ITEM_IDS.has(item),
     )
     .slice(0, MAX_INVENTORY);
+}
+
+function normalizeCurseIds(value: unknown): CampfireCurseId[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((curseId): curseId is CampfireCurseId => {
+      return typeof curseId === 'string' && CAMPFIRE_CURSE_IDS.has(curseId);
+    })
+    .slice(0, 1);
 }
 
 export function normalizeMetaState(value: unknown): MetaState {
@@ -61,6 +73,7 @@ export function normalizeMetaState(value: unknown): MetaState {
       itemIds: normalizeItemIds(pending.itemIds),
       extraStartingChoice: pending.extraStartingChoice === true,
       scoutFlame: pending.scoutFlame === true,
+      curseIds: normalizeCurseIds(pending.curseIds),
     },
     lastAwardedRunId: typeof value.lastAwardedRunId === 'string' ? value.lastAwardedRunId : null,
   };

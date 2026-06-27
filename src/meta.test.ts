@@ -71,10 +71,26 @@ describe('meta state', () => {
           itemIds: savedItemIds,
           extraStartingChoice: false,
           scoutFlame: true,
+          curseIds: [],
         },
         lastAwardedRunId: null,
       }).pendingPrep.itemIds,
     ).toEqual(expectedItemIds);
+  });
+
+  test('keeps only the first valid saved curse id', () => {
+    expect(
+      normalizeMetaState({
+        embers: 7,
+        pendingPrep: {
+          itemIds: [],
+          extraStartingChoice: false,
+          scoutFlame: false,
+          curseIds: ['blood_oath', 'bad'],
+        },
+        lastAwardedRunId: null,
+      }).pendingPrep.curseIds,
+    ).toEqual(['blood_oath']);
   });
 
   test('loads saved embers and pending prep', () => {
@@ -86,6 +102,7 @@ describe('meta state', () => {
           itemIds: ['small_potion'],
           extraStartingChoice: true,
           scoutFlame: false,
+          curseIds: [],
         },
         lastAwardedRunId: 'run-1',
       },
@@ -98,6 +115,7 @@ describe('meta state', () => {
         itemIds: ['small_potion'],
         extraStartingChoice: true,
         scoutFlame: false,
+        curseIds: [],
       },
       lastAwardedRunId: 'run-1',
     });
@@ -118,6 +136,7 @@ describe('meta state', () => {
           itemIds: ['large_potion', 'bomb'],
           extraStartingChoice: true,
           scoutFlame: false,
+          curseIds: [],
         },
         lastAwardedRunId: null,
       }),
@@ -127,6 +146,7 @@ describe('meta state', () => {
         itemIds: ['bomb'],
         extraStartingChoice: true,
         scoutFlame: false,
+        curseIds: [],
       },
       lastAwardedRunId: null,
     });
@@ -138,6 +158,7 @@ describe('meta state', () => {
           itemIds: ['bomb'],
           extraStartingChoice: true,
           scoutFlame: true,
+          curseIds: [],
         },
         lastAwardedRunId: 'run-2',
       }),
@@ -147,6 +168,7 @@ describe('meta state', () => {
         itemIds: ['bomb'],
         extraStartingChoice: true,
         scoutFlame: true,
+        curseIds: [],
       },
       lastAwardedRunId: 'run-2',
     });
@@ -157,6 +179,7 @@ describe('meta state', () => {
         itemIds: ['bomb'],
         extraStartingChoice: true,
         scoutFlame: true,
+        curseIds: [],
       },
       lastAwardedRunId: 'run-2',
     });

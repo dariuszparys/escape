@@ -1,5 +1,6 @@
 import { MAX_ARMOR, MAX_HAND, MAX_INVENTORY, PLAYER_MAX_HP } from './config';
 import { Card } from './data/cards';
+import type { CampfireCurseId } from './data/campfireBargains';
 import { InventoryItem, makeItem } from './data/items';
 import { RelicId, Relic } from './data/relics';
 import { selectCombatHand } from './game/cardSelection';
@@ -31,6 +32,7 @@ export class RunState {
   startingCardPicks = DEFAULT_STARTING_CARD_PICKS;
   startingCardsTaken = 0;
   scoutCharges = 0;
+  curseIds: CampfireCurseId[] = [];
   bossDefeated = false;
   isDaily = false;
   dailyKey: string | null = null;

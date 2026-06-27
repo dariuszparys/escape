@@ -1,4 +1,5 @@
 import { MAX_INVENTORY } from '../config';
+import type { CampfireCurseId } from './campfireBargains';
 import type { InventoryItemDef } from './items';
 
 export type CampfirePurchaseId =
@@ -12,6 +13,7 @@ export interface PendingPrep {
   itemIds: InventoryItemDef['id'][];
   extraStartingChoice: boolean;
   scoutFlame: boolean;
+  curseIds?: CampfireCurseId[];
 }
 
 interface CampfirePurchaseBase {
@@ -88,6 +90,7 @@ export function createDefaultPendingPrep(): PendingPrep {
     itemIds: [],
     extraStartingChoice: false,
     scoutFlame: false,
+    curseIds: [],
   };
 }
 
@@ -136,6 +139,7 @@ export function buyCampfirePurchase(
     itemIds: [...state.pendingPrep.itemIds],
     extraStartingChoice: state.pendingPrep.extraStartingChoice,
     scoutFlame: state.pendingPrep.scoutFlame,
+    curseIds: [...(state.pendingPrep.curseIds ?? [])],
   };
 
   if (purchase.kind === 'item') {

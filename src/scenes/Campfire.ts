@@ -1,6 +1,14 @@
 import Phaser from 'phaser';
 import { GAME_H, GAME_W } from '../config';
 import { applyPendingPrepToRun } from '../game/campfirePrep';
+import {
+  CAMPFIRE_BARGAINS,
+  acceptCampfireBargain,
+  canAcceptCampfireBargain,
+  formatCampfireCurseSummary,
+} from '../data/campfireBargains';
+import type { CampfireBargainDef } from '../data/campfireBargains';
+import type { PendingPrep } from '../data/campfirePurchases';
 import { dailyKey, dailySeed, loadDailyRecord } from '../daily';
 import { loadRunChronicle } from '../chronicle';
 import {
@@ -10,6 +18,7 @@ import {
 } from '../game/campfireSummary';
 import { getMeta, setMeta } from '../meta';
 import { newRun } from '../state';
+import { playSfx } from '../audio/sfx';
 
 const TEXT_STYLE = {
   fontFamily: 'monospace',
@@ -23,9 +32,12 @@ const HERO_Y = 356;
 const STATUS_X = 392;
 const STATUS_W = 290;
 const FOREGROUND_DEPTH = 10;
+const OVERLAY_DEPTH = 30;
+const ACTION_Y = 584;
 
 export class CampfireScene extends Phaser.Scene {
   private dynamic!: Phaser.GameObjects.Container;
+  private bargainOverlay?: Phaser.GameObjects.Container;
 
   constructor() {
     super('Campfire');
@@ -38,6 +50,7 @@ export class CampfireScene extends Phaser.Scene {
     this.game.events.on('meta-update', this.redraw, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.game.events.off('meta-update', this.redraw, this);
+      this.closeBargainOverlay();
     });
     this.redraw();
   }
@@ -178,7 +191,7 @@ export class CampfireScene extends Phaser.Scene {
       }),
     );
     this.dynamic.add(
-      this.add.text(STATUS_X, 254, formatPendingPrepSummary(meta.pendingPrep), {
+      this.add.text(STATUS_X, 254, this.formatPendingPrepSummary(meta.pendingPrep), {
         ...TEXT_STYLE,
         fontSize: '13px',
         color: '#b8b0c8',
@@ -205,16 +218,17 @@ export class CampfireScene extends Phaser.Scene {
       }),
     );
 
-    this.addActionButton(156, '[ SUPPLIES ]', () => this.scene.start('Supplies'));
-    this.addActionButton(360, '[ DESCEND ]', () => this.startRun());
-    this.addActionButton(565, '[ DAILY DESCENT ]', () => this.startDailyRun());
+    this.addActionButton(92, '[ SUPPLIES ]', () => this.scene.start('Supplies'));
+    this.addActionButton(250, '[ BARGAINS ]', () => this.openBargainOverlay());
+    this.addActionButton(407, '[ DESCEND ]', () => this.startRun());
+    this.addActionButton(592, '[ DAILY DESCENT ]', () => this.startDailyRun());
   }
 
   private addActionButton(x: number, label: string, onPointerDown: () => void): void {
     const button = this.add
-      .text(x, 584, label, {
+      .text(x, ACTION_Y, label, {
         ...TEXT_STYLE,
-        fontSize: '22px',
+        fontSize: '18px',
         fontStyle: 'bold',
         color: '#f1c40f',
       })
@@ -225,6 +239,133 @@ export class CampfireScene extends Phaser.Scene {
     button.on('pointerout', () => button.setColor('#f1c40f'));
     button.on('pointerdown', onPointerDown);
     this.dynamic.add(button);
+  }
+
+  private formatPendingPrepSummary(prep: PendingPrep): string {
+    return [formatPendingPrepSummary(prep), formatCampfireCurseSummary(prep.curseIds ?? [])].join(
+      '\n',
+    );
+  }
+
+  private openBargainOverlay(): void {
+    this.closeBargainOverlay();
+
+    const overlay = this.add.container(0, 0).setDepth(OVERLAY_DEPTH);
+    this.bargainOverlay = overlay;
+
+    const backdrop = this.add
+      .rectangle(GAME_W / 2, GAME_H / 2, GAME_W, GAME_H, 0x000000, 0.66)
+      .setInteractive();
+    const panel = this.add.graphics();
+    panel.fillStyle(0x151018, 0.98);
+    panel.fillRect(82, 96, 556, 390);
+    panel.lineStyle(2, 0xf1c40f, 0.72);
+    panel.strokeRect(82, 96, 556, 390);
+
+    overlay.add([backdrop, panel]);
+    overlay.add(
+      this.add
+        .text(GAME_W / 2, 126, 'CAMPFIRE BARGAINS', {
+          ...TEXT_STYLE,
+          fontSize: '22px',
+          fontStyle: 'bold',
+          color: '#f1c40f',
+        })
+        .setOrigin(0.5),
+    );
+
+    CAMPFIRE_BARGAINS.forEach((bargain, index) => {
+      this.addBargainRow(overlay, bargain, 114, 168 + index * 112);
+    });
+
+    const close = this.add
+      .text(GAME_W / 2, 454, '[ CLOSE ]', {
+        ...TEXT_STYLE,
+        fontSize: '18px',
+        fontStyle: 'bold',
+        color: '#f1c40f',
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+    close.on('pointerover', () => close.setColor('#ffe48a'));
+    close.on('pointerout', () => close.setColor('#f1c40f'));
+    close.on('pointerdown', () => this.closeBargainOverlay());
+    overlay.add(close);
+
+    this.input.keyboard?.once('keydown-ESC', this.closeBargainOverlay, this);
+  }
+
+  private addBargainRow(
+    overlay: Phaser.GameObjects.Container,
+    bargain: CampfireBargainDef,
+    x: number,
+    y: number,
+  ): void {
+    const check = canAcceptCampfireBargain(getMeta(), bargain.id);
+    const enabled = check.ok;
+    const row = this.add.graphics();
+    row.fillStyle(enabled ? 0x241c1a : 0x17151c, 0.98);
+    row.fillRect(x, y, 492, 86);
+    row.lineStyle(1, enabled ? 0x6f5032 : 0x393344, enabled ? 0.82 : 0.46);
+    row.strokeRect(x, y, 492, 86);
+
+    const title = this.add.text(x + 14, y + 10, `${bargain.name} +${bargain.emberGain} embers`, {
+      ...TEXT_STYLE,
+      fontSize: '16px',
+      fontStyle: 'bold',
+      color: enabled ? '#f5edd8' : '#6f687c',
+    });
+    const detail = this.add.text(
+      x + 14,
+      y + 36,
+      enabled ? bargain.description : `${bargain.description} ${check.reason}`,
+      {
+        ...TEXT_STYLE,
+        fontSize: '12px',
+        color: enabled ? '#b8b0c8' : '#5d566d',
+        fixedWidth: 342,
+        wordWrap: { width: 342, useAdvancedWrap: true },
+        lineSpacing: 5,
+      },
+    );
+    const action = this.add
+      .text(x + 416, y + 42, enabled ? '[ ACCEPT ]' : '[ LOCKED ]', {
+        ...TEXT_STYLE,
+        fontSize: '14px',
+        fontStyle: 'bold',
+        color: enabled ? '#f1c40f' : '#5d566d',
+      })
+      .setOrigin(0.5);
+
+    if (enabled) {
+      action.setInteractive({ useHandCursor: true });
+      action.on('pointerover', () => action.setColor('#ffe48a'));
+      action.on('pointerout', () => action.setColor('#f1c40f'));
+      action.on('pointerdown', () => this.acceptBargain(bargain));
+    }
+
+    overlay.add([row, title, detail, action]);
+  }
+
+  private acceptBargain(bargain: CampfireBargainDef): void {
+    const meta = getMeta();
+    const result = acceptCampfireBargain(meta, bargain.id);
+    if (!result.ok) return;
+
+    const updated = setMeta({
+      ...meta,
+      embers: result.state.embers,
+      pendingPrep: result.state.pendingPrep,
+    });
+    playSfx(this, 'purchase');
+    this.closeBargainOverlay();
+    this.game.events.emit('meta-update', updated);
+  }
+
+  private closeBargainOverlay(): void {
+    this.input.keyboard?.off('keydown-ESC', this.closeBargainOverlay, this);
+    this.bargainOverlay?.destroy();
+    this.bargainOverlay = undefined;
   }
 
   private startRun(): void {
