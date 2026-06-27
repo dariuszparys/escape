@@ -1,23 +1,14 @@
 import Phaser from 'phaser';
-import { GAME_H, GAME_W, MAX_INVENTORY } from '../config';
-import {
-  CAMPFIRE_PURCHASES,
-  buyCampfirePurchase,
-  canBuyCampfirePurchase,
-} from '../data/campfirePurchases';
-import type { CampfirePurchaseDef } from '../data/campfirePurchases';
-import { ITEM_DEFS } from '../data/items';
+import { GAME_H, GAME_W } from '../config';
 import { applyPendingPrepToRun } from '../game/campfirePrep';
-import {
-  BONUS_STARTING_CARD_CHOICES,
-  BONUS_STARTING_CARD_PICKS,
-  DEFAULT_STARTING_CARD_CHOICES,
-  DEFAULT_STARTING_CARD_PICKS,
-} from '../game/startingCards';
 import { dailyKey, dailySeed, loadDailyRecord } from '../daily';
 import { loadRunChronicle } from '../chronicle';
+import {
+  formatChronicleLine,
+  formatDailyRecordLine,
+  formatPendingPrepSummary,
+} from '../game/campfireSummary';
 import { getMeta, setMeta } from '../meta';
-import { playSfx } from '../audio/sfx';
 import { newRun } from '../state';
 
 const TEXT_STYLE = {
@@ -29,11 +20,8 @@ const FIRE_X = 210;
 const FIRE_Y = 348;
 const HERO_X = 104;
 const HERO_Y = 356;
-const OPTION_X = 506;
-const OPTION_W = 352;
-const OPTION_H = 52;
-const OPTION_START_Y = 132;
-const OPTION_GAP = 60;
+const STATUS_X = 392;
+const STATUS_W = 290;
 const FOREGROUND_DEPTH = 10;
 
 export class CampfireScene extends Phaser.Scene {
@@ -149,6 +137,7 @@ export class CampfireScene extends Phaser.Scene {
     this.dynamic.removeAll(true);
     const meta = getMeta();
     const dailyRecord = loadDailyRecord();
+    const chronicle = loadRunChronicle();
 
     this.dynamic.add(
       this.add
@@ -163,21 +152,16 @@ export class CampfireScene extends Phaser.Scene {
 
     this.dynamic.add(
       this.add
-        .text(GAME_W / 2, 88, `Embers: ${meta.embers}`, {
+        .text(GAME_W / 2, 94, `Embers: ${meta.embers}`, {
           ...TEXT_STYLE,
           fontSize: '18px',
           color: '#f5edd8',
         })
         .setOrigin(0.5),
     );
-    const chronicle = loadRunChronicle();
-    const recordLine =
-      chronicle.runsCompleted === 0
-        ? 'No completed runs yet'
-        : `Runs ${chronicle.runsCompleted} | Escapes ${chronicle.escapes} | Best room ${chronicle.bestDepth} | Best gold ${chronicle.bestGold}`;
     this.dynamic.add(
       this.add
-        .text(GAME_W / 2, 110, recordLine, {
+        .text(GAME_W / 2, 120, formatChronicleLine(chronicle), {
           ...TEXT_STYLE,
           fontSize: '12px',
           color: '#b8b0c8',
@@ -185,149 +169,62 @@ export class CampfireScene extends Phaser.Scene {
         .setOrigin(0.5),
     );
 
-    for (const [index, purchase] of CAMPFIRE_PURCHASES.entries()) {
-      this.addPurchaseButton(purchase, OPTION_X, OPTION_START_Y + index * OPTION_GAP);
-    }
-
     this.dynamic.add(
-      this.add.text(330, 438, this.pendingPrepSummary(), {
+      this.add.text(STATUS_X, 220, 'NEXT RUN', {
+        ...TEXT_STYLE,
+        fontSize: '18px',
+        fontStyle: 'bold',
+        color: '#f1c40f',
+      }),
+    );
+    this.dynamic.add(
+      this.add.text(STATUS_X, 254, formatPendingPrepSummary(meta.pendingPrep), {
         ...TEXT_STYLE,
         fontSize: '13px',
         color: '#b8b0c8',
         lineSpacing: 8,
-        fixedWidth: OPTION_W,
-        wordWrap: { width: OPTION_W, useAdvancedWrap: true },
+        fixedWidth: STATUS_W,
+        wordWrap: { width: STATUS_W, useAdvancedWrap: true },
       }),
     );
     this.dynamic.add(
-      this.add.text(
-        330,
-        512,
-        `Daily ${dailyRecord.date} - best room ${dailyRecord.bestDepth}, escaped: ${
-          dailyRecord.escaped ? 'yes' : 'no'
-        }`,
-        {
-          ...TEXT_STYLE,
-          fontSize: '13px',
-          color: '#b8b0c8',
-        },
-      ),
-    );
-
-    const addRunButton = (x: number, label: string, onPointerDown: () => void): void => {
-      const button = this.add
-        .text(x, 584, label, {
-          ...TEXT_STYLE,
-          fontSize: '24px',
-          fontStyle: 'bold',
-          color: '#f1c40f',
-        })
-        .setOrigin(0.5)
-        .setInteractive({ useHandCursor: true });
-
-      button.on('pointerover', () => button.setColor('#ffe48a'));
-      button.on('pointerout', () => button.setColor('#f1c40f'));
-      button.on('pointerdown', onPointerDown);
-      this.dynamic.add(button);
-    };
-
-    addRunButton(GAME_W / 2 - 128, '[ DESCEND ]', () => this.startRun());
-    addRunButton(GAME_W / 2 + 128, '[ DAILY DESCENT ]', () => this.startDailyRun());
-  }
-
-  private pendingPrepSummary(): string {
-    const prep = getMeta().pendingPrep;
-    const names = prep.itemIds.map((id) => ITEM_DEFS.find((item) => item.id === id)?.name ?? id);
-    const openingChoices = prep.extraStartingChoice
-      ? BONUS_STARTING_CARD_CHOICES
-      : DEFAULT_STARTING_CARD_CHOICES;
-    const openingPicks = prep.extraStartingChoice
-      ? BONUS_STARTING_CARD_PICKS
-      : DEFAULT_STARTING_CARD_PICKS;
-    return [
-      `Prepared supplies: ${names.length > 0 ? names.join(', ') : 'none'} (${names.length}/${MAX_INVENTORY})`,
-      `Opening picks: ${openingPicks} of ${openingChoices}`,
-      `Scout flame: ${prep.scoutFlame ? 'ready' : 'unlit'}`,
-    ].join('\n');
-  }
-
-  private addPurchaseButton(purchase: CampfirePurchaseDef, x: number, y: number): void {
-    const meta = getMeta();
-    const check = canBuyCampfirePurchase(meta, purchase.id);
-    const enabled = check.ok;
-    const bg = this.add.graphics();
-
-    const drawBg = (color: number, lineColor: number) => {
-      bg.clear();
-      bg.fillStyle(color, 0.94);
-      bg.fillRect(x - OPTION_W / 2, y - OPTION_H / 2, OPTION_W, OPTION_H);
-      bg.lineStyle(1, lineColor, enabled ? 0.8 : 0.45);
-      bg.strokeRect(x - OPTION_W / 2, y - OPTION_H / 2, OPTION_W, OPTION_H);
-    };
-
-    drawBg(enabled ? 0x221f1e : 0x17151c, enabled ? 0x6f5032 : 0x393344);
-
-    const title = this.add.text(
-      x - OPTION_W / 2 + 16,
-      y - 17,
-      `${purchase.name} - ${purchase.cost} embers`,
-      {
+      this.add.text(STATUS_X, 368, 'TODAY', {
         ...TEXT_STYLE,
-        fontSize: '14px',
+        fontSize: '18px',
         fontStyle: 'bold',
-        color: enabled ? '#f5edd8' : '#6f687c',
-      },
+        color: '#f1c40f',
+      }),
     );
-    const detail = this.add.text(
-      x - OPTION_W / 2 + 16,
-      y + 3,
-      this.purchaseDetail(purchase, check),
-      {
+    this.dynamic.add(
+      this.add.text(STATUS_X, 402, formatDailyRecordLine(dailyRecord), {
         ...TEXT_STYLE,
-        fontSize: '11px',
-        color: enabled ? '#b8b0c8' : '#5d566d',
-        fixedWidth: OPTION_W - 32,
-        wordWrap: { width: OPTION_W - 32, useAdvancedWrap: true },
-      },
+        fontSize: '13px',
+        color: '#b8b0c8',
+        fixedWidth: STATUS_W,
+        wordWrap: { width: STATUS_W, useAdvancedWrap: true },
+      }),
     );
-    const hit = this.add.zone(x, y, OPTION_W, OPTION_H);
 
-    if (enabled) {
-      hit.setInteractive({ useHandCursor: true });
-      hit.on('pointerover', () => {
-        drawBg(0x2d261f, 0xf1c40f);
-        title.setColor('#ffe48a');
-      });
-      hit.on('pointerout', () => {
-        drawBg(0x221f1e, 0x6f5032);
-        title.setColor('#f5edd8');
-      });
-      hit.on('pointerdown', () => this.buyPurchase(purchase.id));
-    }
-
-    this.dynamic.add([bg, title, detail, hit]);
+    this.addActionButton(156, '[ SUPPLIES ]', () => this.scene.start('Supplies'));
+    this.addActionButton(360, '[ DESCEND ]', () => this.startRun());
+    this.addActionButton(565, '[ DAILY DESCENT ]', () => this.startDailyRun());
   }
 
-  private purchaseDetail(
-    purchase: CampfirePurchaseDef,
-    check: ReturnType<typeof canBuyCampfirePurchase>,
-  ): string {
-    if (check.ok) return purchase.description;
-    return `${purchase.description} ${check.reason}`;
-  }
+  private addActionButton(x: number, label: string, onPointerDown: () => void): void {
+    const button = this.add
+      .text(x, 584, label, {
+        ...TEXT_STYLE,
+        fontSize: '22px',
+        fontStyle: 'bold',
+        color: '#f1c40f',
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
 
-  private buyPurchase(id: CampfirePurchaseDef['id']): void {
-    const meta = getMeta();
-    const result = buyCampfirePurchase(meta, id);
-    if (!result.ok) return;
-
-    setMeta({
-      ...meta,
-      embers: result.state.embers,
-      pendingPrep: result.state.pendingPrep,
-    });
-    playSfx(this, 'purchase');
-    this.redraw();
+    button.on('pointerover', () => button.setColor('#ffe48a'));
+    button.on('pointerout', () => button.setColor('#f1c40f'));
+    button.on('pointerdown', onPointerDown);
+    this.dynamic.add(button);
   }
 
   private startRun(): void {

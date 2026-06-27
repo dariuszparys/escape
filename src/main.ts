@@ -6,6 +6,7 @@ import { getMeta, setMeta } from './meta';
 import { BootScene } from './scenes/Boot';
 import { TitleScene } from './scenes/Title';
 import { CampfireScene } from './scenes/Campfire';
+import { SuppliesScene } from './scenes/Supplies';
 import { DungeonScene } from './scenes/Dungeon';
 import { BattleScene } from './scenes/Battle';
 import { HudScene } from './scenes/Hud';
@@ -29,7 +30,16 @@ const game = new Phaser.Game({
     default: 'arcade',
     arcade: { debug: false },
   },
-  scene: [BootScene, TitleScene, CampfireScene, DungeonScene, BattleScene, HudScene, EndScene],
+  scene: [
+    BootScene,
+    TitleScene,
+    CampfireScene,
+    SuppliesScene,
+    DungeonScene,
+    BattleScene,
+    HudScene,
+    EndScene,
+  ],
 });
 
 window.addEventListener('keydown', (event) => {
