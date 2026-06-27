@@ -28,6 +28,8 @@ export class RunState {
   startingCardsTaken = 0;
   scoutCharges = 0;
   bossDefeated = false;
+  isDaily = false;
+  dailyKey: string | null = null;
 
   constructor(seed = String(Math.random()), runId = createRunId()) {
     this.seed = seed;

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_W } from '../config';
 import { playSfx } from '../audio/sfx';
+import { loadDailyRecord, recordDailyAttempt, saveDailyRecord } from '../daily';
 import { calculateEmberReward, EmberRewardBreakdown } from '../game/metaRewards';
 import { getMeta, setMeta } from '../meta';
 import { getRun } from '../state';
@@ -53,6 +54,9 @@ export class EndScene extends Phaser.Scene {
     const emberLine = emberAward.awarded
       ? `Recovered ${emberAward.reward.total} embers.`
       : 'Embers already recovered.';
+    if (emberAward.awarded) {
+      this.recordDailyAttemptOnce();
+    }
     const cx = GAME_W / 2;
     this.cameras.main.fadeIn(600, 11, 10, 18);
 
@@ -137,5 +141,15 @@ export class EndScene extends Phaser.Scene {
     };
     this.input.keyboard?.once('keydown-SPACE', restart);
     this.input.once('pointerdown', restart);
+  }
+
+  private recordDailyAttemptOnce(): void {
+    const run = getRun();
+    if (!run.isDaily || !run.dailyKey) return;
+
+    const record = loadDailyRecord();
+    if (record.date === run.dailyKey) {
+      saveDailyRecord(recordDailyAttempt(record, { depth: run.depth, escaped: this.victory }));
+    }
   }
 }

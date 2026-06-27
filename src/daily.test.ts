@@ -1,0 +1,119 @@
+import { describe, expect, test } from 'vitest';
+import {
+  createDefaultDailyRecord,
+  dailyKey,
+  dailySeed,
+  loadDailyRecord,
+  normalizeDailyRecord,
+  recordDailyAttempt,
+  saveDailyRecord,
+} from './daily';
+
+class MemoryStorage implements Storage {
+  private values = new Map<string, string>();
+  length = 0;
+
+  clear(): void {
+    this.values.clear();
+    this.length = this.values.size;
+  }
+
+  getItem(key: string): string | null {
+    return this.values.get(key) ?? null;
+  }
+
+  key(index: number): string | null {
+    return [...this.values.keys()][index] ?? null;
+  }
+
+  removeItem(key: string): void {
+    this.values.delete(key);
+    this.length = this.values.size;
+  }
+
+  setItem(key: string, value: string): void {
+    this.values.set(key, value);
+    this.length = this.values.size;
+  }
+}
+
+describe('daily challenge records', () => {
+  test('derives daily key from UTC date', () => {
+    expect(dailyKey(new Date('2026-06-27T12:00:00Z'))).toBe('2026-06-27');
+    expect(dailyKey(new Date('2026-06-27T00:00:00.010Z'))).toBe('2026-06-27');
+    expect(dailyKey(new Date('2026-06-27T23:59:59.999Z'))).toBe('2026-06-27');
+  });
+
+  test('derives daily seed from key', () => {
+    expect(dailySeed(new Date('2026-06-27T00:00:00Z'))).toBe('daily-2026-06-27');
+  });
+
+  test('normalizes a record for today and rejects stale records', () => {
+    const today = new Date('2026-06-27T00:00:00Z');
+    const stale = new Date('2026-06-26T00:00:00Z');
+    const raw = {
+      date: '2026-06-27',
+      seed: 'daily-2026-06-27',
+      bestDepth: 6,
+      escaped: true,
+      attempts: 2,
+    };
+
+    expect(normalizeDailyRecord(raw, today)).toEqual(raw);
+    expect(normalizeDailyRecord({ ...raw, date: dailyKey(stale) }, today)).toEqual(
+      createDefaultDailyRecord(today),
+    );
+  });
+
+  test('coerces bad depth/escaped/attempt values when normalizing', () => {
+    expect(
+      normalizeDailyRecord(
+        {
+          date: '2026-06-27',
+          seed: 'daily-2026-06-27',
+          bestDepth: -2.4,
+          escaped: 'yes',
+          attempts: 'five',
+        },
+        new Date('2026-06-27T00:00:00Z'),
+      ),
+    ).toEqual({
+      date: '2026-06-27',
+      seed: 'daily-2026-06-27',
+      bestDepth: 0,
+      escaped: false,
+      attempts: 0,
+    });
+  });
+
+  test('falls back to default when storage unavailable', () => {
+    expect(loadDailyRecord(null)).toEqual(createDefaultDailyRecord());
+  });
+
+  test('round-trips via in-memory storage', () => {
+    const storage = new MemoryStorage();
+    const record = {
+      date: '2026-06-27',
+      seed: 'daily-2026-06-27',
+      bestDepth: 7,
+      escaped: false,
+      attempts: 3,
+    };
+
+    saveDailyRecord(record, storage);
+    expect(loadDailyRecord(storage)).toEqual(record);
+  });
+
+  test('records attempt stats without mutating the input record', () => {
+    const record = createDefaultDailyRecord(new Date('2026-06-27T00:00:00Z'));
+    const recorded = recordDailyAttempt(record, { depth: 7, escaped: true });
+    expect(record).toEqual(createDefaultDailyRecord(new Date('2026-06-27T00:00:00Z')));
+    expect(recorded).toEqual({
+      date: '2026-06-27',
+      seed: 'daily-2026-06-27',
+      bestDepth: 7,
+      escaped: true,
+      attempts: 1,
+    });
+  });
+});

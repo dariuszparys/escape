@@ -14,6 +14,7 @@ import {
   DEFAULT_STARTING_CARD_CHOICES,
   DEFAULT_STARTING_CARD_PICKS,
 } from '../game/startingCards';
+import { dailyKey, dailySeed, loadDailyRecord } from '../daily';
 import { getMeta, setMeta } from '../meta';
 import { playSfx } from '../audio/sfx';
 import { newRun } from '../state';
@@ -146,6 +147,7 @@ export class CampfireScene extends Phaser.Scene {
   private redraw(): void {
     this.dynamic.removeAll(true);
     const meta = getMeta();
+    const dailyRecord = loadDailyRecord();
 
     this.dynamic.add(
       this.add
@@ -182,21 +184,40 @@ export class CampfireScene extends Phaser.Scene {
         wordWrap: { width: OPTION_W, useAdvancedWrap: true },
       }),
     );
+    this.dynamic.add(
+      this.add.text(
+        330,
+        512,
+        `Daily ${dailyRecord.date} - best room ${dailyRecord.bestDepth}, escaped: ${
+          dailyRecord.escaped ? 'yes' : 'no'
+        }`,
+        {
+          ...TEXT_STYLE,
+          fontSize: '13px',
+          color: '#b8b0c8',
+        },
+      ),
+    );
 
-    const descend = this.add
-      .text(GAME_W / 2, 584, '[ DESCEND ]', {
-        ...TEXT_STYLE,
-        fontSize: '24px',
-        fontStyle: 'bold',
-        color: '#f1c40f',
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
+    const addRunButton = (x: number, label: string, onPointerDown: () => void): void => {
+      const button = this.add
+        .text(x, 584, label, {
+          ...TEXT_STYLE,
+          fontSize: '24px',
+          fontStyle: 'bold',
+          color: '#f1c40f',
+        })
+        .setOrigin(0.5)
+        .setInteractive({ useHandCursor: true });
 
-    descend.on('pointerover', () => descend.setColor('#ffe48a'));
-    descend.on('pointerout', () => descend.setColor('#f1c40f'));
-    descend.on('pointerdown', () => this.startRun());
-    this.dynamic.add(descend);
+      button.on('pointerover', () => button.setColor('#ffe48a'));
+      button.on('pointerout', () => button.setColor('#f1c40f'));
+      button.on('pointerdown', onPointerDown);
+      this.dynamic.add(button);
+    };
+
+    addRunButton(GAME_W / 2 - 128, '[ DESCEND ]', () => this.startRun());
+    addRunButton(GAME_W / 2 + 128, '[ DAILY DESCENT ]', () => this.startDailyRun());
   }
 
   private pendingPrepSummary(): string {
@@ -300,6 +321,14 @@ export class CampfireScene extends Phaser.Scene {
     const meta = getMeta();
     const clearedPrep = applyPendingPrepToRun(run, meta.pendingPrep);
     setMeta({ ...meta, pendingPrep: clearedPrep });
+    this.scene.start('Dungeon');
+  }
+
+  private startDailyRun(): void {
+    const seed = dailySeed();
+    const run = newRun(seed);
+    run.isDaily = true;
+    run.dailyKey = dailyKey();
     this.scene.start('Dungeon');
   }
 }
