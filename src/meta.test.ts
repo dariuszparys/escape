@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from 'vitest';
 import { MAX_INVENTORY } from './config';
 import {
+  META_ECONOMY_VERSION,
   createDefaultMetaState,
   getMeta,
   loadMetaState,
@@ -46,6 +47,80 @@ describe('meta state', () => {
     expect(normalizeMetaState({ embers: -10, pendingPrep: null })).toEqual(
       createDefaultMetaState(),
     );
+  });
+
+  test('migrates old positive ember balances into the starter card unlock bonus', () => {
+    expect(
+      normalizeMetaState({
+        embers: 23,
+        pendingPrep: {
+          itemIds: [],
+          extraStartingChoice: false,
+          scoutFlame: false,
+          curseIds: [],
+        },
+        lastAwardedRunId: 'old-run',
+      }),
+    ).toEqual({
+      economyVersion: META_ECONOMY_VERSION,
+      embers: 0,
+      progression: {
+        starterCardVarietyUnlocked: true,
+        migrationBonusGranted: true,
+      },
+      pendingPrep: {
+        itemIds: [],
+        extraStartingChoice: false,
+        scoutFlame: false,
+        curseIds: [],
+      },
+      lastAwardedRunId: 'old-run',
+    });
+  });
+
+  test('preserves pending prep once while migrating old saved data', () => {
+    expect(
+      normalizeMetaState({
+        embers: 3,
+        pendingPrep: {
+          itemIds: ['small_potion'],
+          extraStartingChoice: true,
+          scoutFlame: true,
+          curseIds: ['narrow_opening'],
+        },
+        lastAwardedRunId: null,
+      }),
+    ).toEqual({
+      economyVersion: META_ECONOMY_VERSION,
+      embers: 0,
+      progression: {
+        starterCardVarietyUnlocked: true,
+        migrationBonusGranted: true,
+      },
+      pendingPrep: {
+        itemIds: ['small_potion'],
+        extraStartingChoice: true,
+        scoutFlame: true,
+        curseIds: ['narrow_opening'],
+      },
+      lastAwardedRunId: null,
+    });
+  });
+
+  test('does not grant the migration bonus for malformed versioned data', () => {
+    expect(
+      normalizeMetaState({
+        economyVersion: 'bad',
+        embers: 11,
+        pendingPrep: {
+          itemIds: ['small_potion'],
+          extraStartingChoice: true,
+          scoutFlame: true,
+          curseIds: ['narrow_opening'],
+        },
+        lastAwardedRunId: 'run-1',
+      }),
+    ).toEqual(createDefaultMetaState());
   });
 
   test('filters saved item ids to campfire items and inventory capacity', () => {
@@ -97,7 +172,12 @@ describe('meta state', () => {
     const storage = new MemoryStorage();
     saveMetaState(
       {
+        economyVersion: META_ECONOMY_VERSION,
         embers: 12,
+        progression: {
+          starterCardVarietyUnlocked: true,
+          migrationBonusGranted: false,
+        },
         pendingPrep: {
           itemIds: ['small_potion'],
           extraStartingChoice: true,
@@ -110,7 +190,12 @@ describe('meta state', () => {
     );
 
     expect(loadMetaState(storage)).toEqual({
+      economyVersion: META_ECONOMY_VERSION,
       embers: 12,
+      progression: {
+        starterCardVarietyUnlocked: true,
+        migrationBonusGranted: false,
+      },
       pendingPrep: {
         itemIds: ['small_potion'],
         extraStartingChoice: true,
@@ -131,7 +216,12 @@ describe('meta state', () => {
   test('normalizes set meta and applies sequential setMeta calls', () => {
     expect(
       setMeta({
+        economyVersion: META_ECONOMY_VERSION,
         embers: 4.8,
+        progression: {
+          starterCardVarietyUnlocked: true,
+          migrationBonusGranted: false,
+        },
         pendingPrep: {
           itemIds: ['large_potion', 'bomb'],
           extraStartingChoice: true,
@@ -141,7 +231,12 @@ describe('meta state', () => {
         lastAwardedRunId: null,
       }),
     ).toEqual({
+      economyVersion: META_ECONOMY_VERSION,
       embers: 4,
+      progression: {
+        starterCardVarietyUnlocked: true,
+        migrationBonusGranted: false,
+      },
       pendingPrep: {
         itemIds: ['bomb'],
         extraStartingChoice: true,
@@ -153,7 +248,12 @@ describe('meta state', () => {
 
     expect(
       setMeta({
+        economyVersion: META_ECONOMY_VERSION,
         embers: 7,
+        progression: {
+          starterCardVarietyUnlocked: false,
+          migrationBonusGranted: false,
+        },
         pendingPrep: {
           itemIds: ['bomb'],
           extraStartingChoice: true,
@@ -163,7 +263,12 @@ describe('meta state', () => {
         lastAwardedRunId: 'run-2',
       }),
     ).toEqual({
+      economyVersion: META_ECONOMY_VERSION,
       embers: 7,
+      progression: {
+        starterCardVarietyUnlocked: false,
+        migrationBonusGranted: false,
+      },
       pendingPrep: {
         itemIds: ['bomb'],
         extraStartingChoice: true,
@@ -174,7 +279,12 @@ describe('meta state', () => {
     });
 
     expect(getMeta()).toEqual({
+      economyVersion: META_ECONOMY_VERSION,
       embers: 7,
+      progression: {
+        starterCardVarietyUnlocked: false,
+        migrationBonusGranted: false,
+      },
       pendingPrep: {
         itemIds: ['bomb'],
         extraStartingChoice: true,

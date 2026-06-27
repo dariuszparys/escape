@@ -10,7 +10,7 @@ import {
 describe('campfire summary formatting', () => {
   test('formats empty pending prep for hub status', () => {
     expect(formatPendingPrepSummary(createDefaultPendingPrep())).toBe(
-      ['Prepared supplies: none (0/3)', 'Opening picks: 2 of 3', 'Scout flame: unlit'].join('\n'),
+      ['One-run prep: none (0/3)', 'Opening picks: 2 of 3', 'Scout flame: unlit'].join('\n'),
     );
   });
 
@@ -23,11 +23,23 @@ describe('campfire summary formatting', () => {
       }),
     ).toBe(
       [
-        'Prepared supplies: Small Potion, Bomb (2/3)',
+        'One-run prep: Small Potion, Bomb (2/3)',
         'Opening picks: 3 of 4',
         'Scout flame: ready',
       ].join('\n'),
     );
+  });
+
+  test('includes starter-card progression in opening choice summary without extra picks', () => {
+    const summary = formatPendingPrepSummary(createDefaultPendingPrep(), {
+      starterCardVarietyUnlocked: true,
+      migrationBonusGranted: true,
+    });
+
+    expect(summary).toBe(
+      ['One-run prep: none (0/3)', 'Opening picks: 2 of 4', 'Scout flame: unlit'].join('\n'),
+    );
+    expect(summary).not.toMatch(/Ash|Kindling/);
   });
 
   test('formats chronicle line for no completed runs', () => {

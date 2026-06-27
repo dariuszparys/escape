@@ -9,18 +9,35 @@ import type { CampfireCurseId } from './data/campfireBargains';
 import { CAMPFIRE_PURCHASES, createDefaultPendingPrep } from './data/campfirePurchases';
 
 export const META_STORAGE_KEY = 'escape.meta.v1';
+export const META_ECONOMY_VERSION = 2;
+
+export interface MetaProgressionState {
+  starterCardVarietyUnlocked: boolean;
+  migrationBonusGranted: boolean;
+}
 
 export interface MetaState extends CampfirePurchaseState {
+  economyVersion: typeof META_ECONOMY_VERSION;
   embers: number;
+  progression: MetaProgressionState;
   pendingPrep: PendingPrep;
   lastAwardedRunId: string | null;
 }
 
 export function createDefaultMetaState(): MetaState {
   return {
+    economyVersion: META_ECONOMY_VERSION,
     embers: 0,
+    progression: createDefaultProgressionState(),
     pendingPrep: createDefaultPendingPrep(),
     lastAwardedRunId: null,
+  };
+}
+
+function createDefaultProgressionState(): MetaProgressionState {
+  return {
+    starterCardVarietyUnlocked: false,
+    migrationBonusGranted: false,
   };
 }
 
@@ -58,17 +75,45 @@ function normalizeCurseIds(value: unknown): CampfireCurseId[] {
     .slice(0, 1);
 }
 
+function normalizeEmbers(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+}
+
+function normalizeProgression(value: unknown): MetaProgressionState {
+  if (!isRecord(value)) return createDefaultProgressionState();
+
+  const migrationBonusGranted = value.migrationBonusGranted === true;
+  return {
+    starterCardVarietyUnlocked: value.starterCardVarietyUnlocked === true || migrationBonusGranted,
+    migrationBonusGranted,
+  };
+}
+
+function createMigratedProgressionState(grantsStarterBonus: boolean): MetaProgressionState {
+  return {
+    starterCardVarietyUnlocked: grantsStarterBonus,
+    migrationBonusGranted: grantsStarterBonus,
+  };
+}
+
 export function normalizeMetaState(value: unknown): MetaState {
   if (!isRecord(value)) return createDefaultMetaState();
 
-  const embers =
-    typeof value.embers === 'number' && Number.isFinite(value.embers)
-      ? Math.max(0, Math.floor(value.embers))
-      : 0;
+  const hasEconomyVersion = Object.prototype.hasOwnProperty.call(value, 'economyVersion');
+  if (hasEconomyVersion && value.economyVersion !== META_ECONOMY_VERSION) {
+    return createDefaultMetaState();
+  }
+
+  const legacyEmbers = normalizeEmbers(value.embers);
+  const grantsStarterBonus = !hasEconomyVersion && legacyEmbers > 0;
   const pending = isRecord(value.pendingPrep) ? value.pendingPrep : {};
 
   return {
-    embers,
+    economyVersion: META_ECONOMY_VERSION,
+    embers: hasEconomyVersion ? legacyEmbers : 0,
+    progression: hasEconomyVersion
+      ? normalizeProgression(value.progression)
+      : createMigratedProgressionState(grantsStarterBonus),
     pendingPrep: {
       itemIds: normalizeItemIds(pending.itemIds),
       extraStartingChoice: pending.extraStartingChoice === true,

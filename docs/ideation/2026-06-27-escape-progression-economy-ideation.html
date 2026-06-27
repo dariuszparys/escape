@@ -1,0 +1,929 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ideation: Escape Progression and Economy</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0f1016;
+        --panel: #171923;
+        --panel-2: #20232f;
+        --text: #f5edd8;
+        --muted: #c9c0d5;
+        --subtle: #8e879c;
+        --accent: #f1c40f;
+        --accent-soft: #332b16;
+        --green: #72d98b;
+        --blue: #8dc4ff;
+        --red: #ff8a72;
+        --line: #373241;
+        --line-2: #5a4e36;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at 20% 0%, rgba(241, 196, 15, 0.1), transparent 28rem),
+          linear-gradient(180deg, #11131b 0%, var(--bg) 24rem);
+        color: var(--text);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+        font-size: 15px;
+        line-height: 1.58;
+      }
+
+      a {
+        color: var(--blue);
+      }
+
+      .page {
+        width: min(1060px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 42px 0 56px;
+      }
+
+      header {
+        border: 1px solid var(--line-2);
+        background: rgba(23, 25, 35, 0.92);
+        border-radius: 8px;
+        padding: 28px;
+      }
+
+      .eyebrow {
+        margin: 0 0 8px;
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin: 0;
+        line-height: 1.2;
+      }
+
+      h1 {
+        font-size: 34px;
+        max-width: 18ch;
+      }
+
+      h2 {
+        font-size: 24px;
+        margin-bottom: 14px;
+      }
+
+      h3 {
+        font-size: 19px;
+      }
+
+      p {
+        max-width: 78ch;
+      }
+
+      code {
+        color: #ffe48a;
+        background: rgba(241, 196, 15, 0.1);
+        border: 1px solid rgba(241, 196, 15, 0.18);
+        border-radius: 4px;
+        padding: 0 4px;
+        font-size: 0.94em;
+      }
+
+      .meta {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 24px;
+      }
+
+      .meta div,
+      .stat,
+      .callout,
+      .idea,
+      .subnav,
+      section {
+        border: 1px solid var(--line);
+        background: rgba(23, 25, 35, 0.88);
+        border-radius: 8px;
+      }
+
+      .meta div {
+        padding: 11px 12px;
+      }
+
+      .label {
+        display: block;
+        color: var(--subtle);
+        font-size: 11px;
+        text-transform: uppercase;
+        margin-bottom: 4px;
+      }
+
+      .value {
+        color: var(--text);
+        font-weight: 700;
+      }
+
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin: 18px 0 26px;
+      }
+
+      .stat {
+        padding: 15px;
+      }
+
+      .stat strong {
+        display: block;
+        font-size: 26px;
+        line-height: 1;
+        color: var(--accent);
+      }
+
+      .stat span {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      section {
+        padding: 24px;
+        margin-top: 22px;
+      }
+
+      .axis-list {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 10px;
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+
+      .axis-list li {
+        background: var(--panel-2);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 12px;
+        color: var(--muted);
+      }
+
+      .subnav {
+        padding: 14px 16px;
+        margin-bottom: 16px;
+      }
+
+      .subnav ul {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px 18px;
+        margin: 8px 0 0;
+        padding-left: 18px;
+      }
+
+      .idea {
+        padding: 22px;
+        margin-top: 16px;
+        background: linear-gradient(180deg, rgba(32, 35, 47, 0.96), rgba(23, 25, 35, 0.96));
+      }
+
+      .idea-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 18px;
+        margin-bottom: 16px;
+      }
+
+      .idea-id {
+        color: var(--accent);
+        font-weight: 800;
+        margin-right: 6px;
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: flex-end;
+      }
+
+      .chip {
+        border-radius: 999px;
+        padding: 5px 9px;
+        border: 1px solid rgba(241, 196, 15, 0.26);
+        background: var(--accent-soft);
+        color: #ffe48a;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+
+      .fields {
+        display: grid;
+        grid-template-columns: 130px 1fr;
+        gap: 10px 14px;
+        margin: 0;
+      }
+
+      .fields dt {
+        color: var(--subtle);
+        font-size: 12px;
+        text-transform: uppercase;
+      }
+
+      .fields dd {
+        margin: 0;
+        color: var(--text);
+      }
+
+      .diagram {
+        margin: 16px 0;
+        background: #12141d;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 12px;
+        overflow-x: auto;
+      }
+
+      svg text {
+        fill: var(--text);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+        font-size: 13px;
+      }
+
+      .svg-muted {
+        fill: var(--muted);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+        font-size: 14px;
+      }
+
+      th,
+      td {
+        border: 1px solid var(--line);
+        padding: 10px;
+        vertical-align: top;
+        text-align: left;
+      }
+
+      th {
+        color: var(--accent);
+        background: rgba(241, 196, 15, 0.08);
+      }
+
+      .sources li {
+        margin-bottom: 8px;
+      }
+
+      footer {
+        margin-top: 26px;
+        color: var(--subtle);
+        font-size: 12px;
+        text-align: center;
+      }
+
+      @media (max-width: 820px) {
+        .meta,
+        .stats,
+        .axis-list,
+        .subnav ul {
+          grid-template-columns: 1fr;
+        }
+
+        .idea-head {
+          display: block;
+        }
+
+        .chips {
+          justify-content: flex-start;
+          margin-top: 12px;
+        }
+
+        .fields {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header>
+        <p class="eyebrow">Ideation Artifact</p>
+        <h1>Escape Progression and Economy</h1>
+        <p>
+          Ranked directions for making the card dungeon crawler more challenging, repairing the
+          ember economy, making bargains matter, and adding a Vampire Survivors-like progression
+          loop without flattening the game into permanent stat inflation.
+        </p>
+        <div class="meta" aria-label="Document metadata">
+          <div>
+            <span class="label">Date</span
+            ><span class="value"><time datetime="2026-06-27">2026-06-27</time></span>
+          </div>
+          <div>
+            <span class="label">Topic</span><span class="value">escape-progression-economy</span>
+          </div>
+          <div>
+            <span class="label">Focus</span
+            ><span class="value">challenge, embers, bargains, progression</span>
+          </div>
+          <div><span class="label">Mode</span><span class="value">repo-grounded</span></div>
+        </div>
+      </header>
+
+      <div class="stats" aria-label="Summary statistics">
+        <div class="stat"><strong>39</strong><span>raw candidates generated</span></div>
+        <div class="stat"><strong>14</strong><span>deduped candidates reviewed</span></div>
+        <div class="stat"><strong>6</strong><span>ranked survivors</span></div>
+        <div class="stat"><strong>5</strong><span>topic axes covered</span></div>
+      </div>
+
+      <section id="grounding-context">
+        <p class="eyebrow">Evidence Base</p>
+        <h2>Grounding Context</h2>
+        <p>
+          Escape already has the first layer of the roguelite loop: embers, temporary campfire
+          supplies, bargains with next-run curses, daily runs, a run chronicle, relics, rest rooms,
+          and a balance simulator. The problem is therefore not "add progression from zero"; it is
+          to reshape the existing loop so the economy creates hard choices and progression adds
+          durable goals.
+        </p>
+        <p>
+          The strongest direct economy signal is the mismatch between income and sinks:
+          <code>calculateEmberReward</code> pays from depth, defeated enemies, carried gold, and
+          victory, with a tested victory example totaling 54 embers. Current campfire purchase
+          prices are 4, 6, 8, 10, and 6 embers. Current bargains add 10 or 8 embers immediately and
+          apply a single next-run curse.
+        </p>
+        <p>
+          The strongest direction-setting signal is already in the repo docs: the first campfire
+          pass explicitly avoided permanent power creep and deferred permanent unlocks, randomized
+          campfire offers, and later balance passes. External grounding points the same way: Vampire
+          Survivors succeeds through content-heavy unlocks and persistent power/loadout goals, while
+          Slay the Spire shows how opt-in challenge ladders can preserve fairness and replay depth.
+        </p>
+      </section>
+
+      <section id="topic-axes">
+        <p class="eyebrow">Surface Map</p>
+        <h2>Topic Axes</h2>
+        <ul class="axis-list">
+          <li>Ember faucet and sink economy</li>
+          <li>Bargain risk and curses</li>
+          <li>Permanent unlock and meta-progression seams</li>
+          <li>Challenge tuning and balance validation</li>
+          <li>Content and variety unlock surfaces</li>
+        </ul>
+      </section>
+
+      <section id="ranked-ideas">
+        <p class="eyebrow">Ranked Survivors</p>
+        <h2>Ranked Ideas</h2>
+        <nav class="subnav" aria-label="Ranked idea navigation">
+          <strong>Jump to an idea</strong>
+          <ul>
+            <li><a href="#i1">I1. Ash and Kindling Economy</a></li>
+            <li><a href="#i2">I2. Hearthboard Forge</a></li>
+            <li><a href="#i3">I3. Chronicle Unlock Contracts</a></li>
+            <li><a href="#i4">I4. Nightfall Heat Ladder</a></li>
+            <li><a href="#i5">I5. Economy Autopilot</a></li>
+            <li><a href="#i6">I6. Campfire Draft Market</a></li>
+          </ul>
+        </nav>
+
+        <article class="idea" id="i1">
+          <div class="idea-head">
+            <h3><span class="idea-id">I1.</span>Ash and Kindling Economy</h3>
+            <div class="chips">
+              <span class="chip">Confidence 88%</span>
+              <span class="chip">Complexity Medium</span>
+            </div>
+          </div>
+          <div class="diagram" aria-label="Two currency flow diagram">
+            <svg width="760" height="170" role="img" aria-labelledby="i1-title">
+              <title id="i1-title">
+                Run rewards split into temporary and permanent progression currency
+              </title>
+              <rect
+                x="24"
+                y="56"
+                width="150"
+                height="58"
+                rx="8"
+                fill="#20232f"
+                stroke="#5a4e36"
+              ></rect>
+              <text x="47" y="82">Run reward</text>
+              <text x="47" y="103" class="svg-muted">depth / kills / gold</text>
+              <path d="M180 85 L290 85" stroke="#f1c40f" stroke-width="3"></path>
+              <polygon points="290,85 276,77 276,93" fill="#f1c40f"></polygon>
+              <rect
+                x="302"
+                y="26"
+                width="170"
+                height="58"
+                rx="8"
+                fill="#332b16"
+                stroke="#f1c40f"
+              ></rect>
+              <text x="331" y="52">Ash</text>
+              <text x="331" y="73" class="svg-muted">next-run prep</text>
+              <rect
+                x="302"
+                y="100"
+                width="170"
+                height="58"
+                rx="8"
+                fill="#1d2b22"
+                stroke="#72d98b"
+              ></rect>
+              <text x="331" y="126">Kindling</text>
+              <text x="331" y="147" class="svg-muted">permanent unlocks</text>
+              <path
+                d="M180 85 C230 85 235 129 294 129"
+                stroke="#72d98b"
+                stroke-width="3"
+                fill="none"
+              ></path>
+              <polygon points="294,129 280,121 280,137" fill="#72d98b"></polygon>
+              <rect
+                x="562"
+                y="26"
+                width="170"
+                height="58"
+                rx="8"
+                fill="#20232f"
+                stroke="#5a4e36"
+              ></rect>
+              <text x="590" y="52">Supplies</text>
+              <text x="590" y="73" class="svg-muted">spent every run</text>
+              <rect
+                x="562"
+                y="100"
+                width="170"
+                height="58"
+                rx="8"
+                fill="#20232f"
+                stroke="#5a4e36"
+              ></rect>
+              <text x="590" y="126">Hearthboard</text>
+              <text x="590" y="147" class="svg-muted">long horizon</text>
+              <path d="M478 55 L554 55" stroke="#f1c40f" stroke-width="3"></path>
+              <polygon points="554,55 540,47 540,63" fill="#f1c40f"></polygon>
+              <path d="M478 129 L554 129" stroke="#72d98b" stroke-width="3"></path>
+              <polygon points="554,129 540,121 540,137" fill="#72d98b"></polygon>
+            </svg>
+          </div>
+          <dl class="fields">
+            <dt>Description</dt>
+            <dd>
+              Split the flat ember wallet into two reward streams: short-lived or aggressively
+              spendable <strong>Ash</strong> for next-run preparation, and slower
+              <strong>Kindling</strong>
+              for permanent unlocks. Depth and victory can feed Kindling, while kills, gold, and run
+              performance feed Ash, or the split can start simpler with a percentage conversion from
+              each run.
+            </dd>
+            <dt>Axis</dt>
+            <dd>Ember faucet and sink economy</dd>
+            <dt>Basis</dt>
+            <dd>
+              direct: <code>src/game/metaRewards.ts:21-31</code> combines room, enemy, gold, and
+              victory embers into one total; <code>src/data/campfirePurchases.ts:47-85</code> prices
+              all current supplies at 4-10 embers; <code>src/meta.ts:11-17</code>
+              already centralizes persistent meta.
+            </dd>
+            <dt>Rationale</dt>
+            <dd>
+              The user complaint is specifically about liquid embers making every purchase
+              affordable. A split preserves the rewarding end screen while making only part of the
+              reward immediately spendable, and it creates a natural home for permanent progression
+              without making daily or base runs permanently stronger.
+            </dd>
+            <dt>Downsides</dt>
+            <dd>
+              Two currency names add UI and teaching cost. If the split is too stingy, early losses
+              may feel unrewarding; if it is too generous, the same inflation returns in two
+              wallets.
+            </dd>
+          </dl>
+        </article>
+
+        <article class="idea" id="i2">
+          <div class="idea-head">
+            <h3><span class="idea-id">I2.</span>Hearthboard Forge</h3>
+            <div class="chips">
+              <span class="chip">Confidence 86%</span>
+              <span class="chip">Complexity High</span>
+            </div>
+          </div>
+          <div class="diagram" aria-label="Hearthboard structure diagram">
+            <svg width="760" height="150" role="img" aria-labelledby="i2-title">
+              <title id="i2-title">
+                Permanent unlocks add options, then slots constrain active power
+              </title>
+              <rect
+                x="26"
+                y="40"
+                width="170"
+                height="70"
+                rx="8"
+                fill="#20232f"
+                stroke="#5a4e36"
+              ></rect>
+              <text x="55" y="69">Unlock board</text>
+              <text x="55" y="91" class="svg-muted">new option pools</text>
+              <path d="M204 75 L305 75" stroke="#f1c40f" stroke-width="3"></path>
+              <polygon points="305,75 291,67 291,83" fill="#f1c40f"></polygon>
+              <rect
+                x="318"
+                y="24"
+                width="178"
+                height="102"
+                rx="8"
+                fill="#332b16"
+                stroke="#f1c40f"
+              ></rect>
+              <text x="346" y="52">Run loadout</text>
+              <text x="346" y="76" class="svg-muted">survival slot</text>
+              <text x="346" y="98" class="svg-muted">scouting slot</text>
+              <text x="346" y="120" class="svg-muted">greed slot</text>
+              <path d="M504 75 L606 75" stroke="#72d98b" stroke-width="3"></path>
+              <polygon points="606,75 592,67 592,83" fill="#72d98b"></polygon>
+              <rect
+                x="618"
+                y="40"
+                width="118"
+                height="70"
+                rx="8"
+                fill="#1d2b22"
+                stroke="#72d98b"
+              ></rect>
+              <text x="646" y="69">RunState</text>
+              <text x="646" y="91" class="svg-muted">fresh run</text>
+            </svg>
+          </div>
+          <dl class="fields">
+            <dt>Description</dt>
+            <dd>
+              Add a permanent board that unlocks option breadth rather than passive stats: extra
+              starting-card packages, bargain families, relic families, room modifiers, scouting
+              tools, and campfire offer types. Before a run, the player equips only a limited number
+              of unlocked doctrines or slots, so progress creates identity and choice rather than
+              stacking every advantage.
+            </dd>
+            <dt>Axis</dt>
+            <dd>Permanent unlock and meta-progression seams</dd>
+            <dt>Basis</dt>
+            <dd>
+              direct: earlier campfire planning kept permanent upgrades out of the first pass and deferred permanent unlocks; current progression planning preserves that no-power-creep direction; external: Vampire Survivors uses permanent power-up and unlock goals as
+              its long-tail loop.
+            </dd>
+            <dt>Rationale</dt>
+            <dd>
+              This most directly answers the request for a progression system while respecting the
+              repo's stated no-power-creep direction. The player gets durable goals and new toys,
+              but each run still has a build decision instead of automatic account strength.
+            </dd>
+            <dt>Downsides</dt>
+            <dd>
+              It is the largest product move in the set. It needs a clear first slice and careful
+              content gating or it becomes a UI shell with too few meaningful unlocks.
+            </dd>
+          </dl>
+        </article>
+
+        <article class="idea" id="i3">
+          <div class="idea-head">
+            <h3><span class="idea-id">I3.</span>Chronicle Unlock Contracts</h3>
+            <div class="chips">
+              <span class="chip">Confidence 84%</span>
+              <span class="chip">Complexity Medium</span>
+            </div>
+          </div>
+          <dl class="fields">
+            <dt>Description</dt>
+            <dd>
+              Use run feats as the achievement layer: first boss reach, first cursed escape, win
+              without purchases, survive multiple traps, defeat a boss after taking Blood Oath, or
+              clear a daily. Each contract unlocks future content pools such as relics, bargain
+              templates, starting-card packs, bosses, room variants, or Hearthboard slots.
+            </dd>
+            <dt>Axis</dt>
+            <dd>Content and variety unlock surfaces</dd>
+            <dt>Basis</dt>
+            <dd>
+              direct: <code>src/chronicle.ts:4-23</code> already stores run id, completion time,
+              seed, daily key, escape flag, depth, defeated enemies, gold, and ember reward;
+              <code>src/chronicle.ts:127-148</code> updates runs completed, escapes, best depth,
+              best gold, best enemies defeated, and recent entries.
+            </dd>
+            <dt>Rationale</dt>
+            <dd>
+              Vampire Survivors-style progression feels good because unlocks are goals, not only
+              store purchases. The chronicle already gives Escape a lightweight basis for that:
+              progress can come from how a run was played, including failed runs, instead of simply
+              from accumulating embers.
+            </dd>
+            <dt>Downsides</dt>
+            <dd>
+              The current chronicle keeps only a compact history. Some unlock conditions may need
+              new counters, and the end screen must make progress visible enough that the system
+              does not feel hidden.
+            </dd>
+          </dl>
+        </article>
+
+        <article class="idea" id="i4">
+          <div class="idea-head">
+            <h3><span class="idea-id">I4.</span>Nightfall Heat Ladder</h3>
+            <div class="chips">
+              <span class="chip">Confidence 82%</span>
+              <span class="chip">Complexity Medium</span>
+            </div>
+          </div>
+          <dl class="fields">
+            <dt>Description</dt>
+            <dd>
+              Add an opt-in challenge ladder from the campfire for normal runs only. Each Nightfall
+              level changes one legible rule: fewer rests, reduced potion room odds, harsher trap
+              density, stronger late encounters, pricier supplies, boss modifiers, or stricter ember
+              conversion. Climbing the ladder unlocks content or Kindling velocity, not unchecked
+              liquid embers.
+            </dd>
+            <dt>Axis</dt>
+            <dd>Challenge tuning and balance validation</dd>
+            <dt>Basis</dt>
+            <dd>
+              direct: <code>src/game/balanceSimulator.test.ts:5-30</code> already asserts baseline
+              and prepared win-rate bands; <code>src/scenes/Campfire.ts:389-394</code>
+              starts daily runs separately from normal runs; external: Slay the Spire's Ascension
+              model shows that opt-in difficulty can preserve base-run fairness.
+            </dd>
+            <dt>Rationale</dt>
+            <dd>
+              This answers "not challenging enough" without making the default game hostile for new
+              players. It also gives progression a skill expression outlet: stronger players can
+              choose higher pressure for better unlock progress while daily runs stay comparable.
+            </dd>
+            <dt>Downsides</dt>
+            <dd>
+              A bad first heat tier can feel like punishment rather than mastery. Each modifier
+              should be visible, isolated, and simulator-checked before stacking levels.
+            </dd>
+          </dl>
+        </article>
+
+        <article class="idea" id="i5">
+          <div class="idea-head">
+            <h3><span class="idea-id">I5.</span>Economy Autopilot</h3>
+            <div class="chips">
+              <span class="chip">Confidence 80%</span>
+              <span class="chip">Complexity Medium</span>
+            </div>
+          </div>
+          <dl class="fields">
+            <dt>Description</dt>
+            <dd>
+              Extend the existing balance simulator so it models the meta loop, not only run win
+              rates. Add scenario profiles for careful player, greedy buyer, bargain taker, cursed
+              run, full-prep run, heat climber, and broadened unlock pool. Track average stored
+              Ash/Kindling, spend rate, bargain uptake, curse survival, boss reach, unlock velocity,
+              and whether stockpiles trend upward unchecked.
+            </dd>
+            <dt>Axis</dt>
+            <dd>Challenge tuning and balance validation</dd>
+            <dt>Basis</dt>
+            <dd>
+              direct: <code>src/game/balanceSimulator.ts</code> already simulates runs using room
+              events, enemy spawning, rewards, prep, and battle resolution;
+              <code>src/game/balanceSimulator.test.ts:8-30</code>
+              asserts expected bands for baseline and prepared runs.
+            </dd>
+            <dt>Rationale</dt>
+            <dd>
+              The current problem is partly a balancing failure that the existing simulator does not
+              yet measure. Once permanent progression, rotating offers, and challenge tiers arrive,
+              manual feel-testing will be too slow. A meta simulator turns "bargains are dead" into
+              a detectable regression.
+            </dd>
+            <dt>Downsides</dt>
+            <dd>
+              Simulation can lie if player heuristics are too simple. It should guide thresholds and
+              catch obvious economy drift, not replace manual playtesting.
+            </dd>
+          </dl>
+        </article>
+
+        <article class="idea" id="i6">
+          <div class="idea-head">
+            <h3><span class="idea-id">I6.</span>Campfire Draft Market</h3>
+            <div class="chips">
+              <span class="chip">Confidence 70%</span>
+              <span class="chip">Complexity Medium</span>
+            </div>
+          </div>
+          <dl class="fields">
+            <dt>Description</dt>
+            <dd>
+              Replace the static "all supplies always visible" campfire economy with a small drafted
+              offer set each visit: one stabilizer, one greed play, one odd or risky play, and later
+              one permanent-unlock opportunity. Embers buy scarce timing, not just entries from a
+              solved checklist. As the Hearthboard grows, it expands the market pool rather than
+              making every option always available.
+            </dd>
+            <dt>Axis</dt>
+            <dd>Ember faucet and sink economy</dd>
+            <dt>Basis</dt>
+            <dd>
+              direct: <code>src/data/campfirePurchases.ts:47-85</code> defines a fixed purchase
+              catalog; earlier roadmap notes treated randomized campfire offers as useful once bargains exist and the choice pool grows. The verifier marked this weaker than
+              the top five because unlock offers are not supported yet, but the static-shop pain is
+              directly tied to the user's complaint.
+            </dd>
+            <dt>Rationale</dt>
+            <dd>
+              Even if the economy is tuned down, a full static shop becomes solved. A draft market
+              restores opportunity cost: the player can have enough embers and still face a hard
+              choice because the right offer may not appear again this run cycle.
+            </dd>
+            <dt>Downsides</dt>
+            <dd>
+              The current pool is still small, so this should follow or ship alongside a few new
+              purchases, bargains, or unlockable offer types. Too much randomness can also feel
+              unfair if baseline survival depends on a missing stabilizer.
+            </dd>
+          </dl>
+        </article>
+      </section>
+
+      <section id="rejection-summary">
+        <p class="eyebrow">Critique Record</p>
+        <h2>Rejection Summary</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Idea</th>
+              <th>Reason Rejected</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1</td>
+              <td>Oath Contracts</td>
+              <td>
+                Good bargain direction, but persistent debt is under-evidenced compared with simpler
+                curse/content and economy ideas.
+              </td>
+            </tr>
+            <tr>
+              <td>2</td>
+              <td>Forbidden Content Curses</td>
+              <td>
+                Strong as a later Hearthboard or Chronicle variant, but too speculative as a
+                standalone top direction.
+              </td>
+            </tr>
+            <tr>
+              <td>3</td>
+              <td>Stakefire / Ember Escrow Runs</td>
+              <td>
+                Interesting sink, but less grounded than the two-currency economy and heat ladder.
+              </td>
+            </tr>
+            <tr>
+              <td>4</td>
+              <td>Boss Tax / Boss Progression Spine</td>
+              <td>
+                Boss extensibility exists, but this makes bosses carry too much of the whole
+                progression spine too early.
+              </td>
+            </tr>
+            <tr>
+              <td>5</td>
+              <td>League Rulesets</td>
+              <td>
+                Useful later challenge variety, but a broader new design layer than the immediate
+                economy/progression problem needs.
+              </td>
+            </tr>
+            <tr>
+              <td>6</td>
+              <td>Curse Auction</td>
+              <td>
+                Expressive bargain tuning, but current bargain pool is too small for variable
+                severity to be the first move.
+              </td>
+            </tr>
+            <tr>
+              <td>7</td>
+              <td>Burn Rate / Overburn Pricing</td>
+              <td>
+                Addresses stockpiles, but hoard-scaling prices feel punitive and are weaker than
+                structural sink changes.
+              </td>
+            </tr>
+            <tr>
+              <td>8</td>
+              <td>Locked Embers Tempered by Achievements</td>
+              <td>
+                Overlaps with Ash and Kindling plus Chronicle Unlocks while being harder to explain.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="sources">
+        <p class="eyebrow">Reference Index</p>
+        <h2>Sources and References</h2>
+        <ul class="sources">
+          <li>
+            <a href="https://github.com/dariuszparys/escape/blob/main/src/game/metaRewards.ts"
+              >src/game/metaRewards.ts</a
+            >
+            - current ember reward formula.
+          </li>
+          <li>
+            <a href="https://github.com/dariuszparys/escape/blob/main/src/data/campfirePurchases.ts"
+              >src/data/campfirePurchases.ts</a
+            >
+            - current campfire supply prices and purchase rules.
+          </li>
+          <li>
+            <a href="https://github.com/dariuszparys/escape/blob/main/src/data/campfireBargains.ts"
+              >src/data/campfireBargains.ts</a
+            >
+            - current bargain gains and one-curse model.
+          </li>
+          <li>
+            <a href="https://github.com/dariuszparys/escape/blob/main/src/meta.ts">src/meta.ts</a> -
+            persistent meta-state seam.
+          </li>
+          <li>
+            <a href="https://github.com/dariuszparys/escape/blob/main/src/chronicle.ts"
+              >src/chronicle.ts</a
+            >
+            - run feat and record storage.
+          </li>
+          <li>
+            <a
+              href="https://github.com/dariuszparys/escape/blob/main/src/game/balanceSimulator.test.ts"
+              >src/game/balanceSimulator.test.ts</a
+            >
+            - existing balance guardrails.
+          </li>
+          <li>
+            Historical roadmap notes - deferred variety-only unlock tree and randomized campfire offers.
+          </li>
+          <li>
+            <a href="https://store.steampowered.com/app/1794680/Vampire_Survivors/"
+              >Vampire Survivors Steam page</a
+            >
+            - run loop and market signal.
+          </li>
+          <li>
+            <a href="https://vampire-survivors.fandom.com/wiki/Achievements"
+              >Vampire Survivors Achievements</a
+            >
+            and <a href="https://vampire-survivors.fandom.com/wiki/PowerUps">PowerUps</a> -
+            content-heavy unlock and permanent upgrade references.
+          </li>
+          <li>
+            <a href="https://slay-the-spire.fandom.com/wiki/Ascension">Slay the Spire Ascension</a>
+            - opt-in challenge ladder reference.
+          </li>
+          <li>
+            <a href="https://www.gamedeveloper.com/design/the-f-words-of-mmos-faucets"
+              >Game Developer: Faucets</a
+            >
+            and
+            <a href="https://www.gamedeveloper.com/business/the-fundamentals-of-game-economy-design"
+              >economy fundamentals</a
+            >
+            - faucet/sink framing.
+          </li>
+        </ul>
+      </section>
+
+      <footer class="composition-signal">
+        Composed 2026-06-27T19:43:12Z by ce-ideate from the user prompt about Escape challenge,
+        embers, bargains, and progression.
+      </footer>
+    </main>
+  </body>
+</html>

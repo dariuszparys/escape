@@ -33,6 +33,49 @@ describe('applyPendingPrepToRun', () => {
     expect(run.scoutCharges).toBe(1);
   });
 
+  test('applies starter-card progression without increasing picks', () => {
+    const run = new RunState('seed', 'run-progression');
+
+    applyPendingPrepToRun(
+      run,
+      {
+        itemIds: [],
+        extraStartingChoice: false,
+        scoutFlame: false,
+        curseIds: [],
+      },
+      {
+        starterCardVarietyUnlocked: true,
+        migrationBonusGranted: false,
+      },
+    );
+
+    expect(run.startingCardChoices).toBe(4);
+    expect(run.startingCardPicks).toBe(2);
+    expect(run.startingCardsTaken).toBe(0);
+  });
+
+  test('preserved extra opening pick still combines with the starter-card unlock once', () => {
+    const run = new RunState('seed', 'run-progression-prep');
+
+    applyPendingPrepToRun(
+      run,
+      {
+        itemIds: [],
+        extraStartingChoice: true,
+        scoutFlame: false,
+        curseIds: [],
+      },
+      {
+        starterCardVarietyUnlocked: true,
+        migrationBonusGranted: true,
+      },
+    );
+
+    expect(run.startingCardChoices).toBe(4);
+    expect(run.startingCardPicks).toBe(3);
+  });
+
   test('applies Blood Oath to max HP and current HP for the next run', () => {
     const run = new RunState('seed', 'run-3');
     const cleared = applyPendingPrepToRun(run, {

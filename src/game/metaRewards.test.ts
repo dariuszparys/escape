@@ -2,24 +2,31 @@ import { describe, expect, test } from 'vitest';
 import { calculateEmberReward } from './metaRewards';
 
 describe('calculateEmberReward', () => {
-  test('awards enough embers for an early death to buy a small potion', () => {
+  test('awards no embers before the first depth milestone', () => {
     expect(
       calculateEmberReward({
         depth: 2,
-        enemiesDefeated: 0,
-        gold: 0,
+        enemiesDefeated: 4,
+        gold: 99,
         escaped: false,
       }),
     ).toEqual({
-      roomEmbers: 4,
-      enemyEmbers: 0,
-      goldEmbers: 0,
-      victoryEmbers: 0,
-      total: 4,
+      depthMilestoneEmbers: 0,
+      escapeEmbers: 0,
+      total: 0,
     });
   });
 
-  test('combines room progress, enemy kills, and carried gold', () => {
+  test('awards embers for depth milestones on failed runs', () => {
+    expect(
+      calculateEmberReward({
+        depth: 3,
+        enemiesDefeated: 0,
+        gold: 0,
+        escaped: false,
+      }).total,
+    ).toBe(1);
+
     expect(
       calculateEmberReward({
         depth: 6,
@@ -28,15 +35,26 @@ describe('calculateEmberReward', () => {
         escaped: false,
       }),
     ).toEqual({
-      roomEmbers: 12,
-      enemyEmbers: 9,
-      goldEmbers: 2,
-      victoryEmbers: 0,
-      total: 23,
+      depthMilestoneEmbers: 2,
+      escapeEmbers: 0,
+      total: 2,
+    });
+
+    expect(
+      calculateEmberReward({
+        depth: 9,
+        enemiesDefeated: 12,
+        gold: 120,
+        escaped: false,
+      }),
+    ).toEqual({
+      depthMilestoneEmbers: 3,
+      escapeEmbers: 0,
+      total: 3,
     });
   });
 
-  test('adds the escape bonus on victory', () => {
+  test('adds escape embers without converting carried gold', () => {
     expect(
       calculateEmberReward({
         depth: 10,
@@ -45,11 +63,24 @@ describe('calculateEmberReward', () => {
         escaped: true,
       }),
     ).toEqual({
-      roomEmbers: 20,
-      enemyEmbers: 15,
-      goldEmbers: 4,
-      victoryEmbers: 15,
-      total: 54,
+      depthMilestoneEmbers: 3,
+      escapeEmbers: 3,
+      total: 6,
+    });
+  });
+
+  test('normalizes bad numeric inputs before calculating milestones', () => {
+    expect(
+      calculateEmberReward({
+        depth: Number.NaN,
+        enemiesDefeated: -2.5,
+        gold: -10.5,
+        escaped: false,
+      }),
+    ).toEqual({
+      depthMilestoneEmbers: 0,
+      escapeEmbers: 0,
+      total: 0,
     });
   });
 });

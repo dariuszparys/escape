@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { startingCardIdsForChoiceCount } from './startingCards';
+import { startingCardIdsForChoiceCount, startingCardIdsForRun } from './startingCards';
 
 describe('startingCardIdsForChoiceCount', () => {
   test('defaults to the three-card opening offer', () => {
@@ -19,5 +19,23 @@ describe('startingCardIdsForChoiceCount', () => {
       'quick_jab',
       'minor_heal',
     ]);
+  });
+
+  test('uses the fourth starter option for normal runs after the unlock', () => {
+    expect(
+      startingCardIdsForRun({
+        startingCardChoices: 4,
+        isDaily: false,
+      }),
+    ).toEqual(['slash', 'guard', 'quick_jab', 'minor_heal']);
+  });
+
+  test('keeps daily runs on the default fixed opening offer', () => {
+    expect(
+      startingCardIdsForRun({
+        startingCardChoices: 4,
+        isDaily: true,
+      }),
+    ).toEqual(['slash', 'guard', 'quick_jab']);
   });
 });

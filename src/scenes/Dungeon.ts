@@ -21,9 +21,15 @@ import { createDeckPanel } from '../gfx/deckPanel';
 import { PhaserGameRng } from '../game/rng';
 import { playSfx } from '../audio/sfx';
 import { awardPotionItem, rollChestReward } from '../game/rewards';
-import { startingCardIdsForChoiceCount } from '../game/startingCards';
+import { startingCardIdsForRun } from '../game/startingCards';
 import { orderedDeckEntries } from '../game/deckOrdering';
 import { upgradeCard } from '../game/cardUpgrade';
+import {
+  canUseRestAction,
+  payRestAction,
+  restActionCost,
+  type RestActionMode,
+} from '../game/restEconomy';
 import { getRun } from '../state';
 
 const DOOR_CELL: Record<Dir, { col: number; row: number }> = {
@@ -364,7 +370,7 @@ export class DungeonScene extends Phaser.Scene {
     switch (room.event) {
       case 'start': {
         const run = getRun();
-        const cardIds = startingCardIdsForChoiceCount(run.startingCardChoices);
+        const cardIds = startingCardIdsForRun(run);
         const cols = cardIds.length === 4 ? [2, 5, 9, 12] : [3, 7, 11];
 
         for (const [i, cardId] of cardIds.entries()) {
@@ -1008,8 +1014,8 @@ export class DungeonScene extends Phaser.Scene {
     const panel = this.add.container(cx, cy).setDepth(260);
     this.restActionPanel = panel;
 
-    const w = 300;
-    const h = 170;
+    const w = 330;
+    const h = 222;
     const bg = this.add.graphics();
     bg.fillStyle(0x111019, 0.98);
     bg.fillRoundedRect(-w / 2, -h / 2, w, h, 8);
@@ -1029,7 +1035,7 @@ export class DungeonScene extends Phaser.Scene {
     );
     panel.add(
       this.add
-        .text(0, -h / 2 + 56, 'Choose a campfire action for this room:', {
+        .text(0, -h / 2 + 56, `Gold: ${run.gold} | Choose one paid rest action:`, {
           fontFamily: 'monospace',
           fontSize: '11px',
           color: '#b8b0c8',
@@ -1038,31 +1044,51 @@ export class DungeonScene extends Phaser.Scene {
         .setOrigin(0.5),
     );
 
-    const addChoice = (label: string, y: number, mode: 'upgrade' | 'remove'): void => {
+    const addChoice = (label: string, y: number, mode: RestActionMode): void => {
+      const check = canUseRestAction(run, mode);
+      const enabled = check.ok;
       const button = this.add
-        .text(0, y, `[ ${label} ]`, {
+        .text(0, y, `[ ${label} - ${restActionCost(mode)} GOLD ]`, {
           fontFamily: 'monospace',
           fontSize: '14px',
           fontStyle: 'bold',
-          color: '#f5edd8',
-          backgroundColor: '#221f1e',
+          color: enabled ? '#f5edd8' : '#6f687c',
+          backgroundColor: enabled ? '#221f1e' : '#17151c',
           padding: { x: 12, y: 8 },
         })
-        .setOrigin(0.5)
-        .setInteractive({ useHandCursor: true });
+        .setOrigin(0.5);
 
-      button.on('pointerover', () => button.setColor('#ffe48a'));
-      button.on('pointerout', () => button.setColor('#f5edd8'));
-      button.on('pointerdown', () => this.openRestCardPicker(mode));
+      if (enabled) {
+        button.setInteractive({ useHandCursor: true });
+        button.on('pointerover', () => button.setColor('#ffe48a'));
+        button.on('pointerout', () => button.setColor('#f5edd8'));
+        button.on('pointerdown', () => this.openRestCardPicker(mode));
+      }
       panel.add(button);
     };
 
-    addChoice('UPGRADE A CARD', -6, 'upgrade');
-    addChoice('REMOVE A CARD', 32, 'remove');
+    addChoice('UPGRADE A CARD', -30, 'upgrade');
+    addChoice('REMOVE A CARD', 14, 'remove');
+
+    const leave = this.add
+      .text(0, 62, '[ LEAVE ]', {
+        fontFamily: 'monospace',
+        fontSize: '12px',
+        fontStyle: 'bold',
+        color: '#b8b0c8',
+        backgroundColor: '#221f1e',
+        padding: { x: 10, y: 6 },
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+    leave.on('pointerover', () => leave.setColor('#ffe48a'));
+    leave.on('pointerout', () => leave.setColor('#b8b0c8'));
+    leave.on('pointerdown', () => this.leaveRestRoom());
+    panel.add(leave);
 
     panel.add(
       this.add
-        .text(0, h / 2 - 20, 'Choose once. No retreat.', {
+        .text(0, h / 2 - 20, 'Gold is spent only when the action succeeds.', {
           fontFamily: 'monospace',
           fontSize: '10px',
           color: '#6a6478',
@@ -1071,7 +1097,7 @@ export class DungeonScene extends Phaser.Scene {
     );
   }
 
-  private openRestCardPicker(mode: 'upgrade' | 'remove'): void {
+  private openRestCardPicker(mode: RestActionMode): void {
     if (!this.restActionPanel) return;
     const run = getRun();
 
@@ -1104,7 +1130,7 @@ export class DungeonScene extends Phaser.Scene {
     );
     panel.add(
       this.add
-        .text(0, -h / 2 + 50, 'Pick one card to continue.', {
+        .text(0, -h / 2 + 50, `${restActionCost(mode)} Gold. Pick one card to continue.`, {
           fontFamily: 'monospace',
           fontSize: '11px',
           color: '#b8b0c8',
@@ -1168,8 +1194,15 @@ export class DungeonScene extends Phaser.Scene {
     }
   }
 
-  private applyRestCardChoice(mode: 'upgrade' | 'remove', card: Card): void {
+  private applyRestCardChoice(mode: RestActionMode, card: Card): void {
     const run = getRun();
+    const payment = payRestAction(run, mode);
+    if (!payment.ok) {
+      this.floatText(this.player.x, this.player.y - 42, payment.reason, '#ff9944');
+      this.closeRestCardPanel();
+      this.openRestChoices();
+      return;
+    }
 
     if (mode === 'upgrade') {
       const name = card.name.endsWith('+') ? card.name : `${card.name}+`;
@@ -1179,6 +1212,7 @@ export class DungeonScene extends Phaser.Scene {
     } else {
       const ok = run.removeCard(card.uid);
       if (!ok) {
+        run.gold += payment.cost;
         this.floatText(this.player.x, this.player.y - 42, 'Cannot remove last card', '#ff9944');
         this.closeRestCardPanel();
         this.openRestChoices();
@@ -1192,5 +1226,13 @@ export class DungeonScene extends Phaser.Scene {
     this.room.cleared = true;
     this.transitioning = false;
     this.hud();
+  }
+
+  private leaveRestRoom(): void {
+    this.closeRestActionPanel();
+    this.closeRestCardPanel();
+    this.room.cleared = true;
+    this.transitioning = false;
+    this.floatText(this.player.x, this.player.y - 42, 'Left the rest room', '#b8b0c8');
   }
 }

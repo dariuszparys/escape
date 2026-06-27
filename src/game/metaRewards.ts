@@ -6,28 +6,26 @@ export interface EmberRewardInput {
 }
 
 export interface EmberRewardBreakdown {
-  roomEmbers: number;
-  enemyEmbers: number;
-  goldEmbers: number;
-  victoryEmbers: number;
+  depthMilestoneEmbers: number;
+  escapeEmbers: number;
   total: number;
 }
 
-export function calculateEmberReward(input: EmberRewardInput): EmberRewardBreakdown {
-  const depth = Math.max(1, Math.floor(input.depth));
-  const enemiesDefeated = Math.max(0, Math.floor(input.enemiesDefeated));
-  const gold = Math.max(0, Math.floor(input.gold));
+const DEPTH_MILESTONES = [3, 6, 9] as const;
+const ESCAPE_EMBERS = 3;
 
-  const roomEmbers = depth * 2;
-  const enemyEmbers = enemiesDefeated * 3;
-  const goldEmbers = Math.floor(gold / 10);
-  const victoryEmbers = input.escaped ? 15 : 0;
+function normalizeNonNegativeInteger(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+}
+
+export function calculateEmberReward(input: EmberRewardInput): EmberRewardBreakdown {
+  const depth = normalizeNonNegativeInteger(input.depth);
+  const depthMilestoneEmbers = DEPTH_MILESTONES.filter((milestone) => depth >= milestone).length;
+  const escapeEmbers = input.escaped ? ESCAPE_EMBERS : 0;
 
   return {
-    roomEmbers,
-    enemyEmbers,
-    goldEmbers,
-    victoryEmbers,
-    total: roomEmbers + enemyEmbers + goldEmbers + victoryEmbers,
+    depthMilestoneEmbers,
+    escapeEmbers,
+    total: depthMilestoneEmbers + escapeEmbers,
   };
 }

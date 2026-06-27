@@ -6,7 +6,7 @@ import { getMeta, setMeta } from './meta';
 import { BootScene } from './scenes/Boot';
 import { TitleScene } from './scenes/Title';
 import { CampfireScene } from './scenes/Campfire';
-import { SuppliesScene } from './scenes/Supplies';
+import { ProgressionScene } from './scenes/Progression';
 import { DungeonScene } from './scenes/Dungeon';
 import { BattleScene } from './scenes/Battle';
 import { HudScene } from './scenes/Hud';
@@ -34,7 +34,7 @@ const game = new Phaser.Game({
     BootScene,
     TitleScene,
     CampfireScene,
-    SuppliesScene,
+    ProgressionScene,
     DungeonScene,
     BattleScene,
     HudScene,

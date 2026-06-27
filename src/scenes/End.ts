@@ -22,10 +22,8 @@ export class EndScene extends Phaser.Scene {
     const run = getRun();
     const meta = getMeta();
     const zeroReward: EmberRewardBreakdown = {
-      roomEmbers: 0,
-      enemyEmbers: 0,
-      goldEmbers: 0,
-      victoryEmbers: 0,
+      depthMilestoneEmbers: 0,
+      escapeEmbers: 0,
       total: 0,
     };
 
@@ -53,7 +51,7 @@ export class EndScene extends Phaser.Scene {
     const run = getRun();
     const emberAward = this.awardEmbersOnce();
     const emberLine = emberAward.awarded
-      ? `Recovered ${emberAward.reward.total} embers.`
+      ? this.formatEmberLine(emberAward.reward)
       : 'Embers already recovered.';
     if (emberAward.awarded) {
       this.recordChronicleEntry(emberAward.reward.total);
@@ -143,6 +141,13 @@ export class EndScene extends Phaser.Scene {
     };
     this.input.keyboard?.once('keydown-SPACE', restart);
     this.input.once('pointerdown', restart);
+  }
+
+  private formatEmberLine(reward: EmberRewardBreakdown): string {
+    if (reward.total === 0) {
+      return 'No milestone Embers recovered. Gold stays with this run.';
+    }
+    return `Recovered ${reward.total} milestone Ember${reward.total === 1 ? '' : 's'}. Gold stays with this run.`;
   }
 
   private recordDailyAttemptOnce(): void {

@@ -1,5 +1,6 @@
 import { PendingPrep, createDefaultPendingPrep } from '../data/campfirePurchases';
 import { makeItem } from '../data/items';
+import type { MetaProgressionState } from '../meta';
 import { RunState } from '../state';
 import {
   BONUS_STARTING_CARD_CHOICES,
@@ -8,12 +9,18 @@ import {
   DEFAULT_STARTING_CARD_PICKS,
 } from './startingCards';
 
-export function applyPendingPrepToRun(run: RunState, pendingPrep: PendingPrep): PendingPrep {
+export function applyPendingPrepToRun(
+  run: RunState,
+  pendingPrep: PendingPrep,
+  progression?: MetaProgressionState,
+): PendingPrep {
   const curseIds = pendingPrep.curseIds ?? [];
+  const hasStarterCardVariety = progression?.starterCardVarietyUnlocked === true;
 
-  run.startingCardChoices = pendingPrep.extraStartingChoice
-    ? BONUS_STARTING_CARD_CHOICES
-    : DEFAULT_STARTING_CARD_CHOICES;
+  run.startingCardChoices =
+    hasStarterCardVariety || pendingPrep.extraStartingChoice
+      ? BONUS_STARTING_CARD_CHOICES
+      : DEFAULT_STARTING_CARD_CHOICES;
   run.startingCardPicks = pendingPrep.extraStartingChoice
     ? BONUS_STARTING_CARD_PICKS
     : DEFAULT_STARTING_CARD_PICKS;

@@ -10,13 +10,15 @@ import type { ActiveStatusEffect } from './combat';
 import { resolveRound } from './combat';
 import { awardPotionItem, rollChestReward } from './rewards';
 import { GameRng } from './rng';
-import { startingCardIdsForChoiceCount } from './startingCards';
+import { startingCardIdsForRun } from './startingCards';
 import { upgradeCard } from './cardUpgrade';
+import { canUseRestAction, payRestAction } from './restEconomy';
 
 export interface BalanceScenario {
   prepItemIds?: InventoryItemDef['id'][];
   extraStartingChoice?: boolean;
   scoutFlame?: boolean;
+  starterCardVarietyUnlocked?: boolean;
 }
 
 export interface EncounterBucketSummary {
@@ -117,7 +119,7 @@ function handScore(cards: readonly Card[]): number {
 }
 
 function chooseStartingCards(run: RunState): void {
-  const offers = startingCardIdsForChoiceCount(run.startingCardChoices)
+  const offers = startingCardIdsForRun(run)
     .map((id) => CARD_DEFS.find((card) => card.id === id))
     .filter((card): card is (typeof CARD_DEFS)[number] => !!card)
     .map((card) => makeCard(card));
@@ -142,8 +144,9 @@ function makePendingPrep(scenario: BalanceScenario): PendingPrep {
 function createScenarioRun(seed: number, scenario: BalanceScenario): RunState {
   const run = new RunState(String(seed), `sim-${seed}`);
   const prep = makePendingPrep(scenario);
+  const hasStarterCardVariety = scenario.starterCardVarietyUnlocked === true;
 
-  run.startingCardChoices = prep.extraStartingChoice ? 4 : 3;
+  run.startingCardChoices = prep.extraStartingChoice || hasStarterCardVariety ? 4 : 3;
   run.startingCardPicks = prep.extraStartingChoice ? 3 : 2;
   run.scoutCharges = prep.scoutFlame ? 1 : 0;
 
@@ -171,16 +174,24 @@ function chooseRewardCard(run: RunState, enemyCards: readonly Card[]): void {
   if (best) run.addCard(best);
 }
 
-function applySimulatedRest(run: RunState): void {
+export function applySimulatedRest(run: RunState): void {
   const handIds = new Set(run.combatHand.map((card) => card.uid));
   const removable = [...run.cardCollection]
     .filter((card) => !handIds.has(card.uid))
     .sort((a, b) => combatCardScore(a) - combatCardScore(b))[0];
 
-  if (removable && run.removeCard(removable.uid)) return;
+  if (removable) {
+    const payment = payRestAction(run, 'remove');
+    if (!payment.ok) return;
+    if (run.removeCard(removable.uid)) return;
+    run.gold += payment.cost;
+    return;
+  }
 
   const best = [...run.combatHand].sort((a, b) => combatCardScore(b) - combatCardScore(a))[0];
   if (!best) return;
+  const payment = payRestAction(run, 'upgrade');
+  if (!payment.ok) return;
   upgradeCard(best);
   run.refreshCombatHand();
 }
@@ -230,7 +241,9 @@ function roomEventScore(run: RunState, event: RoomEvent): number {
     case 'encounter':
       return run.hp >= run.maxHp * 0.75 ? 20 : 8;
     case 'rest':
-      return run.cardCollection.length > run.combatHand.length ? 42 : 34;
+      if (canUseRestAction(run, 'remove').ok) return 42;
+      if (canUseRestAction(run, 'upgrade').ok) return 34;
+      return -2;
     case 'trap':
       return -8;
     case 'boss':

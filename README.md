@@ -14,8 +14,9 @@ npm run dev      # http://localhost:5173
 
 ## How it plays
 
-- Each run is a fresh dungeon of **10 rooms**. Room 1 offers a choice of
-  **one of two starting cards**; its three exits lead deeper.
+- Each run is a fresh dungeon of **10 rooms**. The fire offers **two opening
+  card picks** from a small starter set; Ember progression can unlock a fourth
+  opening option without adding a raw stat boost.
 - Every later room has four doors — the one you came through is barred.
   Rooms are randomized: **encounters, treasure chests, health potions,
   spike traps**, or nothing.
@@ -25,6 +26,9 @@ npm run dev      # http://localhost:5173
   collected armor. Cards refresh once a whole hand has been used.
 - The enemy always holds **one card more than you** (capped at 6).
   Win a fight and you may steal one enemy card — hand limit is **5**.
+- **Gold** is earned and spent inside the current run, including paid rest-room
+  deck upgrades or removals. **Embers** persist after the run and unlock
+  long-term campfire progression.
 - Room 10 holds one of three bosses (Minotaur, Lich, Demon King), each
   with six cards **plus** a special weapon attack telegraphed every
   third round. Kill it, step into the hatch, and escape.
