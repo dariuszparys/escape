@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_W } from '../config';
+import { playSfx } from '../audio/sfx';
 import { calculateEmberReward, EmberRewardBreakdown } from '../game/metaRewards';
 import { getMeta, setMeta } from '../meta';
 import { getRun } from '../state';
@@ -56,6 +57,7 @@ export class EndScene extends Phaser.Scene {
     this.cameras.main.fadeIn(600, 11, 10, 18);
 
     if (this.victory) {
+      playSfx(this, 'victory');
       this.add
         .text(cx, 150, 'YOU ESCAPED!', {
           fontFamily: 'monospace',
@@ -94,6 +96,7 @@ export class EndScene extends Phaser.Scene {
         )
         .setOrigin(0.5);
     } else {
+      playSfx(this, 'death');
       this.add
         .text(cx, 170, 'YOU DIED', {
           fontFamily: 'monospace',

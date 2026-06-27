@@ -15,6 +15,7 @@ import {
   DEFAULT_STARTING_CARD_PICKS,
 } from '../game/startingCards';
 import { getMeta, setMeta } from '../meta';
+import { playSfx } from '../audio/sfx';
 import { newRun } from '../state';
 
 const TEXT_STYLE = {
@@ -289,6 +290,7 @@ export class CampfireScene extends Phaser.Scene {
       embers: result.state.embers,
       pendingPrep: result.state.pendingPrep,
     });
+    playSfx(this, 'purchase');
     this.redraw();
   }
 

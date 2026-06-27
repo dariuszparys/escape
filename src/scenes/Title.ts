@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_W } from '../config';
+import { playSfx } from '../audio/sfx';
 
 export class TitleScene extends Phaser.Scene {
   constructor() {
@@ -68,6 +69,7 @@ export class TitleScene extends Phaser.Scene {
     this.tweens.add({ targets: start, alpha: 0.3, duration: 600, yoyo: true, repeat: -1 });
 
     const begin = () => {
+      playSfx(this, 'door', 0.4);
       this.scene.start('Campfire');
     };
     this.input.keyboard?.once('keydown-SPACE', begin);

@@ -148,8 +148,8 @@ export class HudScene extends Phaser.Scene {
           invX,
           y0 + 94,
           run.scoutCharges > 0
-            ? `SCOUT x${run.scoutCharges}  [P] potion  [C] cards`
-            : '[P] drink potion  [C] cards',
+            ? `SCOUT x${run.scoutCharges}  [P] potion  [C] cards  [M] mute`
+            : '[P] drink potion  [C] cards  [M] mute',
           {
             fontFamily: 'monospace',
             fontSize: '9px',

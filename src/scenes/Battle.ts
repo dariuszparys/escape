@@ -15,6 +15,7 @@ import {
 } from '../game/combat';
 import { GameRng } from '../game/rng';
 import { awardEnemyGold } from '../game/rewards';
+import { playSfx } from '../audio/sfx';
 import { getRun } from '../state';
 
 type PlayerAction =
@@ -439,6 +440,7 @@ export class BattleScene extends Phaser.Scene {
     const special = this.enemy.def.special;
     if (special && this.isSpecialRound(this.round)) {
       this.telegraphText.setText(`${special.telegraph}\n${special.name}`);
+      playSfx(this, 'boss_telegraph');
     } else {
       this.telegraphText.setText('');
     }
@@ -515,6 +517,16 @@ export class BattleScene extends Phaser.Scene {
     const run = getRun();
     const cx = GAME_W / 2;
     const playerAction = this.toCombatAction(action);
+
+    const isBlockAction =
+      (action.kind === 'card' && cardEffectAmount(action.card, 'block') > 0) ||
+      (action.kind === 'item' && action.item.kind === 'shield');
+    const isHealAction =
+      (action.kind === 'card' && cardEffectAmount(action.card, 'heal') > 0) ||
+      (action.kind === 'item' && action.item.kind === 'heal');
+    if (isBlockAction) playSfx(this, 'block');
+    else if (isHealAction) playSfx(this, 'heal');
+    else playSfx(this, 'card_play');
 
     const playerStunned = this.playerStatuses.some((status) => status.type === 'stun');
     if (!playerStunned) {
@@ -603,6 +615,7 @@ export class BattleScene extends Phaser.Scene {
           '#ff5544',
         );
         this.flash(this.enemySprite);
+        playSfx(this, 'hit_enemy');
       }
       if (enemyHpChange.heal > 0) {
         this.combatPop(
@@ -621,6 +634,7 @@ export class BattleScene extends Phaser.Scene {
         );
         this.flash(this.heroSprite);
         this.cameras.main.shake(120, 0.006);
+        playSfx(this, 'hit_player');
       }
       if (playerHpChange.heal > 0) {
         this.combatPop(
@@ -687,6 +701,7 @@ export class BattleScene extends Phaser.Scene {
     const run = getRun();
     this.closeDeckOverlay();
     run.enemiesDefeated++;
+    playSfx(this, 'victory');
     const gold = awardEnemyGold(run, this.rng, run.depth);
     this.tweens.add({
       targets: this.enemySprite,
@@ -767,6 +782,7 @@ export class BattleScene extends Phaser.Scene {
 
   private defeat(): void {
     this.closeDeckOverlay();
+    playSfx(this, 'death');
     this.cameras.main.fadeOut(700, 11, 10, 18);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       this.scene.stop('Dungeon');

@@ -19,6 +19,7 @@ import { makeStartRoom, makeNextRoom, RoomData, type RoomEvent } from '../dungeo
 import { makeCardView } from '../gfx/cardview';
 import { createDeckPanel } from '../gfx/deckPanel';
 import { PhaserGameRng } from '../game/rng';
+import { playSfx } from '../audio/sfx';
 import { awardPotionItem, rollChestReward } from '../game/rewards';
 import { startingCardIdsForChoiceCount } from '../game/startingCards';
 import { getRun } from '../state';
@@ -591,6 +592,7 @@ export class DungeonScene extends Phaser.Scene {
     this.player.setVelocity(0, 0);
     this.player.body.enable = false;
     this.clearScoutRevealText();
+    playSfx(this, 'door');
 
     const run = getRun();
     const nextDepth = run.depth + 1;
@@ -662,6 +664,7 @@ export class DungeonScene extends Phaser.Scene {
 
   private onRoomEntered(): void {
     const { room, built } = this;
+    playSfx(this, 'step');
     if ((room.event === 'encounter' || room.event === 'boss') && !room.cleared && built.enemy) {
       // A fight starts the moment you step in.
       const s = built.enemySprite!;
@@ -881,6 +884,7 @@ export class DungeonScene extends Phaser.Scene {
           const msg = result.kind === 'heal' ? `+${result.amount} HP` : `+${result.item.name}`;
           this.floatText(px, py - 50, msg, '#5fe07a');
           this.hud();
+          playSfx(this, 'heal');
         }
       }
     }
@@ -890,6 +894,7 @@ export class DungeonScene extends Phaser.Scene {
     if (chest && !chest.opened && Phaser.Math.Distance.Between(px, py, chest.x, chest.y) < 64) {
       chest.opened = true;
       chest.img.setTexture('chest_open');
+      playSfx(this, 'chest');
       this.openChest(chest.x, chest.y);
     }
 
@@ -904,6 +909,7 @@ export class DungeonScene extends Phaser.Scene {
         this.player.setTint(0xff5544);
         this.time.delayedCall(250, () => this.player.clearTint());
         this.hud();
+        playSfx(this, 'trap');
         if (run.hp <= 0) {
           this.scene.stop('Hud');
           this.scene.start('End', { victory: false });
