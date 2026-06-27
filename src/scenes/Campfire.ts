@@ -15,6 +15,7 @@ import {
   DEFAULT_STARTING_CARD_PICKS,
 } from '../game/startingCards';
 import { dailyKey, dailySeed, loadDailyRecord } from '../daily';
+import { loadRunChronicle } from '../chronicle';
 import { getMeta, setMeta } from '../meta';
 import { playSfx } from '../audio/sfx';
 import { newRun } from '../state';
@@ -166,6 +167,20 @@ export class CampfireScene extends Phaser.Scene {
           ...TEXT_STYLE,
           fontSize: '18px',
           color: '#f5edd8',
+        })
+        .setOrigin(0.5),
+    );
+    const chronicle = loadRunChronicle();
+    const recordLine =
+      chronicle.runsCompleted === 0
+        ? 'No completed runs yet'
+        : `Runs ${chronicle.runsCompleted} | Escapes ${chronicle.escapes} | Best room ${chronicle.bestDepth} | Best gold ${chronicle.bestGold}`;
+    this.dynamic.add(
+      this.add
+        .text(GAME_W / 2, 110, recordLine, {
+          ...TEXT_STYLE,
+          fontSize: '12px',
+          color: '#b8b0c8',
         })
         .setOrigin(0.5),
     );

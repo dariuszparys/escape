@@ -3,6 +3,7 @@ import { GAME_W } from '../config';
 import { playSfx } from '../audio/sfx';
 import { loadDailyRecord, recordDailyAttempt, saveDailyRecord } from '../daily';
 import { calculateEmberReward, EmberRewardBreakdown } from '../game/metaRewards';
+import { loadRunChronicle, recordRunChronicleEntry, saveRunChronicle } from '../chronicle';
 import { getMeta, setMeta } from '../meta';
 import { getRun } from '../state';
 
@@ -55,6 +56,7 @@ export class EndScene extends Phaser.Scene {
       ? `Recovered ${emberAward.reward.total} embers.`
       : 'Embers already recovered.';
     if (emberAward.awarded) {
+      this.recordChronicleEntry(emberAward.reward.total);
       this.recordDailyAttemptOnce();
     }
     const cx = GAME_W / 2;
@@ -151,5 +153,24 @@ export class EndScene extends Phaser.Scene {
     if (record.date === run.dailyKey) {
       saveDailyRecord(recordDailyAttempt(record, { depth: run.depth, escaped: this.victory }));
     }
+  }
+
+  private recordChronicleEntry(emberReward: number): void {
+    const run = getRun();
+    const chronicle = loadRunChronicle();
+
+    saveRunChronicle(
+      recordRunChronicleEntry(chronicle, {
+        runId: run.runId,
+        completedAt: new Date().toISOString(),
+        seed: run.seed,
+        dailyKey: run.isDaily ? run.dailyKey : null,
+        escaped: this.victory,
+        depth: run.depth,
+        enemiesDefeated: run.enemiesDefeated,
+        gold: run.gold,
+        emberReward,
+      }),
+    );
   }
 }
