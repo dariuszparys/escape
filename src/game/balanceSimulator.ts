@@ -1,5 +1,5 @@
 import { MAX_DEPTH } from '../config';
-import { CARD_DEFS, Card, cardEffectAmount, makeCard } from '../data/cards';
+import { CARD_DEFS, Card, makeCard } from '../data/cards';
 import { type PendingPrep } from '../data/campfirePurchases';
 import { spawnBoss, spawnEnemy } from '../data/enemies';
 import { InventoryItem, type InventoryItemDef, makeItem } from '../data/items';
@@ -10,6 +10,7 @@ import { combatCardScore, selectCombatHand } from './cardSelection';
 import { applyPendingPrepToRun } from './campfirePrep';
 import type { ActiveStatusEffect } from './combat';
 import { resolveRound } from './combat';
+import { planEnemyIntent } from './enemyIntent';
 import { awardPotionItem, rollChestReward } from './rewards';
 import { GameRng } from './rng';
 import { startingCardIdsForRun } from './startingCards';
@@ -304,59 +305,24 @@ function toCombatAction(action: PlayerAction): Parameters<typeof resolveRound>[0
   return { actor: 'player', kind: 'punch' };
 }
 
-function pickEnemyCard(state: SimBattleState, rng: SeededRng): { card: Card; used: Set<number> } {
-  let used = new Set(state.enemyUsed);
-  let pool = state.enemyCards.filter((card) => !used.has(card.uid));
-  if (pool.length === 0) {
-    used = new Set();
-    pool = state.enemyCards;
-  }
-
-  const lowHp = state.enemyHp / state.enemyMaxHp < 0.35;
-  const weighted = pool.map((card) => {
-    let weight = 3;
-    if (cardEffectAmount(card, 'block') > 0) weight = 1.5;
-    if (cardEffectAmount(card, 'heal') > 0) weight = lowHp ? 6 : 0.8;
-    if (card.effects.some((effect) => effect.kind === 'status')) weight = 4;
-    return { card, weight };
-  });
-
-  const totalWeight = weighted.reduce((sum, entry) => sum + entry.weight, 0);
-  let roll = rng.frac() * totalWeight;
-  let picked = weighted[weighted.length - 1].card;
-  for (const entry of weighted) {
-    if ((roll -= entry.weight) < 0) {
-      picked = entry.card;
-      break;
-    }
-  }
-
-  used.add(picked.uid);
-  if (state.enemyCards.every((card) => used.has(card.uid))) used.clear();
-  return { card: picked, used };
-}
-
 function chooseEnemyDecision(state: SimBattleState): EnemyDecision {
   const nextRng = state.rng.clone();
-  const special = state.enemyDef.special;
-  if (special && state.round % special.interval === 0) {
-    return {
-      action: {
-        actor: 'enemy',
-        kind: 'special',
-        name: special.name,
-        speed: special.speed,
-        effects: special.effects,
-      },
-      used: new Set(state.enemyUsed),
-      nextRng,
-    };
-  }
-
-  const picked = pickEnemyCard(state, nextRng);
+  const intent = planEnemyIntent({
+    enemy: {
+      def: state.enemyDef,
+      hp: state.enemyHp,
+      maxHp: state.enemyMaxHp,
+      armor: state.enemyArmor,
+      statuses: state.enemyStatuses,
+      cards: state.enemyCards,
+    },
+    round: state.round,
+    usedCardUids: state.enemyUsed,
+    rng: nextRng,
+  });
   return {
-    action: { actor: 'enemy', kind: 'card', card: picked.card },
-    used: picked.used,
+    action: intent.action,
+    used: intent.usedCardUids,
     nextRng,
   };
 }

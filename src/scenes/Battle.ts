@@ -13,6 +13,7 @@ import {
   combatActionSpeed,
   resolveRound,
 } from '../game/combat';
+import { EnemyIntentPlan, planEnemyIntent } from '../game/enemyIntent';
 import { GameRng } from '../game/rng';
 import { awardEnemyGold } from '../game/rewards';
 import { playSfx } from '../audio/sfx';
@@ -30,6 +31,7 @@ export class BattleScene extends Phaser.Scene {
   private busy = false;
   private playerUsed = new Set<number>();
   private enemyUsed = new Set<number>();
+  private enemyIntent: EnemyIntentPlan | null = null;
   private playerStatuses: ActiveStatusEffect[] = [];
   private enemyStatuses: ActiveStatusEffect[] = [];
 
@@ -64,6 +66,7 @@ export class BattleScene extends Phaser.Scene {
     this.busy = false;
     this.playerUsed = new Set();
     this.enemyUsed = new Set();
+    this.enemyIntent = null;
     this.playerStatuses = [];
     this.enemyStatuses = [];
     this.handViews = [];
@@ -229,6 +232,7 @@ export class BattleScene extends Phaser.Scene {
     this.renderEnemyCards();
     this.renderHand();
     this.renderItems();
+    this.commitEnemyIntent();
     this.updateTelegraph();
     this.updateStatusText();
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.closeDeckOverlay());
@@ -444,15 +448,10 @@ export class BattleScene extends Phaser.Scene {
     return this.add.container(x, y, [panel, rank, title, desc]);
   }
 
-  private isSpecialRound(round: number): boolean {
-    const special = this.enemy.def.special;
-    return !!special && round % special.interval === 0;
-  }
-
   private updateTelegraph(): void {
-    const special = this.enemy.def.special;
-    if (special && this.isSpecialRound(this.round)) {
-      this.telegraphText.setText(`${special.telegraph}\n${special.name}`);
+    const intent = this.enemyIntent;
+    if (intent?.summary.telegraph) {
+      this.telegraphText.setText(`${intent.summary.telegraph}\n${intent.summary.title}`);
       playSfx(this, 'boss_telegraph');
     } else {
       this.telegraphText.setText('');
@@ -469,53 +468,24 @@ export class BattleScene extends Phaser.Scene {
     );
   }
 
-  private pickEnemyCard(): Card {
-    const avail = this.enemy.cards.filter((c) => !this.enemyUsed.has(c.uid));
-    const pool = avail.length > 0 ? avail : this.enemy.cards;
-    if (avail.length === 0) this.enemyUsed.clear();
-
-    const lowHp = this.enemy.hp / this.enemy.maxHp < 0.35;
-    const weighted = pool.map((card) => {
-      let w = 3;
-      if (cardEffectAmount(card, 'block') > 0) w = 1.5;
-      if (cardEffectAmount(card, 'heal') > 0) w = lowHp ? 6 : 0.8;
-      if (card.effects.some((effect) => effect.kind === 'status')) w = 4;
-      return { card, w };
-    });
-    const total = weighted.reduce((sum, entry) => sum + entry.w, 0);
-    let r = this.rng.frac() * total;
-    for (const entry of weighted) {
-      if ((r -= entry.w) < 0) return entry.card;
-    }
-    return weighted[weighted.length - 1].card;
-  }
-
   private toCombatAction(action: PlayerAction): CombatAction {
     if (action.kind === 'card') return { actor: 'player', kind: 'card', card: action.card };
     if (action.kind === 'item') return { actor: 'player', kind: 'item', item: action.item };
     return { actor: 'player', kind: 'punch' };
   }
 
-  private enemyAction(): { action: CombatAction; card: Card | null } {
-    const special = this.enemy.def.special;
-    if (special && this.isSpecialRound(this.round)) {
-      return {
-        card: null,
-        action: {
-          actor: 'enemy',
-          kind: 'special',
-          name: special.name,
-          speed: special.speed,
-          effects: special.effects,
-        },
-      };
-    }
+  private commitEnemyIntent(): EnemyIntentPlan {
+    this.enemyIntent = planEnemyIntent({
+      enemy: this.enemy,
+      round: this.round,
+      usedCardUids: this.enemyUsed,
+      rng: this.rng,
+    });
+    return this.enemyIntent;
+  }
 
-    const card = this.pickEnemyCard();
-    this.enemyUsed.add(card.uid);
-    if (this.enemy.cards.every((candidate) => this.enemyUsed.has(candidate.uid)))
-      this.enemyUsed.clear();
-    return { card, action: { actor: 'enemy', kind: 'card', card } };
+  private currentEnemyIntent(): EnemyIntentPlan {
+    return this.enemyIntent ?? this.commitEnemyIntent();
   }
 
   update(): void {
@@ -554,7 +524,9 @@ export class BattleScene extends Phaser.Scene {
       }
     }
 
-    const enemyTurn = this.enemyAction();
+    const enemyTurn = this.currentEnemyIntent();
+    this.enemyUsed = new Set(enemyTurn.usedCardUids);
+    this.enemyIntent = null;
     const order = orderedBattleActions(playerAction, enemyTurn.action);
     const shown: Phaser.GameObjects.GameObject[] = [
       this.createActionPreview(
@@ -677,6 +649,7 @@ export class BattleScene extends Phaser.Scene {
       this.renderHand();
       this.renderEnemyCards();
       this.renderItems();
+      this.commitEnemyIntent();
       this.updateTelegraph();
       this.updateStatusText();
       this.setPrompt('Choose a card, item, or punch. [C] deck');

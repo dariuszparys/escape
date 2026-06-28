@@ -13,6 +13,21 @@ export interface BossSpecial {
   effects: CardEffect[];
 }
 
+export type EnemyCombatPreference =
+  | 'fast_damage'
+  | 'damage'
+  | 'block_damage'
+  | 'status'
+  | 'block'
+  | 'heal';
+
+export type EnemyCombatArchetype = 'tempo_pressure' | 'status_pressure' | 'block_pressure';
+
+export interface EnemyCombatScript {
+  archetype: EnemyCombatArchetype;
+  pattern: EnemyCombatPreference[][];
+}
+
 export interface EnemyDef {
   id: string;
   name: string;
@@ -21,6 +36,7 @@ export interface EnemyDef {
   tier?: EnemyTier;
   boss: boolean;
   dungeonThreatProfile: RoomThreatProfileId;
+  combatScript?: EnemyCombatScript;
   special?: BossSpecial;
 }
 
@@ -69,6 +85,10 @@ export const ENEMIES: EnemyDef[] = [
     tier: 'medium',
     boss: false,
     dungeonThreatProfile: 'alert_chase',
+    combatScript: {
+      archetype: 'tempo_pressure',
+      pattern: [['fast_damage', 'damage'], ['damage', 'fast_damage'], ['damage', 'fast_damage']],
+    },
   },
   {
     id: 'cultist',
@@ -78,6 +98,10 @@ export const ENEMIES: EnemyDef[] = [
     tier: 'medium',
     boss: false,
     dungeonThreatProfile: 'alert_chase',
+    combatScript: {
+      archetype: 'status_pressure',
+      pattern: [['status'], ['status', 'damage'], ['status', 'damage']],
+    },
   },
   {
     id: 'armored_goblin',
@@ -87,6 +111,14 @@ export const ENEMIES: EnemyDef[] = [
     tier: 'medium',
     boss: false,
     dungeonThreatProfile: 'alert_chase',
+    combatScript: {
+      archetype: 'block_pressure',
+      pattern: [
+        ['block_damage', 'damage'],
+        ['damage', 'block_damage'],
+        ['block_damage', 'damage', 'block'],
+      ],
+    },
   },
   {
     id: 'knight',

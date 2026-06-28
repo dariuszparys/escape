@@ -39,6 +39,18 @@ describe('enemy generation', () => {
     }
   });
 
+  test('first scripted combat enemies expose distinct planning archetypes', () => {
+    expect(ENEMIES.find((enemy) => enemy.id === 'bandit')?.combatScript?.archetype).toBe(
+      'tempo_pressure',
+    );
+    expect(ENEMIES.find((enemy) => enemy.id === 'cultist')?.combatScript?.archetype).toBe(
+      'status_pressure',
+    );
+    expect(ENEMIES.find((enemy) => enemy.id === 'armored_goblin')?.combatScript?.archetype).toBe(
+      'block_pressure',
+    );
+  });
+
   test('bosses resolve to boss pressure dungeon threat profiles', () => {
     for (const boss of BOSSES) {
       expect(getEnemyThreatProfile(boss)).toBe('boss_pressure');
