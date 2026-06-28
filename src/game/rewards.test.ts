@@ -115,6 +115,17 @@ describe('rewards', () => {
     expect(run.gold).toBe(17);
   });
 
+  test('chest card rewards include next-hand impact preview text', () => {
+    const run = new RunState('seed');
+    const result = rollChestReward(run, new SequenceRng([0, 0]), 5);
+
+    expect(result.kind).toBe('card');
+    if (result.kind !== 'card') throw new Error(`Unexpected result: ${result.kind}`);
+    expect(result.impactLabel).toMatch(/hand|collection/);
+    expect(result.impactLabel).not.toMatch(/score/i);
+    expect(run.cardCollection).toHaveLength(1);
+  });
+
   test('chest can award a relic and store it on the run', () => {
     const run = new RunState('seed');
 

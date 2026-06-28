@@ -6,6 +6,7 @@ import { InventoryItem } from '../data/items';
 import { CARD_H, CARD_W, makeCardBack, makeCardView } from '../gfx/cardview';
 import { createBattlePlanningBoard } from '../gfx/battlePlanningBoard';
 import { createDeckPanel } from '../gfx/deckPanel';
+import { compactRewardImpactLabel, createRewardImpactText } from '../gfx/rewardImpactView';
 import { BattlePlanPhase, buildBattlePlanState } from '../game/battlePlan';
 import { BattleLayout, getBattleLayout } from '../game/battleLayout';
 import { buildBattleRoundHistory } from '../game/battleLog';
@@ -16,6 +17,7 @@ import {
 } from '../game/combat';
 import { EnemyIntentPlan, planEnemyIntent } from '../game/enemyIntent';
 import { GameRng } from '../game/rng';
+import { previewRewardImpact } from '../game/rewardImpact';
 import { awardEnemyGold } from '../game/rewards';
 import { playSfx } from '../audio/sfx';
 import { getRun } from '../state';
@@ -679,16 +681,31 @@ export class BattleScene extends Phaser.Scene {
     const startX = GAME_W / 2 - ((n - 1) * spacing) / 2;
     for (const [i, card] of this.enemy.cards.entries()) {
       const view = makeCardView(this, card, startX + i * spacing, 250, 0.92);
+      const impact = previewRewardImpact({
+        collection: run.cardCollection,
+        combatHand: run.combatHand,
+        handLimit: run.handLimit,
+        change: { kind: 'add', card },
+      });
       view.setDepth(31);
       view.setInteractive({ useHandCursor: true });
       view.on('pointerover', () => view.setScale(1.0));
       view.on('pointerout', () => view.setScale(0.92));
       view.on('pointerdown', () => this.takeCard(card));
       overlay.add(view);
+      const preview = createRewardImpactText(
+        this,
+        startX + i * spacing,
+        328,
+        compactRewardImpactLabel(impact),
+        CARD_W + 18,
+      );
+      preview.setDepth(31);
+      overlay.add(preview);
     }
 
     const skip = this.add
-      .text(GAME_W / 2, 380, '[ Take nothing ]', {
+      .text(GAME_W / 2, 402, '[ Take nothing ]', {
         fontFamily: 'monospace',
         fontSize: '16px',
         color: '#b8b0c8',

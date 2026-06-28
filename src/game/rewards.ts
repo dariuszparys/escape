@@ -2,10 +2,11 @@ import { randomCard } from '../data/cards';
 import { InventoryItem, makeItem, randomItemIdForDepth } from '../data/items';
 import { randomRelic } from '../data/relics';
 import { RunState } from '../state';
+import { previewRewardImpact } from './rewardImpact';
 import { GameRng } from './rng';
 
 export type RewardResult =
-  | { kind: 'card'; cardName: string }
+  | { kind: 'card'; cardName: string; impactLabel: string }
   | { kind: 'item'; item: InventoryItem }
   | { kind: 'armor'; amount: number }
   | { kind: 'gold'; amount: number }
@@ -35,8 +36,14 @@ export function rollChestReward(run: RunState, rng: GameRng, depth: number): Rew
   const roll = rng.frac();
   if (roll < 0.5) {
     const card = randomCard(rng, depth);
+    const impact = previewRewardImpact({
+      collection: run.cardCollection,
+      combatHand: run.combatHand,
+      handLimit: run.handLimit,
+      change: { kind: 'add', card },
+    });
     run.addCard(card);
-    return { kind: 'card', cardName: card.name };
+    return { kind: 'card', cardName: card.name, impactLabel: impact.label };
   }
 
   if (roll < 0.68) {

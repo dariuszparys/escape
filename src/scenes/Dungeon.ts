@@ -26,9 +26,11 @@ import {
 } from '../dungeon/roomThreat';
 import { makeCardView } from '../gfx/cardview';
 import { createDeckPanel } from '../gfx/deckPanel';
+import { createRewardImpactText } from '../gfx/rewardImpactView';
 import { PhaserGameRng } from '../game/rng';
 import { playSfx } from '../audio/sfx';
 import { awardPotionItem, rollChestReward } from '../game/rewards';
+import { previewRewardImpact } from '../game/rewardImpact';
 import { startingCardIdsForRun } from '../game/startingCards';
 import { orderedDeckEntries } from '../game/deckOrdering';
 import { upgradeCard } from '../game/cardUpgrade';
@@ -215,6 +217,32 @@ export class DungeonScene extends Phaser.Scene {
         if (this.scoutRevealText === t) this.scoutRevealText = null;
         t.destroy();
       },
+    });
+    return t;
+  }
+
+  private floatImpactText(x: number, y: number, msg: string): Phaser.GameObjects.Text {
+    const t = this.add
+      .text(x, y, msg, {
+        fontFamily: 'monospace',
+        fontSize: '10px',
+        fontStyle: 'bold',
+        color: '#9fb7d0',
+        stroke: '#16121e',
+        strokeThickness: 3,
+        fixedWidth: 300,
+        align: 'center',
+        wordWrap: { width: 300, useAdvancedWrap: true },
+      })
+      .setOrigin(0.5)
+      .setDepth(50);
+    this.tweens.add({
+      targets: t,
+      y: y - 34,
+      alpha: 0,
+      duration: 2400,
+      ease: 'Cubic.easeOut',
+      onComplete: () => t.destroy(),
     });
     return t;
   }
@@ -1106,6 +1134,9 @@ export class DungeonScene extends Phaser.Scene {
       this.spawnFloorPotion(x, y + TILE, result.item);
     }
     this.floatText(x, y - 50, message, result.kind === 'gold' ? '#f1c40f' : '#5fe07a');
+    if (result.kind === 'card') {
+      this.floatImpactText(x, y - 78, result.impactLabel);
+    }
     this.hud();
   }
 
@@ -1250,14 +1281,23 @@ export class DungeonScene extends Phaser.Scene {
         .setOrigin(0.5),
     );
 
-    const visibleEntries = entries.slice(0, 12);
+    const visibleEntries = entries.slice(0, 8);
     for (const [index, entry] of visibleEntries.entries()) {
-      const y = -h / 2 + 80 + index * 23;
+      const y = -h / 2 + 82 + index * 38;
       const badge = entry.inHand ? 'HAND' : 'RES ';
       const row = `${String(index + 1).padStart(2, ' ')}. ${badge} ${entry.card.name.padEnd(
         16,
         ' ',
       )}`;
+      const impact = previewRewardImpact({
+        collection: run.cardCollection,
+        combatHand: run.combatHand,
+        handLimit: run.handLimit,
+        change:
+          mode === 'upgrade'
+            ? { kind: 'upgrade', cardUid: entry.card.uid }
+            : { kind: 'remove', cardUid: entry.card.uid },
+      });
       const button = this.add
         .text(-w / 2 + 18, y, row, {
           fontFamily: 'monospace',
@@ -1273,6 +1313,14 @@ export class DungeonScene extends Phaser.Scene {
       button.on('pointerout', () => button.setColor(entry.inHand ? '#f5edd8' : '#8e889a'));
       button.on('pointerdown', () => this.applyRestCardChoice(mode, entry.card));
       panel.add(button);
+      panel.add(
+        createRewardImpactText(this, -w / 2 + 42, y + 11, impact.label, 430, {
+          align: 'left',
+          originX: 0,
+          originY: 0,
+          fontSize: '9px',
+        }),
+      );
     }
 
     panel.add(
