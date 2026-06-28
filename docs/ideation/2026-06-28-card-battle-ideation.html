@@ -1,0 +1,955 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ideation: Card Battle Enjoyment</title>
+    <style>
+      :root {
+        --bg: #10131a;
+        --panel: #181d27;
+        --panel-2: #202838;
+        --ink: #f4efe4;
+        --muted: #b7becb;
+        --line: #394255;
+        --gold: #f2c66d;
+        --green: #7bd88f;
+        --red: #ff7777;
+        --blue: #8ec5ff;
+        --violet: #c8a4ff;
+        --soft-gold: #3a2e18;
+        --soft-blue: #182b40;
+        --soft-green: #183024;
+        --soft-red: #3a2022;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          sans-serif;
+        line-height: 1.55;
+      }
+
+      main {
+        width: min(960px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 42px 0 56px;
+      }
+
+      header {
+        border: 1px solid var(--line);
+        background: linear-gradient(180deg, #1b2230 0%, #151a24 100%);
+        border-radius: 12px;
+        padding: 28px;
+        margin-bottom: 24px;
+      }
+
+      .eyebrow {
+        margin: 0 0 8px;
+        color: var(--gold);
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        font-weight: 700;
+      }
+
+      h1,
+      h2,
+      h3 {
+        line-height: 1.18;
+        margin: 0;
+        letter-spacing: 0;
+      }
+
+      h1 {
+        font-size: clamp(30px, 4vw, 48px);
+        max-width: 13ch;
+      }
+
+      h2 {
+        font-size: 26px;
+        margin-bottom: 14px;
+      }
+
+      h3 {
+        font-size: 20px;
+        margin-bottom: 8px;
+      }
+
+      p {
+        max-width: 76ch;
+        margin: 0 0 12px;
+      }
+
+      a {
+        color: var(--blue);
+      }
+      code {
+        color: #f7dca0;
+        background: #0d1118;
+        border: 1px solid #273244;
+        border-radius: 5px;
+        padding: 1px 5px;
+        font-size: 0.92em;
+      }
+
+      section {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        border-radius: 12px;
+        padding: 24px;
+        margin: 18px 0;
+      }
+
+      .meta,
+      .stats,
+      .chips,
+      .idea-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 18px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: 999px;
+        border: 1px solid #4a5367;
+        background: #20283a;
+        color: var(--ink);
+        padding: 6px 10px;
+        font-size: 13px;
+      }
+
+      .pill.gold {
+        background: var(--soft-gold);
+        color: #ffe1a0;
+        border-color: #6d5528;
+      }
+      .pill.blue {
+        background: var(--soft-blue);
+        color: #bddcff;
+        border-color: #355e84;
+      }
+      .pill.green {
+        background: var(--soft-green);
+        color: #b9f0c4;
+        border-color: #376847;
+      }
+      .pill.red {
+        background: var(--soft-red);
+        color: #ffc4c4;
+        border-color: #733a3f;
+      }
+
+      .toc {
+        display: grid;
+        gap: 8px;
+        padding: 0;
+        margin: 0;
+        list-style: none;
+      }
+
+      .toc a {
+        display: block;
+        padding: 9px 11px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #141923;
+        text-decoration: none;
+      }
+
+      .axes {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+        gap: 10px;
+        padding: 0;
+        margin: 0;
+        list-style: none;
+      }
+
+      .axes li {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #141923;
+        padding: 12px;
+      }
+
+      article.idea {
+        border: 1px solid var(--line);
+        background: var(--panel-2);
+        border-radius: 12px;
+        padding: 20px;
+        margin: 16px 0;
+      }
+
+      .idea-head {
+        display: flex;
+        gap: 14px;
+        align-items: flex-start;
+      }
+
+      .rank {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: var(--soft-gold);
+        color: #ffe1a0;
+        border: 1px solid #6d5528;
+        font-weight: 800;
+      }
+
+      dl {
+        display: grid;
+        grid-template-columns: 110px 1fr;
+        gap: 8px 12px;
+        margin: 14px 0 0;
+      }
+
+      dt {
+        color: var(--gold);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        font-weight: 800;
+      }
+
+      dd {
+        margin: 0;
+      }
+
+      .callout {
+        border: 1px solid #596a45;
+        border-radius: 10px;
+        background: #202916;
+        padding: 14px;
+        margin: 14px 0;
+      }
+
+      .diagram {
+        margin: 18px 0 6px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #111722;
+        padding: 12px;
+        overflow-x: auto;
+      }
+
+      .diagram svg {
+        width: 100%;
+        min-width: 620px;
+        height: auto;
+        display: block;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+        font-size: 14px;
+      }
+
+      th,
+      td {
+        border: 1px solid var(--line);
+        padding: 10px;
+        vertical-align: top;
+        text-align: left;
+      }
+
+      th {
+        color: #ffe1a0;
+        background: #1a2030;
+      }
+
+      footer {
+        color: var(--muted);
+        font-size: 13px;
+        margin-top: 22px;
+        padding: 14px 0;
+      }
+
+      @media (max-width: 640px) {
+        main {
+          width: min(100vw - 20px, 960px);
+          padding-top: 18px;
+        }
+        header,
+        section,
+        article.idea {
+          padding: 16px;
+        }
+        dl {
+          grid-template-columns: 1fr;
+        }
+        .idea-head {
+          flex-direction: column;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="eyebrow">Ideation Artifact</p>
+        <h1>Card Battle Enjoyment</h1>
+        <p>
+          Ranked directions for making Escape's main card-battle loop more enjoyable, using Slay the
+          Spire as a reference for readable intent, scarce turn choices, and identity-building
+          rewards without cloning its full combat model.
+        </p>
+        <div class="meta">
+          <span class="pill gold">Date 2026-06-28</span>
+          <span class="pill blue">Topic card-battle</span>
+          <span class="pill green">Mode repo-grounded</span>
+          <span class="pill">Focus Slay-like battle depth</span>
+        </div>
+        <div class="stats">
+          <span class="pill gold">40 raw frame ideas</span>
+          <span class="pill blue">13 merged candidates</span>
+          <span class="pill green">7 ranked survivors</span>
+          <span class="pill red">8 cut or folded</span>
+        </div>
+      </header>
+
+      <section id="grounding-context">
+        <p class="eyebrow">Evidence</p>
+        <h2>Grounding Context</h2>
+        <p>
+          <strong>Codebase context.</strong> Escape already has simultaneous card combat, speed
+          ordering, poison, burn, stun, items, relics, collection versus combat-hand state,
+          enemy-card stealing, rest-room upgrades/removals, starter kits, boss specials, and a
+          balance simulator. Runtime code is concentrated in <code>src/scenes/Battle.ts</code>,
+          <code>src/game/combat.ts</code>, <code>src/game/cardSelection.ts</code>,
+          <code>src/game/rewards.ts</code>, <code>src/data/cards.ts</code>, and
+          <code>src/data/enemies.ts</code>.
+        </p>
+        <p>
+          <strong>Current friction.</strong> Normal enemies are rendered mostly as card backs and
+          their chosen card is picked during the player action flow. Bosses have interval
+          telegraphs, but normal fights hide the information that would make speed, block, stun, and
+          healing decisions feel intentional. The player has one action per round, and cards refresh
+          only after the whole combat hand has been used.
+        </p>
+        <p>
+          <strong>Past repo learnings.</strong> Keep Battle as the combat authority. Dungeon room
+          threat can shape pre-battle pressure, but should not become a second combat system.
+          Visible Phaser UI changes need layout discipline and browser smoke because prior screens
+          regressed through overlapping text. Progression should shape runs, not become raw
+          permanent stat creep, and Daily Descents should stay comparable.
+        </p>
+        <p>
+          <strong>External context.</strong> Slay the Spire-like feel is less about copying exact
+          nouns and more about a loop where the player can answer: what is the enemy about to do,
+          what scarce resource do I spend this turn, and what deck identity am I reinforcing? Slay
+          the Spire, Into the Breach, Cobalt Core, Monster Train, and Wildfrost all point toward
+          readable threats, timing pressure, and reward choices that reinforce a plan.
+        </p>
+      </section>
+
+      <section id="topic-axes">
+        <p class="eyebrow">Surface Map</p>
+        <h2>Topic Axes</h2>
+        <ul class="axes">
+          <li>Enemy intent and turn readability</li>
+          <li>Player resource cadence and action economy</li>
+          <li>Deckbuilding rewards and hand composition</li>
+          <li>Enemy archetypes, statuses, and boss patterns</li>
+        </ul>
+      </section>
+
+      <section id="ranked-ideas">
+        <p class="eyebrow">Survivors</p>
+        <h2>Ranked Ideas</h2>
+        <ul class="toc">
+          <li><a href="#idea-1">1. Intent Strip Plus Speed Timeline</a></li>
+          <li><a href="#idea-2">2. Authored Enemy Scripts</a></li>
+          <li><a href="#idea-3">3. Status Lanes And Counterplay</a></li>
+          <li><a href="#idea-4">4. Reward Impact Preview</a></li>
+          <li><a href="#idea-5">5. Enemy Archetype Rewards</a></li>
+          <li><a href="#idea-6">6. Boss Rhythm Boards</a></li>
+          <li><a href="#idea-7">7. Prepared Answer Slot</a></li>
+        </ul>
+
+        <article class="idea" id="idea-1">
+          <div class="idea-head">
+            <span class="rank">1</span>
+            <div>
+              <h3>1. Intent Strip Plus Speed Timeline</h3>
+              <p>
+                Reveal the normal enemy's committed next action or action family, its speed, and its
+                main effect before the player chooses. Pair that with a clearer speed timeline so a
+                player can see whether Quick Jab lands before a Hex, whether Guard matters this
+                round, and whether stun can prevent an incoming action. This is the most direct
+                Slay-like improvement because it changes the basic turn from guessing into planning
+                while preserving Escape's simultaneous resolver.
+              </p>
+            </div>
+          </div>
+          <div class="diagram" aria-label="Intent strip plus speed timeline diagram">
+            <svg viewBox="0 0 760 220" role="img">
+              <rect x="24" y="26" width="200" height="72" rx="10" fill="#182b40" stroke="#355e84" />
+              <text
+                x="124"
+                y="54"
+                text-anchor="middle"
+                fill="#bddcff"
+                font-size="15"
+                font-weight="700"
+              >
+                Enemy intent
+              </text>
+              <text x="124" y="78" text-anchor="middle" fill="#f4efe4" font-size="13">
+                Fast attack · spd 8 · 4 dmg
+              </text>
+              <rect
+                x="280"
+                y="26"
+                width="200"
+                height="72"
+                rx="10"
+                fill="#3a2e18"
+                stroke="#6d5528"
+              />
+              <text
+                x="380"
+                y="54"
+                text-anchor="middle"
+                fill="#ffe1a0"
+                font-size="15"
+                font-weight="700"
+              >
+                Player choice
+              </text>
+              <text x="380" y="78" text-anchor="middle" fill="#f4efe4" font-size="13">
+                Block, outrun, stun, or race
+              </text>
+              <rect
+                x="536"
+                y="26"
+                width="200"
+                height="72"
+                rx="10"
+                fill="#183024"
+                stroke="#376847"
+              />
+              <text
+                x="636"
+                y="54"
+                text-anchor="middle"
+                fill="#b9f0c4"
+                font-size="15"
+                font-weight="700"
+              >
+                Resolve by speed
+              </text>
+              <text x="636" y="78" text-anchor="middle" fill="#f4efe4" font-size="13">
+                Known order, no gotcha
+              </text>
+              <path
+                d="M224 62 L280 62"
+                stroke="#8ec5ff"
+                stroke-width="2"
+                marker-end="url(#arrow)"
+              />
+              <path
+                d="M480 62 L536 62"
+                stroke="#8ec5ff"
+                stroke-width="2"
+                marker-end="url(#arrow)"
+              />
+              <line x1="88" y1="158" x2="672" y2="158" stroke="#59657a" stroke-width="3" />
+              <circle cx="218" cy="158" r="10" fill="#8ec5ff" />
+              <circle cx="384" cy="158" r="10" fill="#f2c66d" />
+              <circle cx="548" cy="158" r="10" fill="#ff7777" />
+              <text x="218" y="188" text-anchor="middle" fill="#bddcff" font-size="13">
+                Quick Jab 8
+              </text>
+              <text x="384" y="188" text-anchor="middle" fill="#ffe1a0" font-size="13">
+                Guard 6
+              </text>
+              <text x="548" y="188" text-anchor="middle" fill="#ffc4c4" font-size="13">
+                Enemy 8
+              </text>
+              <defs>
+                <marker
+                  id="arrow"
+                  viewBox="0 0 10 10"
+                  refX="8"
+                  refY="5"
+                  markerWidth="6"
+                  markerHeight="6"
+                  orient="auto-start-reverse"
+                >
+                  <path d="M 0 0 L 10 5 L 0 10 z" fill="#8ec5ff" />
+                </marker>
+              </defs>
+            </svg>
+          </div>
+          <dl>
+            <dt>Axis</dt>
+            <dd>Enemy intent and turn readability</dd>
+            <dt>Basis</dt>
+            <dd>
+              <code>direct:</code> <code>src/scenes/Battle.ts</code> renders normal enemy cards as
+              backs and picks normal enemy actions from weighted hidden cards; boss specials already
+              have telegraph text. <code>src/game/combat.ts</code> already resolves action order by
+              speed. <code>external:</code> Slay the Spire, Into the Breach, and Cobalt Core show
+              that explicit incoming threats can create difficulty through sequencing instead of
+              hidden information.
+            </dd>
+            <dt>Rationale</dt>
+            <dd>
+              This turns existing card speed, block, stun, and status effects into readable answers.
+              It is high value because it improves every battle turn and makes later card/enemy
+              design easier to explain.
+            </dd>
+            <dt>Downsides</dt>
+            <dd>
+              Needs careful battle layout and a clean intent summary format. Revealing too much
+              exact information could reduce tension, so the first version may use action families
+              plus speed rather than full cards.
+            </dd>
+            <dt>Confidence</dt>
+            <dd>88%</dd>
+            <dt>Complexity</dt>
+            <dd>Medium</dd>
+          </dl>
+        </article>
+
+        <article class="idea" id="idea-2">
+          <div class="idea-head">
+            <span class="rank">2</span>
+            <div>
+              <h3>2. Authored Enemy Scripts</h3>
+              <p>
+                Give normal enemies small recurring behavior packages instead of mostly generic
+                random card pools. A Bandit might pressure speed, a Cultist might rotate into
+                status, and an Armored Goblin might force block-breaking decisions. Keep random
+                variation, but make the pattern legible enough that players learn opponents over a
+                run.
+              </p>
+            </div>
+          </div>
+          <dl>
+            <dt>Axis</dt>
+            <dd>Enemy archetypes, statuses, and boss patterns</dd>
+            <dt>Basis</dt>
+            <dd>
+              <code>direct:</code> <code>src/data/enemies.ts</code> already defines named enemies
+              and tiers, while <code>spawnEnemy()</code> mostly fills their cards from generic
+              random depth pools. <code>src/scenes/Battle.ts</code> applies shared weighted card
+              selection. <code>external:</code> Monster Train and Wildfrost show that recognizable
+              opponent patterns can carry combat identity.
+            </dd>
+            <dt>Rationale</dt>
+            <dd>
+              Players remember enemies when they force different card evaluations. This also
+              compounds future content work: new enemy equals small script plus card package, not a
+              hand-tuned AI rewrite.
+            </dd>
+            <dt>Downsides</dt>
+            <dd>
+              Requires enemy data authoring and simulator updates. Over-scripted enemies could
+              become solved if scripts are too short or too deterministic.
+            </dd>
+            <dt>Confidence</dt>
+            <dd>82%</dd>
+            <dt>Complexity</dt>
+            <dd>Medium</dd>
+          </dl>
+        </article>
+
+        <article class="idea" id="idea-3">
+          <div class="idea-head">
+            <span class="rank">3</span>
+            <div>
+              <h3>3. Status Lanes And Counterplay</h3>
+              <p>
+                Make poison, burn, stun, block, and armor visible as lanes with upcoming ticks,
+                expiry, and next-round impact. Then add narrow counterplay verbs over time: burn
+                could pressure block, stun could delay a telegraphed action, and future support
+                cards could cleanse or ward. This deepens the existing status system instead of
+                adding a new combat model.
+              </p>
+            </div>
+          </div>
+          <dl>
+            <dt>Axis</dt>
+            <dd>Enemy archetypes, statuses, and boss patterns</dd>
+            <dt>Basis</dt>
+            <dd>
+              <code>direct:</code> <code>src/data/cards.ts</code> already defines poison, burn, and
+              stun; <code>src/game/combat.ts</code> applies status ticks, stun consumption, and
+              status merging; status cards already influence combat scoring. The Battle scene
+              already has status text, but not a future-facing lane view.
+            </dd>
+            <dt>Rationale</dt>
+            <dd>
+              Status-heavy cards become more satisfying when delayed payoff and danger are visible.
+              This pairs especially well with intent visibility because statuses can become answers
+              to known threats.
+            </dd>
+            <dt>Downsides</dt>
+            <dd>
+              UI density risk is real on the Phaser battle screen. Counterplay should start small,
+              or the status matrix will outgrow the card pool.
+            </dd>
+            <dt>Confidence</dt>
+            <dd>78%</dd>
+            <dt>Complexity</dt>
+            <dd>Medium</dd>
+          </dl>
+        </article>
+
+        <article class="idea" id="idea-4">
+          <div class="idea-head">
+            <span class="rank">4</span>
+            <div>
+              <h3>4. Reward Impact Preview</h3>
+              <p>
+                On card rewards, upgrades, removals, and steals, show exactly what changes in the
+                actual combat hand: enters hand now, replaces another card, improves a role, or
+                stays collection-only for now. This is a low-risk clarity win because the code
+                already computes the answer; the player just does not see the consequence clearly.
+              </p>
+            </div>
+          </div>
+          <div class="diagram" aria-label="Reward impact preview diagram">
+            <svg viewBox="0 0 760 170" role="img">
+              <rect x="34" y="34" width="190" height="82" rx="10" fill="#202838" stroke="#394255" />
+              <text
+                x="129"
+                y="62"
+                text-anchor="middle"
+                fill="#f4efe4"
+                font-size="15"
+                font-weight="700"
+              >
+                Reward card
+              </text>
+              <text x="129" y="88" text-anchor="middle" fill="#b7becb" font-size="13">
+                Poison Dagger
+              </text>
+              <path
+                d="M224 75 L300 75"
+                stroke="#8ec5ff"
+                stroke-width="2"
+                marker-end="url(#arrow2)"
+              />
+              <rect
+                x="300"
+                y="34"
+                width="190"
+                height="82"
+                rx="10"
+                fill="#183024"
+                stroke="#376847"
+              />
+              <text
+                x="395"
+                y="62"
+                text-anchor="middle"
+                fill="#b9f0c4"
+                font-size="15"
+                font-weight="700"
+              >
+                Hand impact
+              </text>
+              <text x="395" y="88" text-anchor="middle" fill="#f4efe4" font-size="13">
+                Replaces Strike
+              </text>
+              <path
+                d="M490 75 L566 75"
+                stroke="#8ec5ff"
+                stroke-width="2"
+                marker-end="url(#arrow2)"
+              />
+              <rect
+                x="566"
+                y="34"
+                width="160"
+                height="82"
+                rx="10"
+                fill="#3a2e18"
+                stroke="#6d5528"
+              />
+              <text
+                x="646"
+                y="62"
+                text-anchor="middle"
+                fill="#ffe1a0"
+                font-size="15"
+                font-weight="700"
+              >
+                Next fight
+              </text>
+              <text x="646" y="88" text-anchor="middle" fill="#f4efe4" font-size="13">
+                Build is felt
+              </text>
+              <defs>
+                <marker
+                  id="arrow2"
+                  viewBox="0 0 10 10"
+                  refX="8"
+                  refY="5"
+                  markerWidth="6"
+                  markerHeight="6"
+                  orient="auto-start-reverse"
+                >
+                  <path d="M 0 0 L 10 5 L 0 10 z" fill="#8ec5ff" />
+                </marker>
+              </defs>
+            </svg>
+          </div>
+          <dl>
+            <dt>Axis</dt>
+            <dd>Deckbuilding rewards and hand composition</dd>
+            <dt>Basis</dt>
+            <dd>
+              <code>direct:</code> <code>RunState</code> separates <code>cardCollection</code> from
+              <code>combatHand</code>, and <code>refreshCombatHand()</code> runs after deck changes.
+              <code>src/game/cardSelection.ts</code> scores and selects the hand automatically.
+              Battle rewards currently add enemy cards to collection, which can hide whether the
+              next fight changed.
+            </dd>
+            <dt>Rationale</dt>
+            <dd>
+              This fixes the question “did that card matter?” without changing balance. It also
+              prepares the UX for deeper reward ideas later.
+            </dd>
+            <dt>Downsides</dt>
+            <dd>
+              The preview must be accurate and concise. If it exposes too much scoring detail, it
+              could make rewards feel spreadsheet-like.
+            </dd>
+            <dt>Confidence</dt>
+            <dd>76%</dd>
+            <dt>Complexity</dt>
+            <dd>Low</dd>
+          </dl>
+        </article>
+
+        <article class="idea" id="idea-5">
+          <div class="idea-head">
+            <span class="rank">5</span>
+            <div>
+              <h3>5. Enemy Archetype Rewards</h3>
+              <p>
+                Keep the distinctive “steal from the enemy” reward identity, but make certain
+                enemies carry recognizable archetype rewards. Beating a Cultist might offer a
+                status-oriented tool, while beating an Armored Goblin might offer block pressure or
+                anti-block. The reward should feel like the player learned from the fight, not just
+                looted a random stronger card.
+              </p>
+            </div>
+          </div>
+          <dl>
+            <dt>Axis</dt>
+            <dd>Deckbuilding rewards and hand composition</dd>
+            <dt>Basis</dt>
+            <dd>
+              <code>direct:</code> Victory already offers enemy-card theft, and starter kits already
+              show that signature card identity can shape runs. <code>src/data/enemies.ts</code> has
+              named enemies that can carry tighter card packages. <code>external:</code> Strong
+              deckbuilders make rewards reinforce a build identity rather than only increase raw
+              efficiency.
+            </dd>
+            <dt>Rationale</dt>
+            <dd>
+              This preserves Escape's own reward flavor while making deckbuilding more memorable. It
+              also connects enemy authoring and reward design into one content pipeline.
+            </dd>
+            <dt>Downsides</dt>
+            <dd>
+              Too many guaranteed signatures could reduce reward variety. This depends on authored
+              enemy scripts or at least tighter enemy packages.
+            </dd>
+            <dt>Confidence</dt>
+            <dd>70%</dd>
+            <dt>Complexity</dt>
+            <dd>Medium</dd>
+          </dl>
+        </article>
+
+        <article class="idea" id="idea-6">
+          <div class="idea-head">
+            <span class="rank">6</span>
+            <div>
+              <h3>6. Boss Rhythm Boards</h3>
+              <p>
+                Turn boss specials from isolated interval messages into a visible repeating rhythm
+                board, such as setup, pressure, special, recovery. The first version should focus on
+                readability and pattern mastery, not full interrupt mechanics. Later, status
+                counterplay could hook into the rhythm once the board itself is proven fun.
+              </p>
+            </div>
+          </div>
+          <dl>
+            <dt>Axis</dt>
+            <dd>Enemy archetypes, statuses, and boss patterns</dd>
+            <dt>Basis</dt>
+            <dd>
+              <code>direct:</code> Bosses already define named specials with interval, speed, and
+              effects in <code>src/data/enemies.ts</code>; <code>BattleScene</code> already shows
+              telegraph text on special rounds. Boss fights are mandatory, so their readability
+              matters more than optional normal fights.
+            </dd>
+            <dt>Rationale</dt>
+            <dd>
+              Bosses become tests of learning and preparation rather than larger HP pools with
+              occasional spikes. This is the cleanest place to make readable pattern combat feel
+              dramatic.
+            </dd>
+            <dt>Downsides</dt>
+            <dd>
+              The verifier correctly flagged interrupt/soften windows as weakly grounded. Keep those
+              as future variants, not part of the initial idea.
+            </dd>
+            <dt>Confidence</dt>
+            <dd>68%</dd>
+            <dt>Complexity</dt>
+            <dd>Medium</dd>
+          </dl>
+        </article>
+
+        <article class="idea" id="idea-7">
+          <div class="idea-head">
+            <span class="rank">7</span>
+            <div>
+              <h3>7. Prepared Answer Slot</h3>
+              <p>
+                Let the player hold or ready one card for an upcoming visible threat. This is
+                intentionally narrower than a full energy or draw/discard system: one prepared
+                answer, one clear future problem, and the existing one-action cadence stays intact.
+                It should only be explored after enemy intent is visible, because otherwise there is
+                no meaningful future state to prepare against.
+              </p>
+            </div>
+          </div>
+          <dl>
+            <dt>Axis</dt>
+            <dd>Player resource cadence and action economy</dd>
+            <dt>Basis</dt>
+            <dd>
+              <code>reasoned:</code> The current loop has one action per round and hand exhaustion;
+              visible intent creates a new need to bank an answer. <code>direct:</code> The existing
+              <code>combatHand</code> and used-card tracking provide card availability, but there is
+              no current retain slot, so this is the least grounded survivor.
+            </dd>
+            <dt>Rationale</dt>
+            <dd>
+              If the top idea succeeds, the next pressure point becomes access timing: the player
+              can see a threat but may not be able to line up the right card. This adds foresight
+              without a full tempo rewrite.
+            </dd>
+            <dt>Downsides</dt>
+            <dd>
+              Verifier marked this weak because no hold/react seam exists today. It should be
+              brainstormed only as a follow-up to visible intent, not as the first implementation.
+            </dd>
+            <dt>Confidence</dt>
+            <dd>58%</dd>
+            <dt>Complexity</dt>
+            <dd>Medium</dd>
+          </dl>
+        </article>
+      </section>
+
+      <section id="rejection-summary">
+        <p class="eyebrow">Critique</p>
+        <h2>Rejection Summary</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Idea</th>
+              <th>Reason Rejected</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1</td>
+              <td>Tempo Budget Per Turn</td>
+              <td>
+                Refuted by verifier: too much combat-system rewrite relative to the current
+                one-action round contract.
+              </td>
+            </tr>
+            <tr>
+              <td>2</td>
+              <td>Pocket Items</td>
+              <td>Refuted by verifier: breaks item-as-action economy without enough grounding.</td>
+            </tr>
+            <tr>
+              <td>3</td>
+              <td>Enemy Signature Card Capture as standalone</td>
+              <td>
+                Too close to existing enemy-card reward behavior; folded into Enemy Archetype
+                Rewards.
+              </td>
+            </tr>
+            <tr>
+              <td>4</td>
+              <td>Earned Second Beat / Mid-Cycle Refresh</td>
+              <td>
+                Interesting, but pushes against one-action cadence; keep as a possible brainstorm
+                variant after intent and cadence are clearer.
+              </td>
+            </tr>
+            <tr>
+              <td>5</td>
+              <td>Stance Cards</td>
+              <td>
+                Weak basis today; no existing stance-like seam in cards, statuses, relics, or
+                resolver.
+              </td>
+            </tr>
+            <tr>
+              <td>6</td>
+              <td>Full boss interrupt/soften/exploit mechanics</td>
+              <td>
+                Countdown and rhythm board are grounded, but interrupt windows need a later
+                brainstorm once status counterplay is chosen.
+              </td>
+            </tr>
+            <tr>
+              <td>7</td>
+              <td>Role-Gap Reward Offers as full role taxonomy</td>
+              <td>
+                Useful but invented too much structure for the current code; downgraded into Reward
+                Impact Preview plus Enemy Archetype Rewards.
+              </td>
+            </tr>
+            <tr>
+              <td>8</td>
+              <td>Defensive Cards That Auto-Catch Threats</td>
+              <td>Duplicate of Prepared Answer Slot with more automation and weaker grounding.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <footer class="composition-signal">
+        Composed 2026-06-28 by ce-ideate from the prompt about making Escape's card battle more
+        enjoyable in a Slay the Spire-like direction.
+      </footer>
+    </main>
+  </body>
+</html>

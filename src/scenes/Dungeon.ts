@@ -1281,7 +1281,7 @@ export class DungeonScene extends Phaser.Scene {
         .setOrigin(0.5),
     );
 
-    const visibleEntries = entries.slice(0, 8);
+    const visibleEntries = entries.slice(0, 7);
     for (const [index, entry] of visibleEntries.entries()) {
       const y = -h / 2 + 82 + index * 38;
       const badge = entry.inHand ? 'HAND' : 'RES ';

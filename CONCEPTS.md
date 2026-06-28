@@ -17,6 +17,20 @@ threats can be escaped without fight rewards; boss threats remain mandatory.
 The turn-based combat phase that resolves enemy fights through simultaneous
 card choices after a dungeon encounter commits the player to fight.
 
+### Card Battle Planning Board
+
+A Card Battle readability layer that surfaces battle-side enemy intent, speed
+order, and status consequences before the player chooses a card. It belongs
+after combat starts; Room Threat System remains the dungeon-side pre-battle
+intent layer.
+
+### Reward Impact Preview
+
+A player-facing label that explains whether taking, upgrading, or removing a
+card changes the next combat hand. It describes outcomes such as entering hand,
+replacing a role, improving an in-hand card, or staying collection-only without
+showing raw hand-selection scores.
+
 ## Progression Loop
 
 ### Run

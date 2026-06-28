@@ -10,11 +10,7 @@ import { compactRewardImpactLabel, createRewardImpactText } from '../gfx/rewardI
 import { BattlePlanPhase, buildBattlePlanState } from '../game/battlePlan';
 import { BattleLayout, getBattleLayout } from '../game/battleLayout';
 import { buildBattleRoundHistory } from '../game/battleLog';
-import {
-  ActiveStatusEffect,
-  CombatAction,
-  resolveRound,
-} from '../game/combat';
+import { ActiveStatusEffect, CombatAction, resolveRound } from '../game/combat';
 import { EnemyIntentPlan, planEnemyIntent } from '../game/enemyIntent';
 import { GameRng } from '../game/rng';
 import { previewRewardImpact } from '../game/rewardImpact';
@@ -167,14 +163,19 @@ export class BattleScene extends Phaser.Scene {
       fontStyle: 'bold',
       color: '#f1c40f',
     });
-    this.historyText = this.add.text(history.x + 12, history.y + 34, 'Battle history appears here.', {
-      fontFamily: 'monospace',
-      fontSize: '10px',
-      color: '#d8d2e4',
-      fixedWidth: history.w - 24,
-      lineSpacing: 3,
-      wordWrap: { width: history.w - 24, useAdvancedWrap: true },
-    });
+    this.historyText = this.add.text(
+      history.x + 12,
+      history.y + 34,
+      'Battle history appears here.',
+      {
+        fontFamily: 'monospace',
+        fontSize: '10px',
+        color: '#d8d2e4',
+        fixedWidth: history.w - 24,
+        lineSpacing: 3,
+        wordWrap: { width: history.w - 24, useAdvancedWrap: true },
+      },
+    );
 
     this.logText = this.add
       .text(cx, 352, 'Choose a card, item, or punch. [C] deck', {
@@ -440,11 +441,7 @@ export class BattleScene extends Phaser.Scene {
       },
       resolvedLog,
     });
-    this.planningBoard = createBattlePlanningBoard(
-      this,
-      this.battleLayout.planningBoard,
-      state,
-    );
+    this.planningBoard = createBattlePlanningBoard(this, this.battleLayout.planningBoard, state);
   }
 
   update(): void {

@@ -120,7 +120,10 @@ function pickFromPreference(
   const firstPreference =
     ordered.length === 1 ? ordered[0] : ordered[Math.floor(rng.frac() * ordered.length)];
 
-  for (const preference of [firstPreference, ...ordered.filter((entry) => entry !== firstPreference)]) {
+  for (const preference of [
+    firstPreference,
+    ...ordered.filter((entry) => entry !== firstPreference),
+  ]) {
     const matches = pool.filter((card) => cardMatchesPreference(card, preference));
     if (matches.length > 0) return rng.pick(matches);
   }

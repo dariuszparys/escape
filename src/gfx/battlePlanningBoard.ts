@@ -34,10 +34,7 @@ function compactEntryText(entry: BattleStatusLaneEntry): string {
 
 function laneText(lane: BattleStatusLane): string {
   if (lane.entries.length === 0) return 'Clear';
-  return lane.entries
-    .slice(0, 3)
-    .map(compactEntryText)
-    .join('\n');
+  return lane.entries.slice(0, 3).map(compactEntryText).join('\n');
 }
 
 function timelineText(state: BattlePlanState): string {

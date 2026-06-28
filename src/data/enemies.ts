@@ -87,7 +87,11 @@ export const ENEMIES: EnemyDef[] = [
     dungeonThreatProfile: 'alert_chase',
     combatScript: {
       archetype: 'tempo_pressure',
-      pattern: [['fast_damage', 'damage'], ['damage', 'fast_damage'], ['damage', 'fast_damage']],
+      pattern: [
+        ['fast_damage', 'damage'],
+        ['damage', 'fast_damage'],
+        ['damage', 'fast_damage'],
+      ],
     },
   },
   {
