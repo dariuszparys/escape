@@ -4,13 +4,14 @@ import { Card, cardEffectAmount } from '../data/cards';
 import { EnemyInstance } from '../data/enemies';
 import { InventoryItem } from '../data/items';
 import { CARD_H, CARD_W, makeCardBack, makeCardView } from '../gfx/cardview';
+import { createBattlePlanningBoard } from '../gfx/battlePlanningBoard';
 import { createDeckPanel } from '../gfx/deckPanel';
-import { buildBattleRoundHistory, orderedBattleActions } from '../game/battleLog';
+import { BattlePlanPhase, buildBattlePlanState } from '../game/battlePlan';
+import { BattleLayout, getBattleLayout } from '../game/battleLayout';
+import { buildBattleRoundHistory } from '../game/battleLog';
 import {
   ActiveStatusEffect,
   CombatAction,
-  combatActionLabel,
-  combatActionSpeed,
   resolveRound,
 } from '../game/combat';
 import { EnemyIntentPlan, planEnemyIntent } from '../game/enemyIntent';
@@ -46,12 +47,13 @@ export class BattleScene extends Phaser.Scene {
   private playerHpText!: Phaser.GameObjects.Text;
   private logText!: Phaser.GameObjects.Text;
   private historyText!: Phaser.GameObjects.Text;
-  private orderText!: Phaser.GameObjects.Text;
   private telegraphText!: Phaser.GameObjects.Text;
   private armorText!: Phaser.GameObjects.Text;
   private statusText!: Phaser.GameObjects.Text;
   private relicText!: Phaser.GameObjects.Text;
   private historyLines: string[] = [];
+  private battleLayout: BattleLayout = getBattleLayout();
+  private planningBoard: Phaser.GameObjects.Container | null = null;
   private deckOverlay: Phaser.GameObjects.Container | null = null;
   private toggleDeckKey!: Phaser.Input.Keyboard.Key;
 
@@ -73,6 +75,8 @@ export class BattleScene extends Phaser.Scene {
     this.itemButtons = [];
     this.enemyCardBacks = [];
     this.historyLines = [];
+    this.battleLayout = getBattleLayout();
+    this.planningBoard = null;
     this.deckOverlay = null;
   }
 
@@ -149,50 +153,26 @@ export class BattleScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
+    const history = this.battleLayout.historyPanel;
     const historyBg = this.add.graphics();
     historyBg.fillStyle(0x16121e, 0.82);
-    historyBg.fillRoundedRect(24, 112, 250, 220, 6);
+    historyBg.fillRoundedRect(history.x, history.y, history.w, history.h, 6);
     historyBg.lineStyle(1, 0x3a3544, 1);
-    historyBg.strokeRoundedRect(24, 112, 250, 220, 6);
-    this.add.text(36, 122, 'Battle log', {
+    historyBg.strokeRoundedRect(history.x, history.y, history.w, history.h, 6);
+    this.add.text(history.x + 12, history.y + 10, 'Battle log', {
       fontFamily: 'monospace',
       fontSize: '14px',
       fontStyle: 'bold',
       color: '#f1c40f',
     });
-    this.historyText = this.add.text(36, 146, 'Battle history appears here.', {
+    this.historyText = this.add.text(history.x + 12, history.y + 34, 'Battle history appears here.', {
       fontFamily: 'monospace',
       fontSize: '10px',
       color: '#d8d2e4',
-      fixedWidth: 226,
+      fixedWidth: history.w - 24,
       lineSpacing: 3,
-      wordWrap: { width: 226, useAdvancedWrap: true },
+      wordWrap: { width: history.w - 24, useAdvancedWrap: true },
     });
-
-    const orderBg = this.add.graphics();
-    orderBg.fillStyle(0x16121e, 0.82);
-    orderBg.fillRoundedRect(520, 124, 168, 94, 6);
-    orderBg.lineStyle(1, 0x3a3544, 1);
-    orderBg.strokeRoundedRect(520, 124, 168, 94, 6);
-    this.add
-      .text(604, 136, 'Turn order', {
-        fontFamily: 'monospace',
-        fontSize: '14px',
-        fontStyle: 'bold',
-        color: '#f1c40f',
-      })
-      .setOrigin(0.5, 0);
-    this.orderText = this.add
-      .text(604, 162, 'Order appears here.', {
-        fontFamily: 'monospace',
-        fontSize: '11px',
-        color: '#d8d2e4',
-        fixedWidth: 140,
-        align: 'center',
-        lineSpacing: 4,
-        wordWrap: { width: 140, useAdvancedWrap: true },
-      })
-      .setOrigin(0.5, 0);
 
     this.logText = this.add
       .text(cx, 352, 'Choose a card, item, or punch. [C] deck', {
@@ -224,6 +204,12 @@ export class BattleScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true })
+      .on('pointerover', () => {
+        if (!this.busy && !this.deckOverlay) {
+          this.renderPlanningBoard({ actor: 'player', kind: 'punch' });
+        }
+      })
+      .on('pointerout', () => !this.busy && !this.deckOverlay && this.renderPlanningBoard())
       .on('pointerdown', () => {
         if (!this.busy && !this.deckOverlay) this.playRound({ kind: 'punch' });
       });
@@ -233,6 +219,7 @@ export class BattleScene extends Phaser.Scene {
     this.renderHand();
     this.renderItems();
     this.commitEnemyIntent();
+    this.renderPlanningBoard();
     this.updateTelegraph();
     this.updateStatusText();
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.closeDeckOverlay());
@@ -304,8 +291,16 @@ export class BattleScene extends Phaser.Scene {
         view.setAlpha(0.3);
       } else {
         view.setInteractive({ useHandCursor: true });
-        view.on('pointerover', () => !this.busy && !this.deckOverlay && view.setY(y - 16));
-        view.on('pointerout', () => view.setY(y));
+        view.on('pointerover', () => {
+          if (!this.busy && !this.deckOverlay) {
+            view.setY(y - 16);
+            this.renderPlanningBoard({ actor: 'player', kind: 'card', card });
+          }
+        });
+        view.on('pointerout', () => {
+          view.setY(y);
+          if (!this.busy && !this.deckOverlay) this.renderPlanningBoard();
+        });
         view.on('pointerdown', () => {
           if (!this.busy && !this.deckOverlay) this.playRound({ kind: 'card', card });
         });
@@ -331,6 +326,12 @@ export class BattleScene extends Phaser.Scene {
         })
         .setOrigin(0.5)
         .setInteractive({ useHandCursor: true })
+        .on('pointerover', () => {
+          if (!this.busy && !this.deckOverlay) {
+            this.renderPlanningBoard({ actor: 'player', kind: 'item', item });
+          }
+        })
+        .on('pointerout', () => !this.busy && !this.deckOverlay && this.renderPlanningBoard())
         .on('pointerdown', () => {
           if (!this.busy && !this.deckOverlay) this.playRound({ kind: 'item', item });
         });
@@ -370,91 +371,11 @@ export class BattleScene extends Phaser.Scene {
     this.historyText.setText(this.historyLines.join('\n'));
   }
 
-  private updateOrderText(playerAction: CombatAction, enemyAction: CombatAction): void {
-    const order = orderedBattleActions(playerAction, enemyAction);
-    this.orderText.setText(
-      [
-        `${order[0].actor === 'player' ? '1. You' : `1. ${this.enemy.def.name}`}`,
-        `${order[0].label} [${order[0].speed}]`,
-        '',
-        `${order[1].actor === 'player' ? '2. You' : `2. ${this.enemy.def.name}`}`,
-        `${order[1].label} [${order[1].speed}]`,
-      ].join('\n'),
-    );
-  }
-
-  private createActionPreview(
-    action: CombatAction,
-    x: number,
-    y: number,
-    rankLabel: string,
-  ): Phaser.GameObjects.Container {
-    if (action.kind === 'card') {
-      const view = makeCardView(this, action.card, x, y, 0.78);
-      const label = this.add
-        .text(x, y - 76, `${rankLabel} • spd ${action.card.speed}`, {
-          fontFamily: 'monospace',
-          fontSize: '11px',
-          fontStyle: 'bold',
-          color: '#f1c40f',
-          backgroundColor: '#16121e',
-          padding: { x: 6, y: 2 },
-        })
-        .setOrigin(0.5);
-      return this.add.container(0, 0, [view, label]);
-    }
-
-    const panel = this.add.graphics();
-    panel.fillStyle(0x1c1826, 1);
-    panel.fillRoundedRect(-68, -40, 136, 80, 8);
-    panel.lineStyle(2, 0xcab98a, 1);
-    panel.strokeRoundedRect(-68, -40, 136, 80, 8);
-    const rank = this.add
-      .text(0, -24, `${rankLabel} • spd ${combatActionSpeed(action)}`, {
-        fontFamily: 'monospace',
-        fontSize: '10px',
-        color: '#f1c40f',
-      })
-      .setOrigin(0.5);
-    const title = this.add
-      .text(0, -4, combatActionLabel(action), {
-        fontFamily: 'monospace',
-        fontSize: '14px',
-        fontStyle: 'bold',
-        color: '#f5edd8',
-        align: 'center',
-      })
-      .setOrigin(0.5);
-    const desc = this.add
-      .text(
-        0,
-        18,
-        action.kind === 'item'
-          ? action.item.description
-          : action.kind === 'punch'
-            ? `${PUNCH_DAMAGE} damage`
-            : action.kind === 'special'
-              ? 'Boss special'
-              : '',
-        {
-          fontFamily: 'monospace',
-          fontSize: '10px',
-          color: '#b8b0c8',
-          align: 'center',
-          wordWrap: { width: 116, useAdvancedWrap: true },
-        },
-      )
-      .setOrigin(0.5);
-    return this.add.container(x, y, [panel, rank, title, desc]);
-  }
-
   private updateTelegraph(): void {
     const intent = this.enemyIntent;
+    this.telegraphText.setText('');
     if (intent?.summary.telegraph) {
-      this.telegraphText.setText(`${intent.summary.telegraph}\n${intent.summary.title}`);
       playSfx(this, 'boss_telegraph');
-    } else {
-      this.telegraphText.setText('');
     }
   }
 
@@ -488,6 +409,42 @@ export class BattleScene extends Phaser.Scene {
     return this.enemyIntent ?? this.commitEnemyIntent();
   }
 
+  private renderPlanningBoard(
+    playerAction?: CombatAction,
+    phase: BattlePlanPhase = 'planning',
+    resolvedLog: readonly string[] = [],
+    intent: EnemyIntentPlan | null = this.enemyIntent,
+  ): void {
+    this.planningBoard?.destroy();
+    this.planningBoard = null;
+    if (!intent) return;
+
+    const run = getRun();
+    const state = buildBattlePlanState({
+      phase,
+      enemyName: this.enemy.def.name,
+      enemyIntent: intent.summary,
+      enemyAction: intent.action,
+      playerAction,
+      player: {
+        label: 'You',
+        armor: run.armor,
+        statuses: this.playerStatuses,
+      },
+      enemy: {
+        label: this.enemy.def.name,
+        armor: this.enemy.armor,
+        statuses: this.enemyStatuses,
+      },
+      resolvedLog,
+    });
+    this.planningBoard = createBattlePlanningBoard(
+      this,
+      this.battleLayout.planningBoard,
+      state,
+    );
+  }
+
   update(): void {
     if (Phaser.Input.Keyboard.JustDown(this.toggleDeckKey)) {
       this.toggleDeckOverlay();
@@ -498,7 +455,6 @@ export class BattleScene extends Phaser.Scene {
     this.busy = true;
     this.closeDeckOverlay();
     const run = getRun();
-    const cx = GAME_W / 2;
     const playerAction = this.toCombatAction(action);
 
     const isBlockAction =
@@ -527,22 +483,7 @@ export class BattleScene extends Phaser.Scene {
     const enemyTurn = this.currentEnemyIntent();
     this.enemyUsed = new Set(enemyTurn.usedCardUids);
     this.enemyIntent = null;
-    const order = orderedBattleActions(playerAction, enemyTurn.action);
-    const shown: Phaser.GameObjects.GameObject[] = [
-      this.createActionPreview(
-        playerAction,
-        cx - 108,
-        218,
-        `${order.findIndex((entry) => entry.actor === 'player') + 1}${order.findIndex((entry) => entry.actor === 'player') === 0 ? 'st' : 'nd'}`,
-      ),
-      this.createActionPreview(
-        enemyTurn.action,
-        cx + 108,
-        218,
-        `${order.findIndex((entry) => entry.actor === 'enemy') + 1}${order.findIndex((entry) => entry.actor === 'enemy') === 0 ? 'st' : 'nd'}`,
-      ),
-    ];
-    this.updateOrderText(playerAction, enemyTurn.action);
+    this.renderPlanningBoard(playerAction, 'planning', [], enemyTurn);
     this.setPrompt('Resolving round...');
 
     const resolved = resolveRound({
@@ -579,6 +520,7 @@ export class BattleScene extends Phaser.Scene {
     this.renderEnemyCards();
     this.renderItems();
     this.telegraphText.setText('');
+    this.renderPlanningBoard(playerAction, 'resolved', resolved.log, enemyTurn);
     this.appendHistory(
       buildBattleRoundHistory({
         round: this.round,
@@ -635,7 +577,6 @@ export class BattleScene extends Phaser.Scene {
     });
 
     this.time.delayedCall(2300, () => {
-      for (const view of shown) view.destroy();
       if (this.enemy.hp <= 0) {
         this.victory();
         return;
@@ -650,6 +591,7 @@ export class BattleScene extends Phaser.Scene {
       this.renderEnemyCards();
       this.renderItems();
       this.commitEnemyIntent();
+      this.renderPlanningBoard();
       this.updateTelegraph();
       this.updateStatusText();
       this.setPrompt('Choose a card, item, or punch. [C] deck');
