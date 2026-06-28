@@ -76,7 +76,7 @@ export function combatActionLabel(action: CombatAction): string {
   return 'nothing';
 }
 
-function actionEffects(action: CombatAction): CardEffect[] {
+export function combatActionEffects(action: CombatAction): CardEffect[] {
   if (action.kind === 'card') return action.card.effects;
   if (action.kind === 'punch') return [{ kind: 'damage', amount: PUNCH_DAMAGE }];
   if (action.kind === 'special') return action.effects;
@@ -145,7 +145,7 @@ function applyAction(
     return 'skip_target';
   }
 
-  for (const effect of actionEffects(action)) {
+  for (const effect of combatActionEffects(action)) {
     if (effect.kind === 'block') {
       actor.roundBlock += effect.amount;
       log.push(`${actor.name} gains ${effect.amount} block`);
