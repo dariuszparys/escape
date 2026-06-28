@@ -1,5 +1,13 @@
 import { describe, expect, test } from 'vitest';
-import { getEnemyTierForDepth, spawnBoss, spawnEnemy } from './enemies';
+import { ROOM_THREAT_PROFILES } from '../dungeon/roomThreat';
+import {
+  BOSSES,
+  ENEMIES,
+  getEnemyThreatProfile,
+  getEnemyTierForDepth,
+  spawnBoss,
+  spawnEnemy,
+} from './enemies';
 import { SequenceRng } from '../game/test-rng';
 
 describe('enemy generation', () => {
@@ -20,5 +28,20 @@ describe('enemy generation', () => {
     expect(boss.cards).toHaveLength(5);
     expect(boss.def.boss).toBe(true);
     expect(boss.def.special?.interval).toBeGreaterThanOrEqual(2);
+  });
+
+  test('normal enemies resolve to known non-boss dungeon threat profiles', () => {
+    for (const enemy of ENEMIES) {
+      const profile = getEnemyThreatProfile(enemy);
+
+      expect(profile).not.toBe('boss_pressure');
+      expect(ROOM_THREAT_PROFILES[profile]).toBeDefined();
+    }
+  });
+
+  test('bosses resolve to boss pressure dungeon threat profiles', () => {
+    for (const boss of BOSSES) {
+      expect(getEnemyThreatProfile(boss)).toBe('boss_pressure');
+    }
   });
 });

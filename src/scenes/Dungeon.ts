@@ -13,10 +13,17 @@ import {
   VISION_RADIUS,
 } from '../config';
 import { Card, makeCard, CARD_DEFS } from '../data/cards';
-import { EnemyInstance, spawnBoss, spawnEnemy } from '../data/enemies';
+import { EnemyInstance, getEnemyThreatProfile, spawnBoss, spawnEnemy } from '../data/enemies';
 import { InventoryItem, makeItem, randomItemIdForDepth } from '../data/items';
 import { STARTER_KITS } from '../data/starterKits';
 import { makeStartRoom, makeNextRoom, RoomData, type RoomEvent } from '../dungeon/rooms';
+import {
+  createRoomThreatState,
+  evaluateRoomThreatEscape,
+  updateRoomThreatState,
+  type RoomThreatIntent,
+  type RoomThreatState,
+} from '../dungeon/roomThreat';
 import { makeCardView } from '../gfx/cardview';
 import { createDeckPanel } from '../gfx/deckPanel';
 import { PhaserGameRng } from '../game/rng';
@@ -66,6 +73,13 @@ interface CardPickup {
   taken: boolean;
 }
 
+interface RoomThreatActor {
+  state: RoomThreatState;
+  sprite: Phaser.GameObjects.Image;
+  marker: Phaser.GameObjects.Text;
+  contact: Phaser.GameObjects.Arc;
+}
+
 interface BuiltRoom {
   objs: Phaser.GameObjects.GameObject[];
   walls: Phaser.Physics.Arcade.StaticGroup;
@@ -76,7 +90,7 @@ interface BuiltRoom {
   restAt: { x: number; y: number; img: Phaser.GameObjects.Image; opened: boolean } | null;
   cardPicks: CardPickup[];
   enemy: EnemyInstance | null;
-  enemySprite: Phaser.GameObjects.Image | null;
+  threat: RoomThreatActor | null;
 }
 
 interface NextRoomOption {
@@ -363,7 +377,7 @@ export class DungeonScene extends Phaser.Scene {
       restAt: null,
       cardPicks: [],
       enemy: null,
-      enemySprite: null,
+      threat: null,
     };
 
     const center = at(7, 5);
@@ -456,43 +470,92 @@ export class DungeonScene extends Phaser.Scene {
       }
       case 'encounter': {
         built.enemy = spawnEnemy(this.gameRng, room.depth, Math.max(getRun().combatHand.length, 1));
-        const img = this.add
-          .image(center.x, center.y, built.enemy.def.texture)
-          .setScale(4)
-          .setDepth(5);
-        this.tweens.add({
-          targets: img,
-          y: center.y - 6,
-          duration: 600,
-          yoyo: true,
-          repeat: -1,
-          ease: 'Sine.easeInOut',
-        });
-        objs.push(img);
-        built.enemySprite = img;
+        this.createThreatActor(built, room, origin, built.enemy);
         break;
       }
       case 'boss': {
         built.enemy = spawnBoss(this.gameRng);
-        const img = this.add
-          .image(center.x, center.y - 10, built.enemy.def.texture)
-          .setScale(4.5)
-          .setDepth(5);
-        this.tweens.add({
-          targets: img,
-          y: center.y - 18,
-          duration: 800,
-          yoyo: true,
-          repeat: -1,
-          ease: 'Sine.easeInOut',
-        });
-        objs.push(img);
-        built.enemySprite = img;
+        this.createThreatActor(built, room, origin, built.enemy);
         break;
       }
     }
 
     return built;
+  }
+
+  private createThreatActor(
+    built: BuiltRoom,
+    room: RoomData,
+    origin: { x: number; y: number },
+    enemy: EnemyInstance,
+  ): void {
+    const kind = room.event === 'boss' ? 'boss' : 'normal';
+    const state = createRoomThreatState(this.gameRng, {
+      kind,
+      profileId: getEnemyThreatProfile(enemy.def),
+      entryDoor: room.blockedDoor,
+    });
+    const x = origin.x + state.position.x;
+    const y = origin.y + state.position.y;
+    const contact = this.add
+      .circle(x, y, state.contactRadius, 0xff5544, 0.06)
+      .setStrokeStyle(2, 0xff5544, 0.22)
+      .setDepth(4);
+    const sprite = this.add
+      .image(x, y, enemy.def.texture)
+      .setScale(kind === 'boss' ? 4.5 : 4)
+      .setDepth(5);
+    const marker = this.add
+      .text(x, y - 58, '', {
+        fontFamily: 'monospace',
+        fontSize: kind === 'boss' ? '34px' : '30px',
+        fontStyle: 'bold',
+        stroke: '#16121e',
+        strokeThickness: 5,
+      })
+      .setOrigin(0.5)
+      .setDepth(50);
+
+    built.objs.push(contact, sprite, marker);
+    built.threat = { state, sprite, marker, contact };
+    this.syncThreatActor(built.threat, true);
+  }
+
+  private threatMarker(intent: RoomThreatIntent): { text: string; color: string; alpha: number } {
+    switch (intent) {
+      case 'ignore':
+        return { text: 'o', color: '#b8b0c8', alpha: 0.78 };
+      case 'alert':
+        return { text: '?', color: '#f1c40f', alpha: 1 };
+      case 'chase':
+        return { text: '!', color: '#ff5544', alpha: 1 };
+    }
+  }
+
+  private syncThreatActor(actor: RoomThreatActor, graceActive: boolean): void {
+    const x = this.origin.x + actor.state.position.x;
+    const y = this.origin.y + actor.state.position.y;
+    actor.sprite.setPosition(x, y);
+    actor.contact.setPosition(x, y);
+    actor.contact.setRadius(actor.state.contactRadius);
+    actor.marker.setPosition(x, y - (actor.state.kind === 'boss' ? 68 : 58));
+
+    const marker = this.threatMarker(actor.state.intent);
+    actor.marker.setText(marker.text).setColor(marker.color).setAlpha(marker.alpha);
+    actor.contact
+      .setFillStyle(
+        actor.state.intent === 'chase'
+          ? 0xff5544
+          : actor.state.intent === 'alert'
+            ? 0xf1c40f
+            : 0x9aa0b8,
+        graceActive ? 0.04 : actor.state.intent === 'chase' ? 0.14 : 0.08,
+      )
+      .setStrokeStyle(
+        actor.state.intent === 'chase' ? 3 : 2,
+        actor.state.intent === 'chase' ? 0xff5544 : 0xf1c40f,
+        graceActive ? 0.16 : 0.36,
+      );
   }
 
   private attachWalls(): void {
@@ -724,25 +787,9 @@ export class DungeonScene extends Phaser.Scene {
   private onRoomEntered(): void {
     const { room, built } = this;
     playSfx(this, 'step');
-    if ((room.event === 'encounter' || room.event === 'boss') && !room.cleared && built.enemy) {
-      // A fight starts the moment you step in.
-      const s = built.enemySprite!;
-      const mark = this.add
-        .text(s.x, s.y - 60, '!', {
-          fontFamily: 'monospace',
-          fontSize: '40px',
-          fontStyle: 'bold',
-          color: '#ff5544',
-          stroke: '#16121e',
-          strokeThickness: 6,
-        })
-        .setOrigin(0.5)
-        .setDepth(50);
-      this.built.objs.push(mark);
-      this.time.delayedCall(450, () => {
-        mark.destroy();
-        this.startBattle();
-      });
+    if ((room.event === 'encounter' || room.event === 'boss') && !room.cleared && built.threat) {
+      this.syncThreatActor(built.threat, true);
+      this.tryRevealScoutOptions();
     } else if (room.event === 'trap') {
       this.enableDarknessOverlay();
       this.floatText(this.player.x, this.player.y - 50, 'Watch your step!', '#ff9944');
@@ -755,6 +802,7 @@ export class DungeonScene extends Phaser.Scene {
   private startBattle(): void {
     if (!this.built.enemy) return;
     this.closeDeckOverlay();
+    this.closeItemSwapPrompt();
     this.battleActive = true;
     this.player.setVelocity(0, 0);
     this.scene.launch('Battle', { enemy: this.built.enemy, rng: this.gameRng });
@@ -765,17 +813,21 @@ export class DungeonScene extends Phaser.Scene {
     this.battleActive = false;
     if (!won) return; // Battle scene already routed to the game-over screen.
     this.room.cleared = true;
-    const s = this.built.enemySprite;
-    if (s) {
+    const threat = this.built.threat;
+    if (threat) {
       this.tweens.add({
-        targets: s,
+        targets: [threat.sprite, threat.marker, threat.contact],
         alpha: 0,
-        scale: s.scale * 0.3,
         duration: 500,
         ease: 'Cubic.easeIn',
-        onComplete: () => s.destroy(),
+        onComplete: () => {
+          threat.sprite.destroy();
+          threat.marker.destroy();
+          threat.contact.destroy();
+        },
       });
-      this.built.enemySprite = null;
+      this.built.threat = null;
+      this.built.enemy = null;
     }
     if (this.room.event === 'boss') {
       getRun().bossDefeated = true;
@@ -791,9 +843,28 @@ export class DungeonScene extends Phaser.Scene {
     this.hud();
   }
 
+  private updateRoomThreat(delta: number): boolean {
+    const threat = this.built.threat;
+    if (!threat || this.room.cleared || this.battleActive) return false;
+
+    const result = updateRoomThreatState(threat.state, {
+      player: { x: this.player.x - this.origin.x, y: this.player.y - this.origin.y },
+      deltaMs: delta,
+    });
+    threat.state = result.state;
+    this.syncThreatActor(threat, result.graceActive);
+
+    if (!result.contactReady) return false;
+    this.floatText(threat.sprite.x, threat.sprite.y - 58, '!', '#ff5544');
+    this.cameras.main.shake(120, 0.006);
+    playSfx(this, 'hit_player');
+    this.startBattle();
+    return true;
+  }
+
   // ------------------------------------------------------------ update loop
 
-  update(time: number): void {
+  update(time: number, delta = 16): void {
     if (this.transitioning || this.battleActive) return;
     if (this.visionGraphics) {
       this.visionGraphics.clear();
@@ -874,9 +945,25 @@ export class DungeonScene extends Phaser.Scene {
     const px = this.player.x;
     const py = this.player.y;
 
+    if (this.updateRoomThreat(delta)) return;
+
     // doors
     for (const door of this.built.doors) {
       if (!door.rect.contains(px, py)) continue;
+      const threat = this.built.threat;
+      if (threat && !this.room.cleared) {
+        const escape = evaluateRoomThreatEscape(threat.state.kind, this.room.cleared);
+        if (!escape.allowed) {
+          if (time > this.lastHintAt + 900) {
+            this.lastHintAt = time;
+            this.floatText(px, py - 50, 'Defeat the boss!', '#ff9944');
+          }
+          const c = this.cellXY(7, 5);
+          const away = new Phaser.Math.Vector2(c.x - px, c.y - py).normalize().scale(60);
+          this.player.setPosition(px + away.x * 0.4, py + away.y * 0.4);
+          continue;
+        }
+      }
       if (this.room.event === 'start' && run.startingCardsTaken < run.startingCardPicks) {
         if (time > this.lastHintAt + 900) {
           this.lastHintAt = time;

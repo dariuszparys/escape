@@ -36,9 +36,10 @@ baseline validation before submitting changes. For gameplay changes, also run
 `npm run dev` and manually smoke test the affected loop, such as dungeon movement,
 encounters, card selection, treasure, potions, traps, or boss completion.
 
-Use `docs/solutions/` for repo-local writeups of solved problems and reusable fixes
-when working in documented areas. Shared player-facing vocabulary lives in
-`CONCEPTS.md`.
+Use `docs/solutions/` for repo-local writeups of solved problems and reusable fixes;
+entries are organized by category with YAML frontmatter such as `module`, `tags`,
+and `problem_type`, and are relevant when implementing or debugging in documented
+areas. Shared player-facing vocabulary lives in `CONCEPTS.md`.
 
 ## Commit & Pull Request Guidelines
 

@@ -20,19 +20,19 @@ npm run dev      # http://localhost:5173
   runs without adding raw stat boosts.
 - Every later room has four doors — the one you came through is barred.
   Rooms are randomized: **encounters, treasure chests, health potions,
-  spike traps**, or nothing.
-- Entering an encounter room starts the fight immediately. Combat is
-  simultaneous rounds: you play a card (or drink a potion), the enemy
-  plays one. Attacks are reduced by the opponent's block and your
+  paid rest rooms, or spike traps**.
+- Encounter rooms place one visible monster in the room. Touching the monster
+  starts simultaneous card combat: you play a card (or drink a potion), the
+  enemy plays one. Attacks are reduced by the opponent's block and your
   collected armor. Cards refresh once a whole hand has been used.
-- The enemy always holds **one card more than you** (capped at 6).
-  Win a fight and you may steal one enemy card — hand limit is **5**.
+- Normal encounters can be escaped through an open door before fighting, but
+  skipped fights give no enemy-card or Gold reward. Win a fight and you may
+  steal one enemy card — hand limit is **5**.
 - **Gold** is earned and spent inside the current run, including paid rest-room
   deck upgrades or removals. **Embers** persist after the run and unlock
   long-term campfire progression.
-- Room 10 holds one of three bosses (Minotaur, Lich, Demon King), each
-  with six cards **plus** a special weapon attack telegraphed every
-  third round. Kill it, step into the hatch, and escape.
+- Room 10 holds one of three bosses. Boss fights are mandatory: no escape hatch
+  opens until the boss is defeated.
 
 ## Controls
 

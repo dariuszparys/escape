@@ -3,6 +3,20 @@
 Shared domain vocabulary for Escape. Keep entries focused on player-facing
 concepts and durable implementation boundaries.
 
+## Dungeon Loop
+
+### Room Threat System
+
+A dungeon-room behavior layer that manages visible pre-battle threats. In the
+first version it owns one active monster's room intent, movement, contact
+trigger, and cleanup before handing off to Card Battle. Normal encounter
+threats can be escaped without fight rewards; boss threats remain mandatory.
+
+### Card Battle
+
+The turn-based combat phase that resolves enemy fights through simultaneous
+card choices after a dungeon encounter commits the player to fight.
+
 ## Progression Loop
 
 ### Run

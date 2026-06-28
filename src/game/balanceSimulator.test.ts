@@ -1,7 +1,11 @@
 import { describe, expect, test } from 'vitest';
 import { CARD_DEFS, makeCard } from '../data/cards';
 import { RunState } from '../state';
-import { applySimulatedRest, simulateScenarioSummary } from './balanceSimulator';
+import {
+  BALANCE_ENCOUNTER_POLICY,
+  applySimulatedRest,
+  simulateScenarioSummary,
+} from './balanceSimulator';
 
 function makeDeckCard(id: string) {
   const def = CARD_DEFS.find((card) => card.id === id);
@@ -45,6 +49,13 @@ describe('balance simulator', () => {
     expect(summary.winRate).toBeLessThanOrEqual(0.15);
     expect(summary.bossReachRate).toBeGreaterThanOrEqual(0.28);
     expect(summary.bossKillGivenReach).toBeGreaterThanOrEqual(0.4);
+  });
+
+  test('encounter simulation remains the fight-taken balance baseline', () => {
+    const summary = simulateScenarioSummary({}, 80);
+
+    expect(BALANCE_ENCOUNTER_POLICY).toBe('fight-taken-baseline');
+    expect(Object.keys(summary.byEncounter).some((key) => key !== '0')).toBe(true);
   });
 
   test('starter-card variety alone does not erase the challenge band', () => {

@@ -40,6 +40,8 @@ export interface BalanceSimulationSummary {
   byEncounter: Record<string, EncounterBucketSummary>;
 }
 
+export const BALANCE_ENCOUNTER_POLICY = 'fight-taken-baseline';
+
 interface SimRunResult {
   victory: boolean;
   reachedBoss: boolean;

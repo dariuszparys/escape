@@ -1,6 +1,7 @@
 import { Card, CardEffect, randomCard, randomCardOfTier, randomOffensiveCard } from './cards';
 import { GameRng } from '../game/rng';
 import type { ActiveStatusEffect } from '../game/combat';
+import type { RoomThreatProfileId } from '../dungeon/roomThreat';
 
 export type EnemyTier = 'weak' | 'medium' | 'strong';
 
@@ -19,6 +20,7 @@ export interface EnemyDef {
   baseHp: number;
   tier?: EnemyTier;
   boss: boolean;
+  dungeonThreatProfile: RoomThreatProfileId;
   special?: BossSpecial;
 }
 
@@ -32,11 +34,51 @@ export interface EnemyInstance {
 }
 
 export const ENEMIES: EnemyDef[] = [
-  { id: 'rat', name: 'Rat', texture: 'bat', baseHp: 8, tier: 'weak', boss: false },
-  { id: 'slime', name: 'Slime', texture: 'slime', baseHp: 10, tier: 'weak', boss: false },
-  { id: 'skeleton', name: 'Skeleton', texture: 'skeleton', baseHp: 12, tier: 'weak', boss: false },
-  { id: 'bandit', name: 'Bandit', texture: 'skeleton', baseHp: 16, tier: 'medium', boss: false },
-  { id: 'cultist', name: 'Cultist', texture: 'bat', baseHp: 17, tier: 'medium', boss: false },
+  {
+    id: 'rat',
+    name: 'Rat',
+    texture: 'bat',
+    baseHp: 8,
+    tier: 'weak',
+    boss: false,
+    dungeonThreatProfile: 'ignore',
+  },
+  {
+    id: 'slime',
+    name: 'Slime',
+    texture: 'slime',
+    baseHp: 10,
+    tier: 'weak',
+    boss: false,
+    dungeonThreatProfile: 'patrol',
+  },
+  {
+    id: 'skeleton',
+    name: 'Skeleton',
+    texture: 'skeleton',
+    baseHp: 12,
+    tier: 'weak',
+    boss: false,
+    dungeonThreatProfile: 'patrol',
+  },
+  {
+    id: 'bandit',
+    name: 'Bandit',
+    texture: 'skeleton',
+    baseHp: 16,
+    tier: 'medium',
+    boss: false,
+    dungeonThreatProfile: 'alert_chase',
+  },
+  {
+    id: 'cultist',
+    name: 'Cultist',
+    texture: 'bat',
+    baseHp: 17,
+    tier: 'medium',
+    boss: false,
+    dungeonThreatProfile: 'alert_chase',
+  },
   {
     id: 'armored_goblin',
     name: 'Armored Goblin',
@@ -44,8 +86,17 @@ export const ENEMIES: EnemyDef[] = [
     baseHp: 19,
     tier: 'medium',
     boss: false,
+    dungeonThreatProfile: 'alert_chase',
   },
-  { id: 'knight', name: 'Knight', texture: 'skeleton', baseHp: 23, tier: 'strong', boss: false },
+  {
+    id: 'knight',
+    name: 'Knight',
+    texture: 'skeleton',
+    baseHp: 23,
+    tier: 'strong',
+    boss: false,
+    dungeonThreatProfile: 'alert_chase',
+  },
   {
     id: 'necromancer',
     name: 'Necromancer',
@@ -53,8 +104,17 @@ export const ENEMIES: EnemyDef[] = [
     baseHp: 24,
     tier: 'strong',
     boss: false,
+    dungeonThreatProfile: 'alert_chase',
   },
-  { id: 'ogre', name: 'Ogre', texture: 'slime', baseHp: 27, tier: 'strong', boss: false },
+  {
+    id: 'ogre',
+    name: 'Ogre',
+    texture: 'slime',
+    baseHp: 27,
+    tier: 'strong',
+    boss: false,
+    dungeonThreatProfile: 'alert_chase',
+  },
 ];
 
 export const BOSSES: EnemyDef[] = [
@@ -64,6 +124,7 @@ export const BOSSES: EnemyDef[] = [
     texture: 'boss_minotaur',
     baseHp: 44,
     boss: true,
+    dungeonThreatProfile: 'boss_pressure',
     special: {
       name: 'Warhammer',
       telegraph: 'The Iron Warden braces behind iron plates...',
@@ -81,6 +142,7 @@ export const BOSSES: EnemyDef[] = [
     texture: 'boss_lich',
     baseHp: 40,
     boss: true,
+    dungeonThreatProfile: 'boss_pressure',
     special: {
       name: 'Bone Staff',
       telegraph: 'The Bone Oracle raises a staff of splintered bone...',
@@ -95,6 +157,7 @@ export const BOSSES: EnemyDef[] = [
     texture: 'boss_demon',
     baseHp: 42,
     boss: true,
+    dungeonThreatProfile: 'boss_pressure',
     special: {
       name: 'Flame Axe',
       telegraph: 'The Flame Tyrant gathers heat around its axe...',
@@ -112,6 +175,10 @@ export function getEnemyTierForDepth(depth: number): EnemyTier {
   if (depth <= 3) return 'weak';
   if (depth <= 6) return 'medium';
   return 'strong';
+}
+
+export function getEnemyThreatProfile(def: EnemyDef): RoomThreatProfileId {
+  return def.dungeonThreatProfile;
 }
 
 /** Enemy mirrors the player combat hand size, capped to keep fights readable. */
