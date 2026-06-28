@@ -5,10 +5,10 @@ import { dailyKey, dailySeed, loadDailyRecord } from '../daily';
 import { loadRunChronicle } from '../chronicle';
 import {
   formatChronicleLine,
+  formatCampfireProgressionSummary,
   formatDailyRecordLine,
   formatPendingPrepSummary,
 } from '../game/campfireSummary';
-import { formatStarterCardProgressionSummary } from '../game/progression';
 import { getMeta, setMeta } from '../meta';
 import { newRun } from '../state';
 
@@ -180,7 +180,7 @@ export class CampfireScene extends Phaser.Scene {
       }),
     );
     this.dynamic.add(
-      this.add.text(STATUS_X, 206, formatStarterCardProgressionSummary(meta), {
+      this.add.text(STATUS_X, 206, formatCampfireProgressionSummary(meta.progression), {
         ...TEXT_STYLE,
         fontSize: '13px',
         color: '#b8b0c8',

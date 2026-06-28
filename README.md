@@ -15,8 +15,9 @@ npm run dev      # http://localhost:5173
 ## How it plays
 
 - Each run is a fresh dungeon of **10 rooms**. The fire offers **two opening
-  card picks** from a small starter set; Ember progression can unlock a fourth
-  opening option without adding a raw stat boost.
+  card picks** from a small starter set. Ember progression can unlock a fourth
+  opening option and optional starter kits that add one signature card to normal
+  runs without adding raw stat boosts.
 - Every later room has four doors — the one you came through is barred.
   Rooms are randomized: **encounters, treasure chests, health potions,
   spike traps**, or nothing.

@@ -1,6 +1,12 @@
 import Phaser from 'phaser';
 import { GAME_W } from '../config';
 import { playSfx } from '../audio/sfx';
+import { createTitleLayout } from '../game/titleLayout';
+
+const TEXT_STYLE = {
+  fontFamily: 'monospace',
+  color: '#f5edd8',
+};
 
 export class TitleScene extends Phaser.Scene {
   constructor() {
@@ -9,59 +15,61 @@ export class TitleScene extends Phaser.Scene {
 
   create(): void {
     const cx = GAME_W / 2;
+    const layout = createTitleLayout();
 
     this.add
-      .text(cx, 130, 'ESCAPE', {
-        fontFamily: 'monospace',
+      .text(cx, layout.titleY, 'ESCAPE', {
+        ...TEXT_STYLE,
         fontSize: '72px',
         fontStyle: 'bold',
         color: '#f1c40f',
       })
       .setOrigin(0.5);
     this.add
-      .text(cx, 195, '~ the card dungeon ~', {
-        fontFamily: 'monospace',
+      .text(cx, layout.subtitleY, '~ the card dungeon ~', {
+        ...TEXT_STYLE,
         fontSize: '22px',
         color: '#b8b0c8',
       })
       .setOrigin(0.5);
 
-    const hero = this.add.image(cx, 290, 'hero_down_0').setScale(5);
+    const hero = this.add.image(cx, layout.heroY, 'hero_down_0').setScale(5);
     this.tweens.add({
       targets: hero,
-      y: 280,
+      y: layout.heroY - 10,
       duration: 700,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
     });
 
-    const lines = [
-      'Descend 10 rooms. Slay the boss. Escape.',
-      '',
-      'Choose two opening cards at the fire',
-      'Gold is for this run; Embers unlock long-term options',
-      'Move with WASD / arrow keys',
-      'Walk into things to pick them up',
-      'Beat enemies to steal their cards (max 5 in hand)',
-      'Most enemies match your hand size',
-      '',
-      'In battle you can always Punch for 3 damage',
-      'Press P in the dungeon to drink a potion',
-    ];
     this.add
-      .text(cx, 430, lines.join('\n'), {
-        fontFamily: 'monospace',
+      .text(cx, layout.objectiveY, 'Descend 10 rooms. Slay the boss. Escape.', {
+        ...TEXT_STYLE,
         fontSize: '15px',
         color: '#d8d2e4',
-        align: 'center',
-        lineSpacing: 4,
       })
       .setOrigin(0.5);
 
+    this.addInfoColumn(cx - 204, layout, 'RUN', [
+      'WASD / arrows move',
+      'Walk into loot',
+      'Find the stairs down',
+    ]);
+    this.addInfoColumn(cx, layout, 'CARDS', [
+      'Pick 2 at the fire',
+      'Kits add a signature',
+      'Gold now, Embers later',
+    ]);
+    this.addInfoColumn(cx + 204, layout, 'BATTLE', [
+      'Beat enemies for cards',
+      'Punch is always ready',
+      'P drinks a potion',
+    ]);
+
     const start = this.add
-      .text(cx, 560, '[ PRESS SPACE OR CLICK TO ENTER ]', {
-        fontFamily: 'monospace',
+      .text(cx, layout.promptY, '[ PRESS SPACE OR CLICK TO ENTER ]', {
+        ...TEXT_STYLE,
         fontSize: '18px',
         fontStyle: 'bold',
         color: '#f1c40f',
@@ -77,5 +85,32 @@ export class TitleScene extends Phaser.Scene {
     this.input.once('pointerdown', begin);
 
     this.scale.canvas.focus?.();
+  }
+
+  private addInfoColumn(
+    x: number,
+    layout: ReturnType<typeof createTitleLayout>,
+    heading: string,
+    lines: string[],
+  ): void {
+    this.add
+      .text(x, layout.sectionHeadingY, heading, {
+        ...TEXT_STYLE,
+        fontSize: '15px',
+        fontStyle: 'bold',
+        color: '#f1c40f',
+      })
+      .setOrigin(0.5);
+    this.add
+      .text(x, layout.sectionTextY, lines.join('\n'), {
+        ...TEXT_STYLE,
+        fontSize: '13px',
+        color: '#d8d2e4',
+        align: 'center',
+        lineSpacing: 5,
+        fixedWidth: 196,
+        wordWrap: { width: 196, useAdvancedWrap: true },
+      })
+      .setOrigin(0.5, 0);
   }
 }

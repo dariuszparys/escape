@@ -1,5 +1,7 @@
 import { PendingPrep, createDefaultPendingPrep } from '../data/campfirePurchases';
+import { CARD_DEFS, makeCard } from '../data/cards';
 import { makeItem } from '../data/items';
+import { starterKitDef, type StarterKitDef } from '../data/starterKits';
 import type { MetaProgressionState } from '../meta';
 import { RunState } from '../state';
 import {
@@ -9,6 +11,18 @@ import {
   DEFAULT_STARTING_CARD_PICKS,
 } from './startingCards';
 
+function activeStarterKit(progression?: MetaProgressionState): StarterKitDef | null {
+  if (!progression?.starterCardVarietyUnlocked || !progression.activeStarterKitId) return null;
+  if (!progression.unlockedStarterKitIds.includes(progression.activeStarterKitId)) return null;
+  return starterKitDef(progression.activeStarterKitId);
+}
+
+function makeSignatureCard(kit: StarterKitDef) {
+  const def = CARD_DEFS.find((card) => card.id === kit.signatureCardId);
+  if (!def) throw new Error(`Unknown starter kit signature card: ${kit.signatureCardId}`);
+  return makeCard(def);
+}
+
 export function applyPendingPrepToRun(
   run: RunState,
   pendingPrep: PendingPrep,
@@ -16,6 +30,7 @@ export function applyPendingPrepToRun(
 ): PendingPrep {
   const curseIds = pendingPrep.curseIds ?? [];
   const hasStarterCardVariety = progression?.starterCardVarietyUnlocked === true;
+  const starterKit = activeStarterKit(progression);
 
   run.startingCardChoices =
     hasStarterCardVariety || pendingPrep.extraStartingChoice
@@ -25,8 +40,13 @@ export function applyPendingPrepToRun(
     ? BONUS_STARTING_CARD_PICKS
     : DEFAULT_STARTING_CARD_PICKS;
   run.startingCardsTaken = 0;
+  run.starterKitId = starterKit?.id ?? null;
   run.scoutCharges = pendingPrep.scoutFlame ? 1 : 0;
   run.curseIds = [...curseIds];
+
+  if (starterKit) {
+    run.addCard(makeSignatureCard(starterKit));
+  }
 
   if (curseIds.includes('blood_oath')) {
     run.maxHp = Math.max(1, run.maxHp - 6);

@@ -67,6 +67,8 @@ describe('meta state', () => {
       progression: {
         starterCardVarietyUnlocked: true,
         migrationBonusGranted: true,
+        unlockedStarterKitIds: [],
+        activeStarterKitId: null,
       },
       pendingPrep: {
         itemIds: [],
@@ -96,6 +98,8 @@ describe('meta state', () => {
       progression: {
         starterCardVarietyUnlocked: true,
         migrationBonusGranted: true,
+        unlockedStarterKitIds: [],
+        activeStarterKitId: null,
       },
       pendingPrep: {
         itemIds: ['small_potion'],
@@ -121,6 +125,58 @@ describe('meta state', () => {
         lastAwardedRunId: 'run-1',
       }),
     ).toEqual(createDefaultMetaState());
+  });
+
+  test('normalizes old versioned progression without starter-kit fields', () => {
+    expect(
+      normalizeMetaState({
+        economyVersion: META_ECONOMY_VERSION,
+        embers: 7,
+        progression: {
+          starterCardVarietyUnlocked: true,
+          migrationBonusGranted: false,
+        },
+        pendingPrep: {
+          itemIds: [],
+          extraStartingChoice: false,
+          scoutFlame: false,
+          curseIds: [],
+        },
+        lastAwardedRunId: null,
+      }).progression,
+    ).toEqual({
+      starterCardVarietyUnlocked: true,
+      migrationBonusGranted: false,
+      unlockedStarterKitIds: [],
+      activeStarterKitId: null,
+    });
+  });
+
+  test('deduplicates unlocked starter kits and clears stale active ids', () => {
+    expect(
+      normalizeMetaState({
+        economyVersion: META_ECONOMY_VERSION,
+        embers: 7,
+        progression: {
+          starterCardVarietyUnlocked: true,
+          migrationBonusGranted: false,
+          unlockedStarterKitIds: ['duelist', 'bad-kit', 'warden', 'duelist'],
+          activeStarterKitId: 'hexbinder',
+        },
+        pendingPrep: {
+          itemIds: [],
+          extraStartingChoice: false,
+          scoutFlame: false,
+          curseIds: [],
+        },
+        lastAwardedRunId: null,
+      }).progression,
+    ).toEqual({
+      starterCardVarietyUnlocked: true,
+      migrationBonusGranted: false,
+      unlockedStarterKitIds: ['duelist', 'warden'],
+      activeStarterKitId: null,
+    });
   });
 
   test('filters saved item ids to campfire items and inventory capacity', () => {
@@ -177,6 +233,8 @@ describe('meta state', () => {
         progression: {
           starterCardVarietyUnlocked: true,
           migrationBonusGranted: false,
+          unlockedStarterKitIds: ['duelist'],
+          activeStarterKitId: 'duelist',
         },
         pendingPrep: {
           itemIds: ['small_potion'],
@@ -195,6 +253,8 @@ describe('meta state', () => {
       progression: {
         starterCardVarietyUnlocked: true,
         migrationBonusGranted: false,
+        unlockedStarterKitIds: ['duelist'],
+        activeStarterKitId: 'duelist',
       },
       pendingPrep: {
         itemIds: ['small_potion'],
@@ -221,6 +281,8 @@ describe('meta state', () => {
         progression: {
           starterCardVarietyUnlocked: true,
           migrationBonusGranted: false,
+          unlockedStarterKitIds: ['warden', 'warden'],
+          activeStarterKitId: 'duelist',
         },
         pendingPrep: {
           itemIds: ['large_potion', 'bomb'],
@@ -236,6 +298,8 @@ describe('meta state', () => {
       progression: {
         starterCardVarietyUnlocked: true,
         migrationBonusGranted: false,
+        unlockedStarterKitIds: ['warden'],
+        activeStarterKitId: null,
       },
       pendingPrep: {
         itemIds: ['bomb'],
@@ -253,6 +317,8 @@ describe('meta state', () => {
         progression: {
           starterCardVarietyUnlocked: false,
           migrationBonusGranted: false,
+          unlockedStarterKitIds: [],
+          activeStarterKitId: null,
         },
         pendingPrep: {
           itemIds: ['bomb'],
@@ -268,6 +334,8 @@ describe('meta state', () => {
       progression: {
         starterCardVarietyUnlocked: false,
         migrationBonusGranted: false,
+        unlockedStarterKitIds: [],
+        activeStarterKitId: null,
       },
       pendingPrep: {
         itemIds: ['bomb'],
@@ -284,6 +352,8 @@ describe('meta state', () => {
       progression: {
         starterCardVarietyUnlocked: false,
         migrationBonusGranted: false,
+        unlockedStarterKitIds: [],
+        activeStarterKitId: null,
       },
       pendingPrep: {
         itemIds: ['bomb'],

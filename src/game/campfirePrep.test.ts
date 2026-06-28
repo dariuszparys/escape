@@ -47,6 +47,8 @@ describe('applyPendingPrepToRun', () => {
       {
         starterCardVarietyUnlocked: true,
         migrationBonusGranted: false,
+        unlockedStarterKitIds: [],
+        activeStarterKitId: null,
       },
     );
 
@@ -69,11 +71,87 @@ describe('applyPendingPrepToRun', () => {
       {
         starterCardVarietyUnlocked: true,
         migrationBonusGranted: true,
+        unlockedStarterKitIds: [],
+        activeStarterKitId: null,
       },
     );
 
     expect(run.startingCardChoices).toBe(4);
     expect(run.startingCardPicks).toBe(3);
+  });
+
+  test('adds an active starter kit signature card before the opening draft', () => {
+    const run = new RunState('seed', 'run-kit');
+
+    applyPendingPrepToRun(
+      run,
+      {
+        itemIds: [],
+        extraStartingChoice: false,
+        scoutFlame: false,
+        curseIds: [],
+      },
+      {
+        starterCardVarietyUnlocked: true,
+        migrationBonusGranted: false,
+        unlockedStarterKitIds: ['duelist'],
+        activeStarterKitId: 'duelist',
+      },
+    );
+
+    expect(run.starterKitId).toBe('duelist');
+    expect(run.cardCollection.map((card) => card.id)).toEqual(['riposte']);
+    expect(run.combatHand.map((card) => card.id)).toEqual(['riposte']);
+    expect(run.startingCardsTaken).toBe(0);
+    expect(run.startingCardChoices).toBe(4);
+    expect(run.startingCardPicks).toBe(2);
+  });
+
+  test('keeps current starting deck behavior when no starter kit is active', () => {
+    const run = new RunState('seed', 'run-no-kit');
+
+    applyPendingPrepToRun(
+      run,
+      {
+        itemIds: [],
+        extraStartingChoice: false,
+        scoutFlame: false,
+        curseIds: [],
+      },
+      {
+        starterCardVarietyUnlocked: true,
+        migrationBonusGranted: false,
+        unlockedStarterKitIds: ['warden'],
+        activeStarterKitId: null,
+      },
+    );
+
+    expect(run.starterKitId).toBeNull();
+    expect(run.cardCollection).toEqual([]);
+    expect(run.startingCardsTaken).toBe(0);
+  });
+
+  test('ignores an active starter kit that is not unlocked', () => {
+    const run = new RunState('seed', 'run-stale-kit');
+
+    applyPendingPrepToRun(
+      run,
+      {
+        itemIds: [],
+        extraStartingChoice: false,
+        scoutFlame: false,
+        curseIds: [],
+      },
+      {
+        starterCardVarietyUnlocked: true,
+        migrationBonusGranted: false,
+        unlockedStarterKitIds: ['duelist'],
+        activeStarterKitId: 'hexbinder',
+      },
+    );
+
+    expect(run.starterKitId).toBeNull();
+    expect(run.cardCollection).toEqual([]);
   });
 
   test('applies Blood Oath to max HP and current HP for the next run', () => {

@@ -3,6 +3,7 @@ import { Card } from './data/cards';
 import type { CampfireCurseId } from './data/campfireBargains';
 import { InventoryItem, makeItem } from './data/items';
 import { RelicId, Relic } from './data/relics';
+import type { StarterKitId } from './data/starterKits';
 import { selectCombatHand } from './game/cardSelection';
 import { DEFAULT_STARTING_CARD_CHOICES, DEFAULT_STARTING_CARD_PICKS } from './game/startingCards';
 
@@ -31,6 +32,7 @@ export class RunState {
   startingCardChoices = DEFAULT_STARTING_CARD_CHOICES;
   startingCardPicks = DEFAULT_STARTING_CARD_PICKS;
   startingCardsTaken = 0;
+  starterKitId: StarterKitId | null = null;
   scoutCharges = 0;
   curseIds: CampfireCurseId[] = [];
   bossDefeated = false;

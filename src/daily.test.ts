@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
   createDefaultDailyRecord,
   dailyKey,
@@ -38,6 +38,10 @@ class MemoryStorage implements Storage {
 }
 
 describe('daily challenge records', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   test('derives daily key from UTC date', () => {
     expect(dailyKey(new Date('2026-06-27T12:00:00Z'))).toBe('2026-06-27');
     expect(dailyKey(new Date('2026-06-27T00:00:00.010Z'))).toBe('2026-06-27');
@@ -91,6 +95,9 @@ describe('daily challenge records', () => {
   });
 
   test('round-trips via in-memory storage', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-27T12:00:00Z'));
+
     const storage = new MemoryStorage();
     const record = {
       date: '2026-06-27',

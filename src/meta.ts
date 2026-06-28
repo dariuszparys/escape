@@ -7,6 +7,7 @@ import { MAX_INVENTORY } from './config';
 import { CAMPFIRE_BARGAINS } from './data/campfireBargains';
 import type { CampfireCurseId } from './data/campfireBargains';
 import { CAMPFIRE_PURCHASES, createDefaultPendingPrep } from './data/campfirePurchases';
+import { STARTER_KITS, type StarterKitId } from './data/starterKits';
 
 export const META_STORAGE_KEY = 'escape.meta.v1';
 export const META_ECONOMY_VERSION = 2;
@@ -14,6 +15,8 @@ export const META_ECONOMY_VERSION = 2;
 export interface MetaProgressionState {
   starterCardVarietyUnlocked: boolean;
   migrationBonusGranted: boolean;
+  unlockedStarterKitIds: StarterKitId[];
+  activeStarterKitId: StarterKitId | null;
 }
 
 export interface MetaState extends CampfirePurchaseState {
@@ -38,6 +41,8 @@ function createDefaultProgressionState(): MetaProgressionState {
   return {
     starterCardVarietyUnlocked: false,
     migrationBonusGranted: false,
+    unlockedStarterKitIds: [],
+    activeStarterKitId: null,
   };
 }
 
@@ -55,6 +60,7 @@ const CAMPFIRE_ITEM_IDS = new Set<PendingPrep['itemIds'][number]>(
   CAMPFIRE_PURCHASES.filter(isCampfireItemPurchase).map((purchase) => purchase.itemId),
 );
 const CAMPFIRE_CURSE_IDS = new Set<string>(CAMPFIRE_BARGAINS.map((bargain) => bargain.curseId));
+const STARTER_KIT_IDS = new Set<string>(STARTER_KITS.map((kit) => kit.id));
 
 function normalizeItemIds(value: unknown): PendingPrep['itemIds'] {
   if (!Array.isArray(value)) return [];
@@ -75,6 +81,20 @@ function normalizeCurseIds(value: unknown): CampfireCurseId[] {
     .slice(0, 1);
 }
 
+function normalizeStarterKitIds(value: unknown): StarterKitId[] {
+  if (!Array.isArray(value)) return [];
+
+  const seen = new Set<string>();
+  return value.filter((kitId): kitId is StarterKitId => {
+    if (typeof kitId !== 'string' || !STARTER_KIT_IDS.has(kitId) || seen.has(kitId)) {
+      return false;
+    }
+
+    seen.add(kitId);
+    return true;
+  });
+}
+
 function normalizeEmbers(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
 }
@@ -83,9 +103,22 @@ function normalizeProgression(value: unknown): MetaProgressionState {
   if (!isRecord(value)) return createDefaultProgressionState();
 
   const migrationBonusGranted = value.migrationBonusGranted === true;
+  const starterCardVarietyUnlocked =
+    value.starterCardVarietyUnlocked === true || migrationBonusGranted;
+  const unlockedStarterKitIds = starterCardVarietyUnlocked
+    ? normalizeStarterKitIds(value.unlockedStarterKitIds)
+    : [];
+  const activeStarterKitId =
+    typeof value.activeStarterKitId === 'string' &&
+    unlockedStarterKitIds.includes(value.activeStarterKitId as StarterKitId)
+      ? (value.activeStarterKitId as StarterKitId)
+      : null;
+
   return {
-    starterCardVarietyUnlocked: value.starterCardVarietyUnlocked === true || migrationBonusGranted,
+    starterCardVarietyUnlocked,
     migrationBonusGranted,
+    unlockedStarterKitIds,
+    activeStarterKitId,
   };
 }
 
@@ -93,6 +126,8 @@ function createMigratedProgressionState(grantsStarterBonus: boolean): MetaProgre
   return {
     starterCardVarietyUnlocked: grantsStarterBonus,
     migrationBonusGranted: grantsStarterBonus,
+    unlockedStarterKitIds: [],
+    activeStarterKitId: null,
   };
 }
 

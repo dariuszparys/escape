@@ -55,6 +55,27 @@ describe('balance simulator', () => {
     expect(summary.bossReachRate).toBeLessThanOrEqual(0.42);
   });
 
+  test('starter kit scenarios change the opener without erasing the challenge band', () => {
+    const varietyOnly = simulateScenarioSummary({ starterCardVarietyUnlocked: true }, 400);
+    const kits = ['duelist', 'warden', 'hexbinder'] as const;
+
+    for (const kit of kits) {
+      const summary = simulateScenarioSummary(
+        {
+          starterCardVarietyUnlocked: true,
+          unlockedStarterKitIds: [kit],
+          activeStarterKitId: kit,
+        },
+        400,
+      );
+
+      expect(summary).not.toEqual(varietyOnly);
+      expect(summary.winRate).toBeGreaterThanOrEqual(0.07);
+      expect(summary.winRate).toBeLessThanOrEqual(0.18);
+      expect(summary.bossReachRate).toBeLessThanOrEqual(0.36);
+    }
+  });
+
   test('full prep materially improves the chance to escape', () => {
     const baseline = simulateScenarioSummary({}, 400);
     const prepared = simulateScenarioSummary(

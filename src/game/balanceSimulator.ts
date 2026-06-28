@@ -3,9 +3,11 @@ import { CARD_DEFS, Card, cardEffectAmount, makeCard } from '../data/cards';
 import { type PendingPrep } from '../data/campfirePurchases';
 import { spawnBoss, spawnEnemy } from '../data/enemies';
 import { InventoryItem, type InventoryItemDef, makeItem } from '../data/items';
+import type { StarterKitId } from '../data/starterKits';
 import { rollRoomEvent, type RoomEvent } from '../dungeon/rooms';
 import { RunState } from '../state';
 import { combatCardScore, selectCombatHand } from './cardSelection';
+import { applyPendingPrepToRun } from './campfirePrep';
 import type { ActiveStatusEffect } from './combat';
 import { resolveRound } from './combat';
 import { awardPotionItem, rollChestReward } from './rewards';
@@ -19,6 +21,8 @@ export interface BalanceScenario {
   extraStartingChoice?: boolean;
   scoutFlame?: boolean;
   starterCardVarietyUnlocked?: boolean;
+  unlockedStarterKitIds?: StarterKitId[];
+  activeStarterKitId?: StarterKitId | null;
 }
 
 export interface EncounterBucketSummary {
@@ -144,14 +148,11 @@ function makePendingPrep(scenario: BalanceScenario): PendingPrep {
 function createScenarioRun(seed: number, scenario: BalanceScenario): RunState {
   const run = new RunState(String(seed), `sim-${seed}`);
   const prep = makePendingPrep(scenario);
-  const hasStarterCardVariety = scenario.starterCardVarietyUnlocked === true;
-
-  run.startingCardChoices = prep.extraStartingChoice || hasStarterCardVariety ? 4 : 3;
-  run.startingCardPicks = prep.extraStartingChoice ? 3 : 2;
-  run.scoutCharges = prep.scoutFlame ? 1 : 0;
-
-  prep.itemIds.forEach((itemId) => {
-    run.addItem(makeItem(itemId));
+  applyPendingPrepToRun(run, prep, {
+    starterCardVarietyUnlocked: scenario.starterCardVarietyUnlocked === true,
+    migrationBonusGranted: false,
+    unlockedStarterKitIds: scenario.unlockedStarterKitIds ?? [],
+    activeStarterKitId: scenario.activeStarterKitId ?? null,
   });
 
   chooseStartingCards(run);

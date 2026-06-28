@@ -3,11 +3,26 @@ import { createDefaultPendingPrep } from '../data/campfirePurchases';
 import { createDefaultRunChronicle } from '../chronicle';
 import {
   formatChronicleLine,
+  formatCampfireProgressionSummary,
   formatDailyRecordLine,
   formatPendingPrepSummary,
 } from './campfireSummary';
 
 describe('campfire summary formatting', () => {
+  test('formats compact progression status for the campfire overview', () => {
+    const summary = formatCampfireProgressionSummary({
+      starterCardVarietyUnlocked: true,
+      migrationBonusGranted: true,
+      unlockedStarterKitIds: ['duelist', 'warden'],
+      activeStarterKitId: 'warden',
+    });
+
+    expect(summary).toBe(
+      ['Starter variety: unlocked', 'Starter kits: 2/3 unlocked', 'Active kit: Warden'].join('\n'),
+    );
+    expect(summary).not.toMatch(/Migration bonus|four opening card options/);
+  });
+
   test('formats empty pending prep for hub status', () => {
     expect(formatPendingPrepSummary(createDefaultPendingPrep())).toBe(
       ['One-run prep: none (0/3)', 'Opening picks: 2 of 3', 'Scout flame: unlit'].join('\n'),
@@ -34,12 +49,30 @@ describe('campfire summary formatting', () => {
     const summary = formatPendingPrepSummary(createDefaultPendingPrep(), {
       starterCardVarietyUnlocked: true,
       migrationBonusGranted: true,
+      unlockedStarterKitIds: [],
+      activeStarterKitId: null,
     });
 
     expect(summary).toBe(
-      ['One-run prep: none (0/3)', 'Opening picks: 2 of 4', 'Scout flame: unlit'].join('\n'),
+      [
+        'One-run prep: none (0/3)',
+        'Opening picks: 2 of 4',
+        'Starter kit: none selected',
+        'Scout flame: unlit',
+      ].join('\n'),
     );
     expect(summary).not.toMatch(/Ash|Kindling/);
+  });
+
+  test('includes the active starter kit in the next-run summary', () => {
+    const summary = formatPendingPrepSummary(createDefaultPendingPrep(), {
+      starterCardVarietyUnlocked: true,
+      migrationBonusGranted: false,
+      unlockedStarterKitIds: ['duelist'],
+      activeStarterKitId: 'duelist',
+    });
+
+    expect(summary).toContain('Starter kit: Duelist (Riposte)');
   });
 
   test('formats chronicle line for no completed runs', () => {

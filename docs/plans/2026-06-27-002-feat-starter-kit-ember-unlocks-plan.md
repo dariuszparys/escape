@@ -333,14 +333,14 @@ flowchart TB
 
 ## Verification Contract
 
-| Gate | Command | Done Signal |
-|---|---|---|
-| Starter kit rules | `npm test -- src/data/starterKits.test.ts src/meta.test.ts src/game/progression.test.ts src/game/campfirePrep.test.ts src/game/startingCards.test.ts src/game/campfireSummary.test.ts` | Starter-kit data, persistence, purchase, selection, run-start, and formatter tests pass. |
-| Balance guardrails | `npm test -- src/game/balanceSimulator.test.ts` | Simulator includes active kit scenarios and challenge-band assertions remain bounded. |
-| Full test suite | `npm test` | All Vitest tests pass. |
-| Typecheck and build | `npm run build` | TypeScript and Vite production build pass. |
-| Lint | `npm run lint` | ESLint exits cleanly under strict unused-symbol rules. |
-| Format | `npm run format:check` | Prettier reports all matched files are formatted. |
+| Gate                | Command                                                                                                                                                                                | Done Signal                                                                              |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Starter kit rules   | `npm test -- src/data/starterKits.test.ts src/meta.test.ts src/game/progression.test.ts src/game/campfirePrep.test.ts src/game/startingCards.test.ts src/game/campfireSummary.test.ts` | Starter-kit data, persistence, purchase, selection, run-start, and formatter tests pass. |
+| Balance guardrails  | `npm test -- src/game/balanceSimulator.test.ts`                                                                                                                                        | Simulator includes active kit scenarios and challenge-band assertions remain bounded.    |
+| Full test suite     | `npm test`                                                                                                                                                                             | All Vitest tests pass.                                                                   |
+| Typecheck and build | `npm run build`                                                                                                                                                                        | TypeScript and Vite production build pass.                                               |
+| Lint                | `npm run lint`                                                                                                                                                                         | ESLint exits cleanly under strict unused-symbol rules.                                   |
+| Format              | `npm run format:check`                                                                                                                                                                 | Prettier reports all matched files are formatted.                                        |
 
 Manual smoke with the dev server must cover:
 

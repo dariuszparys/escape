@@ -18,6 +18,7 @@ export interface CardDef {
   color: number;
   description: string;
   effects: CardEffect[];
+  starterKitOnly?: boolean;
 }
 
 export interface Card extends CardDef {
@@ -76,6 +77,48 @@ export const CARD_DEFS: CardDef[] = [
     color: 0x27ae60,
     description: 'Restore 5 HP',
     effects: [{ kind: 'heal', amount: 5 }],
+  },
+  {
+    id: 'riposte',
+    name: 'Riposte',
+    type: 'utility',
+    tier: 1,
+    speed: 6,
+    color: 0xe67e22,
+    description: 'Deal 5, gain 2 block',
+    starterKitOnly: true,
+    effects: [
+      { kind: 'damage', amount: 5 },
+      { kind: 'block', amount: 2 },
+    ],
+  },
+  {
+    id: 'field_dressing',
+    name: 'Field Dressing',
+    type: 'heal',
+    tier: 1,
+    speed: 3,
+    color: 0x27ae60,
+    description: 'Gain 5 block, restore 2 HP',
+    starterKitOnly: true,
+    effects: [
+      { kind: 'block', amount: 5 },
+      { kind: 'heal', amount: 2 },
+    ],
+  },
+  {
+    id: 'cinder_hex',
+    name: 'Cinder Hex',
+    type: 'status',
+    tier: 1,
+    speed: 5,
+    color: 0xd35400,
+    description: 'Deal 2, burn 2 for 2 turns',
+    starterKitOnly: true,
+    effects: [
+      { kind: 'damage', amount: 2 },
+      { kind: 'status', status: 'burn', amount: 2, duration: 2 },
+    ],
   },
   {
     id: 'heavy_strike',
@@ -171,6 +214,8 @@ export const CARD_DEFS: CardDef[] = [
   },
 ];
 
+const STANDARD_CARD_DEFS = CARD_DEFS.filter((card) => !card.starterKitOnly);
+
 export function makeCard(def: CardDef): Card {
   return { ...def, uid: nextUid++ };
 }
@@ -205,12 +250,12 @@ export function randomCard(rng: GameRng, depth: number): Card {
         : depth <= 9
           ? pickWeighted(rng, [2, 5, 3])
           : pickWeighted(rng, [0, 5, 5]);
-  const pool = CARD_DEFS.filter((c) => c.tier === t);
+  const pool = STANDARD_CARD_DEFS.filter((c) => c.tier === t);
   return makeCard(rng.pick(pool));
 }
 
 export function randomCardOfTier(rng: GameRng, tiers: number[]): Card {
-  const pool = CARD_DEFS.filter((c) => tiers.includes(c.tier));
+  const pool = STANDARD_CARD_DEFS.filter((c) => tiers.includes(c.tier));
   return makeCard(rng.pick(pool));
 }
 
@@ -220,5 +265,5 @@ export function randomOffensiveCard(rng: GameRng, depth: number): Card {
     const card = randomCard(rng, depth);
     if (cardEffectAmount(card, 'damage') > 0) return card;
   }
-  return makeCard(CARD_DEFS[0]);
+  return makeCard(STANDARD_CARD_DEFS[0]);
 }
