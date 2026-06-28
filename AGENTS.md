@@ -31,11 +31,14 @@ new dungeon rules to `src/dungeon/`, and reusable drawing logic to `src/gfx/`.
 
 ## Testing Guidelines
 
-There is no dedicated automated test runner yet. Treat `npm run build` as the required
+Automated tests use Vitest through `npm test`. Treat `npm run build` as the required
 baseline validation before submitting changes. For gameplay changes, also run
 `npm run dev` and manually smoke test the affected loop, such as dungeon movement,
-encounters, card selection, treasure, potions, traps, or boss completion. If tests are
-introduced later, add a matching `npm test` script and document the naming pattern here.
+encounters, card selection, treasure, potions, traps, or boss completion.
+
+Use `docs/solutions/` for repo-local writeups of solved problems and reusable fixes
+when working in documented areas. Shared player-facing vocabulary lives in
+`CONCEPTS.md`.
 
 ## Commit & Pull Request Guidelines
 
