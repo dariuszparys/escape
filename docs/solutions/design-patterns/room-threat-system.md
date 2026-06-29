@@ -1,6 +1,7 @@
 ---
 title: Room Threat System
 date: 2026-06-28
+last_refreshed: 2026-06-29
 category: design-patterns
 module: dungeon-loop
 problem_type: design_pattern
@@ -131,14 +132,20 @@ before victory, so the rule is enforced both by room structure and by the escape
 policy.
 
 Document simulator assumptions when encounter rules change. The balance
-simulator still models the fight-taken baseline:
+simulator (`src/game/balanceSimulator.ts`) assumes a fight-taken baseline:
+encounters that are taken are fought to a finish, and it does not model
+optimal room-skipping or fleeing. It now also models the post-boss
+bank-or-delve decision across three strategy lines rather than a single
+encounter-policy constant:
 
 ```ts
-export const BALANCE_ENCOUNTER_POLICY = 'fight-taken-baseline';
+export type DelveStrategy = 'cautious' | 'moderate' | 'aggressive';
 ```
 
-That prevents future tuning work from mistaking current win-rate output for an
-optimal-skip simulation.
+Keeping these assumptions explicit prevents future tuning work from mistaking
+current win-rate output for an optimal-skip simulation. (Earlier versions
+exposed this as a `BALANCE_ENCOUNTER_POLICY` constant, removed when the
+endless-descent delve economy generalized the run loop into strata.)
 
 ## Why This Matters
 

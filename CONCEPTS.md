@@ -55,13 +55,15 @@ preparation, and starting a normal or daily descent.
 
 ### Gold
 
-Run-local currency earned and spent during the current Run. Gold does not carry
-long-term progression by itself.
+Run-local currency earned and spent during the current Run. Unbanked Gold is
+forfeited on death; Banking at a Gate converts the leftover Gold into Embers
+(see Endless Descent).
 
 ### Ember
 
-Persistent progression currency awarded from completed runs and spent at the
-Campfire on options that shape later normal runs.
+Persistent progression currency spent at the Campfire on options that shape
+later normal runs. Earned from depth milestones, the escape bonus, and Gold
+Banked at a Gate.
 
 ### Starter Variety
 
@@ -73,3 +75,28 @@ changing the number of cards picked.
 A durable Ember unlock that can add one selected signature card to a normal run.
 Only one Starter Kit can be active for the next normal descent, and Daily
 Descents ignore Starter Kits.
+
+## Endless Descent
+
+### Stratum
+
+A fixed-length band of dungeon depth ending in a boss Gate; the base run is the
+first stratum, and Delving continues into deeper, harder strata. Depth keeps
+climbing across strata rather than resetting, and difficulty escalates with it.
+
+### Gate
+
+The decision point after clearing a Stratum's boss, where the player chooses to
+Bank or Delve. Gates are the only points at which a Run can end in a win.
+
+### Delve
+
+Committing to descend into the next Stratum instead of Banking. Irreversible
+until the next Gate, and death anywhere in the Stratum forfeits all unbanked
+Gold — the risk half of the push-your-luck choice.
+
+### Bank
+
+Ending a Run a winner at a Gate by converting unbanked Gold into Embers and
+escaping. The safe terminus opposite death; in a Daily Descent, Banking still
+ends the run but mints no Embers from Gold.
