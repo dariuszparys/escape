@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ideation: Escape — Surprise-Me Directions</title>
+<style>
+  :root{
+    --bg:#17120d; --surface:#201913; --surface-2:#2a2017; --raised:#312517;
+    --text:#ece3d4; --muted:#b0a288; --faint:#8a7c66;
+    --accent:#f0a04b; --accent-2:#ffd089; --accent-soft:rgba(240,160,75,.13);
+    --border:#3a2d20; --border-soft:#2c2218;
+    --direct:#86c46f; --direct-soft:rgba(134,196,111,.14);
+    --external:#7fb6ea; --external-soft:rgba(127,182,234,.14);
+    --reasoned:#e3b765; --reasoned-soft:rgba(227,183,101,.14);
+    --good:#86c46f; --good-soft:rgba(134,196,111,.13);
+    --warn:#e3b765; --warn-soft:rgba(227,183,101,.13);
+    --hot:#e8856a; --hot-soft:rgba(232,133,106,.14);
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    font-size:16px; line-height:1.62; letter-spacing:.1px;
+  }
+  .wrap{max-width:920px; margin-inline:auto; padding:48px 24px 96px}
+  .prose{max-width:72ch}
+  h1,h2,h3{font-family:Avenir,"Avenir Next","Segoe UI",Roboto,system-ui,sans-serif; line-height:1.2; letter-spacing:.2px}
+  h1{font-size:2.1rem; margin:.2em 0 .15em; font-weight:800; color:#fff}
+  h2{font-size:1.4rem; margin:2.4em 0 .7em; font-weight:750; color:var(--accent-2);
+     padding-bottom:.3em; border-bottom:1px solid var(--border)}
+  h3{font-size:1.18rem; margin:0 0 .35em; font-weight:750; color:#fff}
+  a{color:var(--accent); text-decoration:none}
+  a:hover{text-decoration:underline}
+  code{font-family:"SF Mono",ui-monospace,"Cascadia Code",Menlo,Consolas,monospace;
+     font-size:.84em; background:var(--surface-2); border:1px solid var(--border-soft);
+     padding:.08em .38em; border-radius:5px; color:var(--accent-2)}
+  p{margin:.6em 0}
+  .eyebrow{font-family:Avenir,"Avenir Next","Segoe UI",sans-serif; text-transform:uppercase;
+     letter-spacing:.18em; font-size:.7rem; font-weight:700; color:var(--accent); margin-bottom:.5em}
+  .lede{font-size:1.08rem; color:var(--muted); max-width:72ch}
+
+  /* header meta */
+  .meta{display:flex; flex-wrap:wrap; gap:.5rem; margin:1.2em 0 .4em}
+  .meta .pill{font-family:Avenir,"Avenir Next",sans-serif}
+  .pill{display:inline-flex; align-items:center; gap:.4em; font-size:.76rem; font-weight:600;
+     padding:.28em .7em; border-radius:999px; border:1px solid var(--border);
+     background:var(--surface-2); color:var(--muted); letter-spacing:.02em}
+  .pill b{color:var(--text); font-weight:700}
+
+  /* stats strip */
+  .stats{display:flex; flex-wrap:wrap; gap:14px; margin:1.8em 0 .4em}
+  .stat{flex:1 1 130px; background:var(--surface); border:1px solid var(--border);
+     border-radius:12px; padding:14px 16px}
+  .stat .n{font-family:Avenir,"Avenir Next",sans-serif; font-size:1.7rem; font-weight:800; color:var(--accent-2); line-height:1}
+  .stat .l{font-size:.78rem; color:var(--muted); margin-top:.4em; font-family:Avenir,"Avenir Next",sans-serif}
+
+  section{margin-top:.4em}
+  .ground{background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:6px 22px 18px}
+  .ground h3{font-size:1rem; color:var(--accent-2); margin-top:1.3em; font-family:Avenir,"Avenir Next",sans-serif; letter-spacing:.04em}
+  .ground ul{margin:.4em 0; padding-left:1.2em}
+  .ground li{margin:.3em 0}
+  .ground .grid{display:grid; grid-template-columns:1fr 1fr; gap:0 28px}
+  @media(max-width:680px){.ground .grid{grid-template-columns:1fr}}
+
+  .axisnote{background:var(--accent-soft); border:1px solid var(--border); border-left:3px solid var(--accent);
+     border-radius:10px; padding:12px 16px; color:var(--muted); font-size:.95rem}
+
+  /* jump list */
+  .jump{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 18px; margin:.6em 0 1.6em}
+  .jump ol{margin:.2em 0; padding-left:1.4em}
+  .jump li{margin:.32em 0}
+  .jump a{font-weight:600}
+  .jump .tag{color:var(--faint); font-size:.82rem; font-family:Avenir,"Avenir Next",sans-serif}
+
+  /* idea cards */
+  .idea{background:var(--surface); border:1px solid var(--border); border-radius:16px;
+     padding:22px 26px 24px; margin:0 0 22px; scroll-margin-top:18px}
+  .idea-head{display:flex; align-items:baseline; gap:.6em; flex-wrap:wrap}
+  .idnum{font-family:Avenir,"Avenir Next",sans-serif; font-weight:800; font-size:.92rem; color:var(--bg);
+     background:var(--accent); border-radius:8px; padding:.18em .55em; letter-spacing:.02em}
+  .chips{display:flex; gap:.45rem; flex-wrap:wrap; margin:.5em 0 1em}
+  .chip{font-family:Avenir,"Avenir Next",sans-serif; font-size:.72rem; font-weight:700; letter-spacing:.03em;
+     padding:.26em .66em; border-radius:999px; border:1px solid var(--border)}
+  .chip.conf-high,.chip.cx-low{background:var(--good-soft); color:var(--good); border-color:rgba(134,196,111,.3)}
+  .chip.conf-med,.chip.cx-med{background:var(--warn-soft); color:var(--warn); border-color:rgba(227,183,101,.3)}
+  .chip.cx-high{background:var(--hot-soft); color:var(--hot); border-color:rgba(232,133,106,.3)}
+  .chip.theme{background:var(--surface-2); color:var(--muted)}
+  .field{margin:.85em 0}
+  .field .k{font-family:Avenir,"Avenir Next",sans-serif; text-transform:uppercase; letter-spacing:.13em;
+     font-size:.68rem; font-weight:700; color:var(--faint); display:block; margin-bottom:.15em}
+  .basis{border-radius:10px; padding:11px 14px; border:1px solid var(--border); margin-top:.2em}
+  .basis.direct{background:var(--direct-soft); border-color:rgba(134,196,111,.28)}
+  .basis.external{background:var(--external-soft); border-color:rgba(127,182,234,.28)}
+  .basis.reasoned{background:var(--reasoned-soft); border-color:rgba(227,183,101,.28)}
+  .btag{font-family:Avenir,"Avenir Next",sans-serif; font-size:.68rem; font-weight:800; text-transform:uppercase;
+     letter-spacing:.08em; margin-right:.5em; padding:.1em .45em; border-radius:5px}
+  .basis.direct .btag{color:var(--direct); background:rgba(134,196,111,.18)}
+  .basis.external .btag{color:var(--external); background:rgba(127,182,234,.18)}
+  .basis.reasoned .btag{color:var(--reasoned); background:rgba(227,183,101,.18)}
+  .basis + .basis{margin-top:.5em}
+  .figure{margin:1.1em 0 .3em; background:var(--surface-2); border:1px solid var(--border-soft);
+     border-radius:12px; padding:14px}
+  .figure svg{display:block; width:100%; height:auto}
+  .figure figcaption{font-size:.8rem; color:var(--faint); margin-top:.5em; text-align:center; font-family:Avenir,"Avenir Next",sans-serif}
+  .combines{font-size:.85rem; color:var(--faint); margin-top:1em; padding-top:.7em; border-top:1px dashed var(--border)}
+
+  table{width:100%; border-collapse:collapse; margin:1em 0; font-size:.92rem}
+  th,td{text-align:left; padding:9px 12px; border-bottom:1px solid var(--border)}
+  th{font-family:Avenir,"Avenir Next",sans-serif; font-size:.74rem; text-transform:uppercase; letter-spacing:.08em; color:var(--faint)}
+  td:first-child{color:var(--faint); font-family:Avenir,"Avenir Next",sans-serif; white-space:nowrap}
+  td b{color:var(--text)}
+
+  footer.composition-signal{margin-top:3em; padding-top:1.2em; border-top:1px solid var(--border);
+     font-size:.78rem; color:var(--faint); font-family:Avenir,"Avenir Next",sans-serif}
+  /* svg shared text */
+  svg text{font-family:Avenir,"Avenir Next","Segoe UI",sans-serif}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">Compound Engineering · Ideation</div>
+  <h1>Escape — Surprise-Me Directions</h1>
+  <p class="lede">Six independent idea frames swept the codebase and the roguelike-deckbuilder landscape, then an adversarial verifier checked every claim against the source. These are the seven directions that survived — the ones a small team would actually argue about.</p>
+
+  <div class="meta">
+    <span class="pill"><b>Date</b> <time datetime="2026-06-29">2026-06-29</time></span>
+    <span class="pill"><b>Topic</b> escape-next-directions</span>
+    <span class="pill"><b>Mode</b> repo-grounded</span>
+    <span class="pill"><b>Run</b> open-ended (surprise-me)</span>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="n">47</div><div class="l">raw candidates</div></div>
+    <div class="stat"><div class="n">7</div><div class="l">ranked survivors</div></div>
+    <div class="stat"><div class="n">6</div><div class="l">ideation frames</div></div>
+    <div class="stat"><div class="n">14 / 14</div><div class="l">bases verified sound</div></div>
+  </div>
+
+  <section>
+    <h2>Grounding Context</h2>
+    <p class="prose"><b>Escape</b> is a Phaser 3 + TypeScript + Vite browser roguelite: a top-down Zelda-style dungeon of 10 rooms where every fight is resolved as <b>simultaneous-choice card combat</b>. Run-local Gold and persistent Ember meta-currency; all art is generated at boot from pixel string-maps and all SFX are synthesized at runtime — zero external assets. The codebase is architecturally clean (pure, tested game logic under <code>src/game</code> + <code>src/dungeon</code>; Phaser scenes only sync and render) but <b>content-thin</b>, and its most distinctive mechanic — the double-blind card duel — is the genre's sparsest, least-explored territory.</p>
+    <div class="ground">
+      <div class="grid">
+        <div>
+          <h3>Codebase Context</h3>
+          <ul>
+            <li><b>Combat</b> (<code>combat.ts</code> <code>resolveRound</code>): both sides reveal one action, sorted by speed (player wins ties); block is per-round only; one card per round, no energy/mana. Hardcoded 1v1.</li>
+            <li><b>Hand</b> (<code>cardSelection.ts</code>): the 5-card hand is auto-composed by a hidden scorer that forces ≥3 offensive — the player picks which card to <em>play</em>, but not which cards form the hand.</li>
+            <li><b>Planning board</b> (just shipped): previews enemy intent, speed order, and status before you commit.</li>
+            <li><b>Meta</b>: Embers from depth milestones (max 6/run); Campfire shop; <code>chronicle.ts</code> stores the last 10 runs; <code>daily.ts</code> is a deterministic seeded run.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Verified gaps &amp; signals</h3>
+          <ul>
+            <li>Strong enemies (knight/necromancer/ogre) have <b>no combat script</b> — they play randomly, exactly when stakes peak.</li>
+            <li><code>cardUpgrade.ts</code> upgrades only damage/block/heal; <b>status upgrades are a paid no-op</b> that still rename the card with <code>+</code>.</li>
+            <li><code>evaluateRoomThreatEscape</code> returns <code>grantBattleReward:false</code> in <b>every branch</b> — the flee reward is dead code.</li>
+            <li><code>combatFeedback.ts</code> exists as a <b>64-byte stub</b>; the enemy never hurt-flashes.</li>
+            <li>The <code>CardEffect</code> union is closed; <code>applyAction</code> is a hardcoded if/else, so new verbs require resolver edits.</li>
+            <li>Genre: 850+ deckbuilders by 2024 — crowded on features, under-explored on <b>feel</b> and the <b>simultaneous/Yomi</b> niche.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Topic Axes</h2>
+    <p class="axisnote">Decomposition skipped — surprise-me mode. With no fixed subject, each frame discovered its own; the value is in the cross-frame convergence rather than a pre-set surface map. The seven survivors below span combat depth, combat agency, run economy, social meta, adaptive meta, content architecture, and game feel.</p>
+  </section>
+
+  <section>
+    <h2>Ranked Ideas</h2>
+    <div class="jump">
+      <ol>
+        <li><a href="#i1">Make Reading the Enemy the Core Skill</a> <span class="tag">· combat depth · High · Cx M</span></li>
+        <li><a href="#i2">Escape Becomes a Verb: Push-Your-Luck Banking</a> <span class="tag">· run economy · High · Cx M</span></li>
+        <li><a href="#i3">The Seeded Engine You Already Paid For</a> <span class="tag">· social meta · High · Cx S</span></li>
+        <li><a href="#i4">The Compounding Content Engine</a> <span class="tag">· architecture · Med-High · Cx L</span></li>
+        <li><a href="#i5">The Chronicle Comes Alive: A Nemesis That Learns You</a> <span class="tag">· adaptive meta · Med · Cx M</span></li>
+        <li><a href="#i6">Give the Player the Hand They Fight With</a> <span class="tag">· combat agency · High · Cx M</span></li>
+        <li><a href="#i7">Make Every Hit Land: Feel &amp; Honesty Pass</a> <span class="tag">· game feel · High · Cx S</span></li>
+      </ol>
+    </div>
+
+    <!-- IDEA 1 -->
+    <article class="idea" id="i1">
+      <div class="idea-head"><span class="idnum">I1</span><h3>Make Reading the Enemy the Core Skill</h3></div>
+      <div class="chips">
+        <span class="chip theme">Combat depth</span>
+        <span class="chip conf-high">Confidence: High</span>
+        <span class="chip cx-med">Complexity: Medium</span>
+      </div>
+      <div class="field">
+        <span class="k">Description</span>
+        <p>The planning board you just shipped is a <em>passive readout</em> — and against the hardest fights it is pointed at a random number generator. Turn the double-blind duel into a genuine mind-game by layering four moves on top of the board: (1) <b>script the strong enemies</b> so the board has something real to predict; (2) give action families <b>asymmetric prediction payoffs</b> (a correctly-timed block earns a counter, a read-and-punish does bonus damage) so reading the opponent <em>pays</em>; (3) let select enemies <b>bluff</b> — show a false intent summary with a learnable tell; (4) optionally let players <b>spend gold to buy down uncertainty</b> for one round. Each layer ships independently and compounds.</p>
+      </div>
+      <figure class="figure">
+        <svg viewBox="0 0 860 230" role="img" aria-label="From passive readout to a betting table: predict, reveal, and earn an asymmetric payoff, with a bluff branch.">
+          <!-- left: today -->
+          <text x="150" y="26" text-anchor="middle" fill="#b0a288" font-size="13" font-weight="700">TODAY</text>
+          <rect x="40" y="44" width="220" height="54" rx="9" fill="#2a2017" stroke="#3a2d20"/>
+          <text x="150" y="68" text-anchor="middle" fill="#ece3d4" font-size="13">Board shows intent</text>
+          <text x="150" y="86" text-anchor="middle" fill="#8a7c66" font-size="12">strong enemy → random</text>
+          <line x1="150" y1="98" x2="150" y2="126" stroke="#5a4632" stroke-width="2"/>
+          <polygon points="150,134 145,124 155,124" fill="#5a4632"/>
+          <rect x="40" y="136" width="220" height="46" rx="9" fill="#2a2017" stroke="#3a2d20"/>
+          <text x="150" y="164" text-anchor="middle" fill="#8a7c66" font-size="13">no reward for reading</text>
+          <!-- divider -->
+          <line x1="320" y1="44" x2="320" y2="182" stroke="#3a2d20" stroke-dasharray="4 5"/>
+          <!-- right: proposed loop -->
+          <text x="595" y="26" text-anchor="middle" fill="#ffd089" font-size="13" font-weight="700">PROPOSED — A BETTING TABLE</text>
+          <rect x="380" y="48" width="150" height="48" rx="9" fill="#312517" stroke="#5a4632"/>
+          <text x="455" y="71" text-anchor="middle" fill="#ece3d4" font-size="13">Scripted intent</text>
+          <text x="455" y="88" text-anchor="middle" fill="#86c46f" font-size="11.5">(honest or bluff)</text>
+          <rect x="560" y="48" width="120" height="48" rx="9" fill="#312517" stroke="#5a4632"/>
+          <text x="620" y="77" text-anchor="middle" fill="#ece3d4" font-size="13">You predict</text>
+          <rect x="710" y="48" width="120" height="48" rx="9" fill="#3a2a18" stroke="#f0a04b"/>
+          <text x="770" y="71" text-anchor="middle" fill="#ffd089" font-size="13">Asymmetric</text>
+          <text x="770" y="88" text-anchor="middle" fill="#ffd089" font-size="13">payoff</text>
+          <!-- arrows L->R -->
+          <line x1="530" y1="72" x2="556" y2="72" stroke="#5a4632" stroke-width="2"/>
+          <polygon points="562,72 552,67 552,77" fill="#5a4632"/>
+          <line x1="680" y1="72" x2="706" y2="72" stroke="#5a4632" stroke-width="2"/>
+          <polygon points="712,72 702,67 702,77" fill="#5a4632"/>
+          <!-- payoff legend -->
+          <text x="380" y="135" fill="#8a7c66" font-size="12.5" font-weight="700">PAYOFFS THAT REWARD A READ</text>
+          <text x="380" y="158" fill="#ece3d4" font-size="12.5">▸ block the predicted attack → free counter</text>
+          <text x="380" y="178" fill="#ece3d4" font-size="12.5">▸ punish a tell → bonus damage</text>
+          <text x="380" y="198" fill="#ece3d4" font-size="12.5">▸ spend gold → buy one round of certainty</text>
+        </svg>
+        <figcaption>The shipped board becomes the input to a reads game: honest-or-bluff intent → prediction → a payoff that makes reading worth it.</figcaption>
+      </figure>
+      <div class="field">
+        <span class="k">Basis</span>
+        <div class="basis direct"><span class="btag">direct</span>Strong enemies have no <code>combatScript</code> (<code>enemies.ts</code>: knight/necromancer/ogre, tier <code>strong</code>), so <code>planEnemyIntent</code> falls through to a weighted-random <code>pickFallbackCard</code> — verified. <code>EnemyIntentRevealMode = 'summary' | 'exact'</code> and <code>.summary</code> is a separate struct field from the resolved <code>.action</code>, so a false summary is renderable without touching <code>resolveRound</code> (it needs a new summary-override path, not just the existing flag).</div>
+        <div class="basis external"><span class="btag">external</span>Sirlin's <b>Yomi</b> design canon: asymmetric payoffs (attack→combo, block→draw, dodge→counter) that are "hard to compute" build intuition, not lookup tables. Inscryption's rule-bending bosses and the sparse <em>Rogue Paper Scissors</em>/<em>Handmancers</em> subgenre show the territory is wide open.</div>
+      </div>
+      <div class="field"><span class="k">Rationale</span><p>This is the single biggest cross-frame convergence: the difficulty curve is literally <em>inverted</em> — fights get statistically harder but mechanically dumber, and the readability feature goes dark exactly when stakes peak. <code>EnemyCombatScript.pattern</code> is cheap to extend, so this retroactively justifies the board the team just built and stakes out Escape's most defensible differentiator.</p></div>
+      <div class="field"><span class="k">Downsides</span><p>Asymmetric payoffs are the hardest thing in the game to balance — the <em>raison d'être</em> of the balance harness in I4. Bluffing can feel arbitrary without a clear, consistent tell. Scope is large if attempted at once; treat the four layers as a sequence, not one ship.</p></div>
+      <p class="combines">Combines with → <b>I4</b> (the balance harness makes payoff tuning safe), <b>I5</b> (a Nemesis that biases its script against your habits is the boss form of this), <b>I6</b> (reads matter more once you control your own hand).</p>
+    </article>
+
+    <!-- IDEA 2 -->
+    <article class="idea" id="i2">
+      <div class="idea-head"><span class="idnum">I2</span><h3>Escape Becomes a Verb: Push-Your-Luck Banking</h3></div>
+      <div class="chips">
+        <span class="chip theme">Run economy</span>
+        <span class="chip conf-high">Confidence: High</span>
+        <span class="chip cx-med">Complexity: Medium</span>
+      </div>
+      <div class="field">
+        <span class="k">Description</span>
+        <p>The game is named <em>Escape</em>, but leaving is never a strategy — death just resets you to zero, and Gold has only two mid-run uses. Make the title a mechanic: at each door you may <b>bank</b> your run's Gold into a guaranteed Ember payout, or <b>push deeper</b> for richer loot you forfeit entirely if you fall. Unbanked value grows with depth; capture costs you only what you didn't bank. Fix the reward function so the deeper run genuinely pays more (today loot decays toward unusable Gold). Optional escalators: a leveraged-debt curse ("The Ledger") and a hunting-boss clock that makes lingering cost distance.</p>
+      </div>
+      <figure class="figure">
+        <svg viewBox="0 0 860 250" role="img" aria-label="Unbanked value rises with depth while the forfeit-on-death risk rises with it; each door is a bank-or-push decision.">
+          <!-- axes -->
+          <line x1="60" y1="200" x2="800" y2="200" stroke="#5a4632" stroke-width="1.5"/>
+          <line x1="60" y1="40" x2="60" y2="200" stroke="#5a4632" stroke-width="1.5"/>
+          <text x="430" y="232" text-anchor="middle" fill="#8a7c66" font-size="12.5">room depth  →  (room 1 ............... boss, room 10)</text>
+          <text x="44" y="120" text-anchor="middle" fill="#8a7c66" font-size="12.5" transform="rotate(-90 44 120)">value at risk</text>
+          <!-- rising unbanked curve -->
+          <path d="M60,196 C260,188 430,150 620,96 720,68 770,54 792,48" fill="none" stroke="#f0a04b" stroke-width="3"/>
+          <text x="700" y="44" fill="#f0a04b" font-size="12.5" font-weight="700">unbanked Gold (grows)</text>
+          <!-- decision dots -->
+          <circle cx="250" cy="183" r="6" fill="#312517" stroke="#ffd089" stroke-width="2"/>
+          <circle cx="470" cy="140" r="6" fill="#312517" stroke="#ffd089" stroke-width="2"/>
+          <circle cx="650" cy="86" r="6" fill="#312517" stroke="#ffd089" stroke-width="2"/>
+          <text x="250" y="172" text-anchor="middle" fill="#b0a288" font-size="11.5">door</text>
+          <text x="470" y="129" text-anchor="middle" fill="#b0a288" font-size="11.5">door</text>
+          <text x="650" y="75" text-anchor="middle" fill="#b0a288" font-size="11.5">door</text>
+          <!-- decision callouts -->
+          <rect x="300" y="150" width="150" height="44" rx="8" fill="#22301f" stroke="#86c46f"/>
+          <text x="375" y="168" text-anchor="middle" fill="#86c46f" font-size="12" font-weight="700">BANK</text>
+          <text x="375" y="184" text-anchor="middle" fill="#b0a288" font-size="11">lock it as Ember</text>
+          <rect x="520" y="150" width="150" height="44" rx="8" fill="#311f1a" stroke="#e8856a"/>
+          <text x="595" y="168" text-anchor="middle" fill="#e8856a" font-size="12" font-weight="700">PUSH</text>
+          <text x="595" y="184" text-anchor="middle" fill="#b0a288" font-size="11">richer loot, forfeit on death</text>
+        </svg>
+        <figcaption>Every door is a real decision: bank the haul, or gamble it against a deeper, richer floor. Banked progress lost to greed stings more than a reset-to-zero death.</figcaption>
+      </figure>
+      <div class="field">
+        <span class="k">Basis</span>
+        <div class="basis external"><span class="btag">external</span><b>Clank! / Can't Stop</b> push-your-luck canon — the threat of losing <em>banked</em> progress is more potent than a death that resets you to zero anyway. It also serves both meta camps the genre splits on: cautious players bank, greedy players push, and persistent Embers stay intact.</div>
+        <div class="basis direct"><span class="btag">direct</span>Reward entropy is real: in <code>rewards.ts</code> the relic branch falls through to Gold once <code>randomRelic</code> returns null (all 4 owned), the item branch only ever mints potions (<code>randomItemIdForDepth</code>), and <code>iron_armor</code> exists in <code>ITEM_DEFS</code> with zero drop path — so the reward function decays as you progress, punishing your best runs.</div>
+      </div>
+      <div class="field"><span class="k">Rationale</span><p>Three frames independently landed here. It gives Gold genuine weight (a third use: something to <em>lose</em>), converts the forward-only crawl into a tension arc, and makes the title literal — all with no new content, just a decision surface on the doors that already exist.</p></div>
+      <div class="field"><span class="k">Downsides</span><p>Banking can become a dominant "always bail at room 6" line if the curve isn't tuned — needs the deeper-pays-more fix to hold, and the balance harness to verify. The hunting-boss and debt escalators are separable; don't bundle them into the MVP.</p></div>
+      <p class="combines">Combines with → <b>I3</b> (banked outcomes become the shareable daily glyph), <b>I4</b> (harness models the new skip/bail economy the simulator currently ignores).</p>
+    </article>
+
+    <!-- IDEA 3 -->
+    <article class="idea" id="i3">
+      <div class="idea-head"><span class="idnum">I3</span><h3>The Seeded Engine You Already Paid For</h3></div>
+      <div class="chips">
+        <span class="chip theme">Social meta</span>
+        <span class="chip conf-high">Confidence: High</span>
+        <span class="chip cx-low">Complexity: Small</span>
+      </div>
+      <div class="field">
+        <span class="k">Description</span>
+        <p>The Daily Descent is fully deterministic from <code>daily-YYYY-MM-DD</code> — everyone faces the byte-identical dungeon and offer sequence — yet it produces <em>zero</em> social value: no sharing, no leaderboard, no comparison. Harvest it. Emit a <b>Wordle-style spoiler-free result glyph</b> (depth + outcome grid + a few key choices) players paste anywhere, and a local <b>"ghost"</b> overlay so you can compare lines against your past attempts or a pasted run — all over copy-paste codes, no backend. Optionally make the Daily a <em>pure-skill</em> mode (no Ember benefits) so two players' runs are genuinely the same.</p>
+      </div>
+      <figure class="figure">
+        <svg viewBox="0 0 860 210" role="img" aria-label="One deterministic seed fans out to every player, producing comparable spoiler-free glyph lines.">
+          <rect x="40" y="78" width="150" height="54" rx="10" fill="#3a2a18" stroke="#f0a04b"/>
+          <text x="115" y="100" text-anchor="middle" fill="#ffd089" font-size="13" font-weight="700">one seed</text>
+          <text x="115" y="119" text-anchor="middle" fill="#b0a288" font-size="11.5">daily-2026-06-29</text>
+          <!-- fan out -->
+          <line x1="190" y1="105" x2="270" y2="60" stroke="#5a4632" stroke-width="2"/>
+          <line x1="190" y1="105" x2="270" y2="105" stroke="#5a4632" stroke-width="2"/>
+          <line x1="190" y1="105" x2="270" y2="150" stroke="#5a4632" stroke-width="2"/>
+          <!-- player glyph rows -->
+          <g font-size="15">
+            <rect x="272" y="40" width="300" height="40" rx="8" fill="#241c14" stroke="#3a2d20"/>
+            <text x="288" y="65" fill="#ece3d4">you  ⚔️⚔️📦⚔️🔥⚔️🏆</text>
+            <text x="556" y="65" text-anchor="end" fill="#86c46f">7/10 ✓</text>
+            <rect x="272" y="86" width="300" height="40" rx="8" fill="#241c14" stroke="#3a2d20"/>
+            <text x="288" y="111" fill="#ece3d4">A&nbsp;&nbsp;&nbsp;⚔️📦⚔️⚔️💀</text>
+            <text x="556" y="111" text-anchor="end" fill="#e8856a">5/10</text>
+            <rect x="272" y="132" width="300" height="40" rx="8" fill="#241c14" stroke="#3a2d20"/>
+            <text x="288" y="157" fill="#ece3d4">B&nbsp;&nbsp;&nbsp;🚪⚔️📦⚔️🔥⚔️⚔️🏆</text>
+            <text x="556" y="157" text-anchor="end" fill="#86c46f">8/10 ✓</text>
+          </g>
+          <!-- compare bracket -->
+          <path d="M592,46 q14,0 14,14 v40 q0,14 14,14 q-14,0 -14,14 v40 q0,14 -14,14" fill="none" stroke="#5a4632" stroke-width="1.5"/>
+          <text x="640" y="101" fill="#ffd089" font-size="12.5" font-weight="700">same route,</text>
+          <text x="640" y="119" fill="#ffd089" font-size="12.5" font-weight="700">comparable lines</text>
+        </svg>
+        <figcaption>Determinism is already built and tested — this collects the latent community/retention value sitting unused, for the cost of a string formatter and a ghost overlay.</figcaption>
+      </figure>
+      <div class="field">
+        <span class="k">Basis</span>
+        <div class="basis direct"><span class="btag">direct</span><code>daily.ts</code> <code>dailySeed</code> returns <code>`daily-${dailyKey(date)}`</code>; <code>DailyRecord</code> holds only <code>date/seed/bestDepth/escaped/attempts</code> — no sharing, ghost, or comparison anywhere. The seeded-run contract (explicit, serializable RNG) is precisely what makes a pasted ghost replay identically.</div>
+        <div class="basis external"><span class="btag">external</span><b>Wordle</b> proved a shared spoiler-free daily glyph drives organic discussion; <b>Strava segments</b> show identical-route async comparison ("did you take a better line here?") is a community engine with no live opponent.</div>
+      </div>
+      <div class="field"><span class="k">Rationale</span><p>Four frames converged on this as the <em>cheapest</em> high-leverage move: the expensive engineering (a reproducible deterministic run) is already paid for. It's the single most plausible path to a community for a solo browser dev with no servers.</p></div>
+      <div class="field"><span class="k">Downsides</span><p>Glyph design must stay genuinely spoiler-free. Ghost replay must be guarded against the seed contract drifting (any new RNG-consuming system risks invalidating old ghosts — see the harness in I4). Virality is never guaranteed.</p></div>
+      <p class="combines">Combines with → <b>I2</b> (banked outcomes are richer glyph content), <b>I4</b> (seed-stability assertions protect ghosts).</p>
+    </article>
+
+    <!-- IDEA 4 -->
+    <article class="idea" id="i4">
+      <div class="idea-head"><span class="idnum">I4</span><h3>The Compounding Content Engine</h3></div>
+      <div class="chips">
+        <span class="chip theme">Content architecture</span>
+        <span class="chip conf-med">Confidence: Med-High</span>
+        <span class="chip cx-high">Complexity: High</span>
+      </div>
+      <div class="field">
+        <span class="k">Description</span>
+        <p>The content is thin (17 cards, 4 relics, 3 scripted enemies) not because authoring is expensive but because every new mechanic edits a closed resolver. Pay the architecture down once: refactor <code>applyAction</code> into a <b>handler registry + combat event bus</b> (<code>onRoundStart</code>, <code>onDamageDealt</code>, <code>onCardPlayed</code>…). After that, <b>synergy tags</b>, <b>relic "Jokers,"</b> conditional cards, and a <b>procedural enemy generator</b> (driven by the existing preference grammar) all become <em>data and subscribers</em>, not resolver edits. Gate it with an <b>extended balance harness</b> that models flee/skip and asserts seed-stability, so generated content ships safely.</p>
+      </div>
+      <figure class="figure">
+        <svg viewBox="0 0 860 250" role="img" aria-label="A central combat event bus with effects, relics, statuses, synergy and a generator as subscribers, all guarded by a balance harness.">
+          <!-- bus -->
+          <rect x="250" y="104" width="360" height="46" rx="10" fill="#3a2a18" stroke="#f0a04b" stroke-width="2"/>
+          <text x="430" y="132" text-anchor="middle" fill="#ffd089" font-size="14" font-weight="700">combat event bus</text>
+          <!-- subscribers top -->
+          <g font-size="12.5">
+            <rect x="120" y="34" width="140" height="40" rx="8" fill="#241c14" stroke="#3a2d20"/>
+            <text x="190" y="59" text-anchor="middle" fill="#ece3d4">effect handlers</text>
+            <rect x="290" y="34" width="120" height="40" rx="8" fill="#241c14" stroke="#3a2d20"/>
+            <text x="350" y="59" text-anchor="middle" fill="#ece3d4">relic Jokers</text>
+            <rect x="440" y="34" width="120" height="40" rx="8" fill="#241c14" stroke="#3a2d20"/>
+            <text x="500" y="59" text-anchor="middle" fill="#ece3d4">status FX</text>
+            <rect x="590" y="34" width="150" height="40" rx="8" fill="#241c14" stroke="#3a2d20"/>
+            <text x="665" y="59" text-anchor="middle" fill="#ece3d4">synergy tags</text>
+          </g>
+          <!-- connectors top (vertical, clear of labels) -->
+          <line x1="190" y1="74" x2="190" y2="104" stroke="#5a4632" stroke-width="1.6"/>
+          <line x1="350" y1="74" x2="350" y2="104" stroke="#5a4632" stroke-width="1.6"/>
+          <line x1="500" y1="74" x2="500" y2="104" stroke="#5a4632" stroke-width="1.6"/>
+          <line x1="665" y1="74" x2="665" y2="104" stroke="#5a4632" stroke-width="1.6"/>
+          <!-- subscriber bottom: generator -->
+          <rect x="330" y="180" width="200" height="42" rx="8" fill="#241c14" stroke="#3a2d20"/>
+          <text x="430" y="206" text-anchor="middle" fill="#ece3d4" font-size="12.5">procedural enemy generator</text>
+          <line x1="430" y1="150" x2="430" y2="180" stroke="#5a4632" stroke-width="1.6"/>
+          <!-- harness gate around -->
+          <rect x="92" y="16" width="676" height="222" rx="14" fill="none" stroke="#86c46f" stroke-dasharray="6 6"/>
+          <rect x="92" y="2" width="232" height="22" rx="6" fill="#22301f" stroke="#86c46f"/>
+          <text x="208" y="18" text-anchor="middle" fill="#86c46f" font-size="11.5" font-weight="700">balance harness — content gate</text>
+        </svg>
+        <figcaption>Once new mechanics are subscribers to a bus instead of edits to a resolver, content begets content — and the harness is what lets generated content ship without multiplying QA.</figcaption>
+      </figure>
+      <div class="field">
+        <span class="k">Basis</span>
+        <div class="basis direct"><span class="btag">direct</span><code>CardEffect</code> is a closed union (<code>damage|block|heal|status</code>) and <code>applyAction</code> is a hardcoded if/else with no fallthrough — verified; adding a verb does nothing until the resolver is edited. The enemy preference grammar (<code>EnemyCombatPreference = fast_damage|damage|block_damage|status|block|heal</code>, <code>pattern: [][]</code>) already exists as generator fuel. <code>balanceSimulator.ts</code> declares <code>BALANCE_ENCOUNTER_POLICY = 'fight-taken-baseline'</code> with no skip/flee path.</div>
+        <div class="basis external"><span class="btag">external</span><b>Balatro</b>'s Jokers and <b>Slay the Spire</b>'s relics are the genre's highest build-defining content density per byte — and both are event subscribers in spirit. The grounding's "legible base + deep modifiers" lesson is exactly this shape.</div>
+      </div>
+      <div class="field"><span class="k">Rationale</span><p>This is the leverage keystone under I1, I5, and most future content. It converts "every mechanic costs a resolver edit + a regression pass on the seed contract" into "every mechanic costs a data entry," and the harness is the precondition that makes the generators trustworthy rather than a QA liability.</p></div>
+      <div class="field"><span class="k">Downsides</span><p>Highest complexity here — an event bus touches the most-tested file in the codebase and risks the seeded-run contract if done carelessly. It pays off only if followed by the content that exploits it; as a standalone refactor it's invisible to players. Sequence it deliberately (bus → synergy/relics → generator).</p></div>
+      <p class="combines">Combines with → <b>I1</b> (prediction-payoff verbs need the open union), <b>I5</b> (Nemesis biasing reuses the generator), <b>I3</b>/<b>I2</b> (the harness's seed-stability + skip modeling protect both).</p>
+    </article>
+
+    <!-- IDEA 5 -->
+    <article class="idea" id="i5">
+      <div class="idea-head"><span class="idnum">I5</span><h3>The Chronicle Comes Alive: A Nemesis That Learns You</h3></div>
+      <div class="chips">
+        <span class="chip theme">Adaptive meta</span>
+        <span class="chip conf-med">Confidence: Medium</span>
+        <span class="chip cx-med">Complexity: Medium</span>
+      </div>
+      <div class="field">
+        <span class="k">Description</span>
+        <p>The chronicle records the last 10 runs as inert stats — and notably <em>not</em> what killed you or how you play. Add a couple of fields (the killer's archetype, your dominant action family) and turn dead telemetry into personalized, escalating content: deterministically seed a <b>Nemesis</b> into a future run — the thing that beat you, evolved, biasing its script to counter the family you lean on. Because the core is a double-blind duel, "it has learned your habits" is genuinely threatening. Lighter variants of the same data move: <b>spaced-repetition coaching</b> (re-present the situations you keep failing) and <b>campfire ghosts</b> (past runs as warm, named echoes).</p>
+      </div>
+      <figure class="figure">
+        <svg viewBox="0 0 860 168" role="img" aria-label="A loop: a run ends, the death is recorded with how you played, which deterministically seeds an evolved antagonist into a future run.">
+          <rect x="40" y="60" width="150" height="48" rx="9" fill="#241c14" stroke="#3a2d20"/>
+          <text x="115" y="89" text-anchor="middle" fill="#ece3d4" font-size="13">a run ends</text>
+          <rect x="250" y="60" width="180" height="48" rx="9" fill="#241c14" stroke="#3a2d20"/>
+          <text x="340" y="82" text-anchor="middle" fill="#ece3d4" font-size="12.5">record killer +</text>
+          <text x="340" y="99" text-anchor="middle" fill="#ece3d4" font-size="12.5">your dominant family</text>
+          <rect x="490" y="60" width="170" height="48" rx="9" fill="#3a2a18" stroke="#f0a04b"/>
+          <text x="575" y="82" text-anchor="middle" fill="#ffd089" font-size="12.5">seed a Nemesis</text>
+          <text x="575" y="99" text-anchor="middle" fill="#ffd089" font-size="12.5">(counters your habits)</text>
+          <rect x="710" y="60" width="120" height="48" rx="9" fill="#241c14" stroke="#3a2d20"/>
+          <text x="770" y="89" text-anchor="middle" fill="#ece3d4" font-size="13">future run</text>
+          <!-- arrows -->
+          <line x1="190" y1="84" x2="246" y2="84" stroke="#5a4632" stroke-width="2"/><polygon points="252,84 242,79 242,89" fill="#5a4632"/>
+          <line x1="430" y1="84" x2="486" y2="84" stroke="#5a4632" stroke-width="2"/><polygon points="492,84 482,79 482,89" fill="#5a4632"/>
+          <line x1="660" y1="84" x2="706" y2="84" stroke="#5a4632" stroke-width="2"/><polygon points="712,84 702,79 702,89" fill="#5a4632"/>
+          <!-- feedback loop -->
+          <path d="M770,108 v26 q0,12 -12,12 H127 q-12,0 -12,-12 v-26" fill="none" stroke="#5a4632" stroke-width="1.6" stroke-dasharray="5 5"/>
+          <polygon points="115,112 110,122 120,122" fill="#5a4632"/>
+          <text x="440" y="160" text-anchor="middle" fill="#8a7c66" font-size="11.5">the longer you play, the more the game authors antagonists about you</text>
+        </svg>
+        <figcaption>Data the game almost already collects becomes escalating, personalized content — every death writes a future antagonist, as a pure function of chronicle + seed.</figcaption>
+      </figure>
+      <div class="field">
+        <span class="k">Basis</span>
+        <div class="basis direct"><span class="btag">direct</span><code>chronicle.ts</code> <code>RunChronicleEntry</code> stores <code>runId/completedAt/seed/dailyKey/escaped/depth/enemiesDefeated/gold/emberReward</code> — verified: no killer, no deck snapshot, no playstyle tag, and nothing reads it to adapt. The persistence already exists; only the fields and a consumer are missing.</div>
+        <div class="basis external"><span class="btag">external</span><b>Shadow of Mordor</b>'s Nemesis system and Inscryption's meta-narrative ("bosses that cheat / remember you") are the canon for turning recorded play into personalized antagonists. Spaced-repetition (SM-2) is the canon for the coaching variant.</div>
+      </div>
+      <div class="field"><span class="k">Rationale</span><p>Three frames reached for the chronicle. It turns an inert stats store into the meta-layer's reason to exist, and it lands in the double-blind niche — a Nemesis that reads <em>you</em> is the boss-scale version of I1. Crucially it's the meta the purist camp endorses: it sharpens, it doesn't grant raw power.</p></div>
+      <div class="field"><span class="k">Downsides</span><p>"Adaptive AI" risks feeling unfair or like rubber-banding if the bias is too strong or opaque — the grudge must be legible. Nemesis injection must be a pure function of chronicle + seed to honor the seeded-run contract. Authoring "evolved" variants leans on the generator in I4 to avoid bespoke cost.</p></div>
+      <p class="combines">Combines with → <b>I4</b> (generator produces the evolved variants), <b>I1</b> (Nemesis script-bias is asymmetric reads at boss scale), <b>I3</b> (a defeated-by-Nemesis run is a great glyph).</p>
+    </article>
+
+    <!-- IDEA 6 -->
+    <article class="idea" id="i6">
+      <div class="idea-head"><span class="idnum">I6</span><h3>Give the Player the Hand They Fight With</h3></div>
+      <div class="chips">
+        <span class="chip theme">Combat agency</span>
+        <span class="chip conf-high">Confidence: High</span>
+        <span class="chip cx-med">Complexity: Medium</span>
+      </div>
+      <div class="field">
+        <span class="k">Description</span>
+        <p>You choose which card to <em>play</em> each round — but you never choose your <b>hand</b>. The 5-card combat hand is auto-composed by a hidden scorer that force-keeps ≥3 offensive cards, silently suppressing defensive or status-focused builds the player might want. The tell that this hurts: the team shipped <code>rewardImpact</code> previews <em>specifically to explain why your new card won't be used</em>. Give composition back along a spectrum, lightest first: (a) expose the scorer as a per-run <b>"doctrine" dial</b> (Aggressive / Bulwark / Affliction) that re-sorts the hand; (b) let players <b>pin/bench</b> cards manually; (c) the bold end — a <b>"singularity"</b> build around a small modifiable spine, so each reward mutates one card instead of diluting a pile.</p>
+      </div>
+      <figure class="figure">
+        <svg viewBox="0 0 860 150" role="img" aria-label="Today a hidden scorer auto-picks the hand; proposed, the player chooses a doctrine or curates the hand directly.">
+          <text x="215" y="26" text-anchor="middle" fill="#b0a288" font-size="13" font-weight="700">TODAY</text>
+          <rect x="60" y="40" width="140" height="40" rx="8" fill="#241c14" stroke="#3a2d20"/>
+          <text x="130" y="64" text-anchor="middle" fill="#ece3d4" font-size="12.5">collection</text>
+          <rect x="240" y="40" width="150" height="40" rx="8" fill="#2a2017" stroke="#5a4632"/>
+          <text x="315" y="58" text-anchor="middle" fill="#8a7c66" font-size="12">hidden scorer</text>
+          <text x="315" y="73" text-anchor="middle" fill="#8a7c66" font-size="11">forces ≥3 offensive</text>
+          <line x1="200" y1="60" x2="236" y2="60" stroke="#5a4632" stroke-width="2"/><polygon points="242,60 232,55 232,65" fill="#5a4632"/>
+          <rect x="240" y="92" width="150" height="34" rx="8" fill="#241c14" stroke="#3a2d20"/>
+          <text x="315" y="114" text-anchor="middle" fill="#8a7c66" font-size="12">auto hand of 5</text>
+          <line x1="315" y1="80" x2="315" y2="92" stroke="#5a4632" stroke-width="2"/>
+          <!-- divider -->
+          <line x1="445" y1="34" x2="445" y2="128" stroke="#3a2d20" stroke-dasharray="4 5"/>
+          <!-- proposed -->
+          <text x="650" y="26" text-anchor="middle" fill="#ffd089" font-size="13" font-weight="700">PROPOSED — A SPECTRUM</text>
+          <rect x="490" y="40" width="150" height="40" rx="8" fill="#22301f" stroke="#86c46f"/>
+          <text x="565" y="58" text-anchor="middle" fill="#86c46f" font-size="12" font-weight="700">doctrine dial</text>
+          <text x="565" y="73" text-anchor="middle" fill="#b0a288" font-size="11">aggro / bulwark / affliction</text>
+          <rect x="660" y="40" width="150" height="40" rx="8" fill="#2a2418" stroke="#e3b765"/>
+          <text x="735" y="58" text-anchor="middle" fill="#e3b765" font-size="12" font-weight="700">pin / bench</text>
+          <text x="735" y="73" text-anchor="middle" fill="#b0a288" font-size="11">manual curation</text>
+          <rect x="575" y="92" width="150" height="38" rx="8" fill="#311f1a" stroke="#e8856a"/>
+          <text x="650" y="110" text-anchor="middle" fill="#e8856a" font-size="12" font-weight="700">singularity build</text>
+          <text x="650" y="124" text-anchor="middle" fill="#b0a288" font-size="11">one spine, modifier stickers</text>
+        </svg>
+        <figcaption>Lightest-touch (a dial that re-sorts the existing scorer) to boldest (a single evolving card) — all restore the genre's core meta-skill: deckcraft.</figcaption>
+      </figure>
+      <div class="field">
+        <span class="k">Basis</span>
+        <div class="basis direct"><span class="btag">direct</span><code>cardSelection.ts</code>: <code>MIN_OFFENSIVE_CARDS = 3</code> and the score <code>tier*100 + damage*8 + block*4 + heal*4 + status + speed</code>; <code>selectCombatHand</code> sorts the whole collection and slices the top 5 with no player input over composition — verified. <code>rewardImpact.ts</code> enumerates <code>replaces_card / improves_role / collection_only / unchanged</code>, i.e. UI built to warn that a reward is inert.</div>
+        <div class="basis reasoned"><span class="btag">reasoned</span>In a simultaneous-choice game the meta-skill is supposed to be deckcraft, but here it's automated away — and a "your loot does nothing" preview is the codebase admitting the auto-hand creates dead rewards. Surfacing the scorer (rather than overriding it) is the lightest change that converts every drop from "the sorter decides" into agency, without rebuilding combat.</div>
+      </div>
+      <div class="field"><span class="k">Rationale</span><p>Four frames flagged the auto-hand as a buried design opinion the player never agreed to. It directly makes the existing reward stream (and I1's reads) matter more, and the doctrine-dial rung is genuinely cheap — it reuses the scorer the game already runs.</p></div>
+      <div class="field"><span class="k">Downsides</span><p>Manual curation risks re-introducing the per-fight micro the design deliberately avoids — the dial keeps the "no fiddly micro" philosophy while the pin/bench and singularity rungs trade more of it away. Picking the rung is a design-identity decision, not just scope.</p></div>
+      <p class="combines">Combines with → <b>I1</b> (a hand you chose makes reads sharper), <b>I4</b> (synergy tags give curation real decisions), <b>I7</b> (fixing the status-upgrade lie is part of making curation honest).</p>
+    </article>
+
+    <!-- IDEA 7 -->
+    <article class="idea" id="i7">
+      <div class="idea-head"><span class="idnum">I7</span><h3>Make Every Hit Land: Feel &amp; Honesty Pass</h3></div>
+      <div class="chips">
+        <span class="chip theme">Game feel</span>
+        <span class="chip conf-high">Confidence: High</span>
+        <span class="chip cx-low">Complexity: Small</span>
+      </div>
+      <div class="field">
+        <span class="k">Description</span>
+        <p>In a market with 850+ deckbuilders crowded on features, <b>feel</b> is the open lane — and Escape's most <em>frequent</em> friction fires on literally every attack: the enemy never flinches. There's no hurt-flash on the enemy sprite, no floating damage/heal numbers, no status-application ping, no screen punch on big hits, and <code>combatFeedback.ts</code> is a 64-byte empty stub waiting for exactly this. Do a procedural juice pass (sprite tint, tween pops, particle rects, status pings — all on-brand for the no-assets pipeline). Bundle two <b>honesty fixes</b> that quietly erode trust: the paid-lie status upgrade, and the permanently-false flee reward.</p>
+      </div>
+      <div class="field">
+        <span class="k">Basis</span>
+        <div class="basis direct"><span class="btag">direct</span><code>combatFeedback.ts</code> is a 64-byte stub (verified on disk); the enemy sprite is never flashed (<code>flash()</code> fires only on the player). <code>cardUpgrade.ts:18</code> returns the status effect unchanged while line 21 appends <code>+</code> regardless — paying Gold to upgrade a pure-status card changes only the name. <code>evaluateRoomThreatEscape</code> returns <code>grantBattleReward:false</code> in all three branches, so the documented flee reward is unreachable.</div>
+        <div class="basis external"><span class="btag">external</span>The 2024–25 pixel-art "comfort aesthetic" trend and the grounding's own read that the crowded genre is "under-explored on feel and accessibility" make polish a differentiation lever, not just hygiene.</div>
+      </div>
+      <div class="field"><span class="k">Rationale</span><p>The highest juice-per-line in the project: the change improves the largest number of player-seconds (every attack of every fight), the home module already exists, and it requires no new art pipeline. The honesty fixes are small but matter — a core economy loop that charges a scarce resource and lies in the UI is the worst class of friction.</p></div>
+      <div class="field"><span class="k">Downsides</span><p>Juice is easy to overdo (screen shake fatigue, illegible particle noise) — restraint and an accessibility toggle matter. The honesty fixes are quick wins but require deciding what a status upgrade <em>should</em> do (e.g. +1 stack/duration) and whether fleeing should pay at all (ties into I2's economy).</p></div>
+      <p class="combines">Combines with → <b>I2</b> (decide the flee reward as part of the banking economy), <b>I6</b> (a real status upgrade makes affliction builds viable).</p>
+    </article>
+  </section>
+
+  <section>
+    <h2>Rejection Summary</h2>
+    <p class="prose">Most of the 47 raw candidates were <em>merged</em> into the seven survivors above (e.g. the bluff, payoff-triangle, strong-enemy-scripting, and buy-down-info ideas all fused into I1). The table records the directions that were considered and <b>cut or deferred</b>, with why.</p>
+    <table>
+      <thead><tr><th>Idea</th><th>Reason cut / deferred</th></tr></thead>
+      <tbody>
+        <tr><td>Plan-vs-plan combat (commit a multi-round sequence)</td><td>Compelling but a larger combat restructure; revisit as a brainstorm variant of I1 once the simpler payoff layer proves out.</td></tr>
+        <tr><td>Recruit the dead / third combatant</td><td>Requires an N-actor rewrite of the hardcoded 1v1 <code>resolveRound</code>; high cost relative to the reads gains in I1/I5.</td></tr>
+        <tr><td>Transform-only rewards (no collection growth)</td><td>Sweeping economy inversion; partially served by I2's reward-entropy fix and I6's curation — better as a brainstorm option than a default direction.</td></tr>
+        <tr><td>Full pacifist / stealth playstyle</td><td>Needs the skip-balance modeling from I4 first; the concrete dead-flee-reward fix is folded into I7.</td></tr>
+        <tr><td>Fog-off routing (show every door's event)</td><td>Routing-as-menu removes the dungeon's exploration tension; I2 delivers the same push-your-luck goal with less premise change.</td></tr>
+        <tr><td>One <code>RunModifier</code> abstraction (Daily + Ascension + challenges)</td><td>Strong leverage but too broad to action as one direction; the Daily slice is served by I3, the rest is a later consolidation.</td></tr>
+        <tr><td>Clockwork / total-information puzzle fights</td><td>The opposite of the double-blind core (I1); interesting as a separate combat texture, not this run's thrust.</td></tr>
+        <tr><td>Warden mode (build the dungeon, a ghost escapes)</td><td>Large async-multiplayer surface; a genuine moonshot, far beyond current scope.</td></tr>
+        <tr><td>Cheating bosses (break engine rules)</td><td>A memorable boss-design flourish; fold into boss authoring after I1/I4 land and more than 3 bosses exist.</td></tr>
+        <tr><td>Auto-expedition / idle descent</td><td>Changes the game's active-play identity; park (the pre-run preview sub-idea is minor).</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <footer class="composition-signal">Composed 2026-06-29 by ce-ideate (surprise-me mode) · 6 ceiling-tier idea frames + fresh-context basis verifier · grounded in repo <code>dariuszparys/escape</code> @ <code>main</code>.</footer>
+
+</div>
+</body>
+</html>
