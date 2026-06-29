@@ -36,6 +36,10 @@ export class RunState {
   scoutCharges = 0;
   curseIds: CampfireCurseId[] = [];
   bossDefeated = false;
+  /** Current stratum of the endless descent. Starts at 1, advances at each gate via commitDelve. */
+  stratum = 1;
+  /** Run terminus: true once the player banks and escapes, false on death. Single source of truth. */
+  escaped = false;
   isDaily = false;
   dailyKey: string | null = null;
 

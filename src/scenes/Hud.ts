@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
-import { GAME_W, MAX_DEPTH, ROOM_H, HUD_H, MAX_INVENTORY } from '../config';
+import { GAME_W, ROOM_H, HUD_H, MAX_INVENTORY, STRATUM_SIZE } from '../config';
 import { primaryCardValue } from '../data/cards';
+import { depthWithinStratum, isStratumBoundary, stratumForDepth } from '../game/strata';
 import { getRun } from '../state';
 
 const TYPE_COLOR: Record<string, string> = {
@@ -177,13 +178,24 @@ export class HudScene extends Phaser.Scene {
       );
     }
 
+    const atBoss = isStratumBoundary(run.depth);
     this.dynamic.add(
       this.add
-        .text(GAME_W - 24, y0 + 30, `ROOM ${Math.min(run.depth, MAX_DEPTH)}/${MAX_DEPTH}`, {
+        .text(GAME_W - 24, y0 + 28, `STRATUM ${stratumForDepth(run.depth)}`, {
+          fontFamily: 'monospace',
+          fontSize: '14px',
+          fontStyle: 'bold',
+          color: '#d8d2e4',
+        })
+        .setOrigin(1, 0.5),
+    );
+    this.dynamic.add(
+      this.add
+        .text(GAME_W - 24, y0 + 50, `ROOM ${depthWithinStratum(run.depth)}/${STRATUM_SIZE}`, {
           fontFamily: 'monospace',
           fontSize: '17px',
           fontStyle: 'bold',
-          color: run.depth >= MAX_DEPTH ? '#ff5544' : '#f1c40f',
+          color: atBoss ? '#ff5544' : '#f1c40f',
         })
         .setOrigin(1, 0.5),
     );

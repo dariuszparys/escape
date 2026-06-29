@@ -9,6 +9,8 @@ export const GAME_W = ROOM_W;
 export const GAME_H = ROOM_H + HUD_H; // 640
 
 export const MAX_DEPTH = 10;
+/** Rooms per stratum. The boss fires at every multiple of this depth (10, 20, 30, ...). */
+export const STRATUM_SIZE = 10;
 export const MAX_HAND = 5;
 export const MAX_INVENTORY = 3;
 export const PLAYER_MAX_HP = 34;

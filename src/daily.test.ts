@@ -111,6 +111,15 @@ describe('daily challenge records', () => {
     expect(loadDailyRecord(storage)).toEqual(record);
   });
 
+  test('records deep delve depth past 10 as the comparable metric', () => {
+    const record = createDefaultDailyRecord(new Date('2026-06-27T00:00:00Z'));
+    const recorded = recordDailyAttempt(record, { depth: 24, escaped: true });
+
+    // Depth climbs past 10 unchanged, giving finer leaderboard resolution than a stratum index.
+    expect(recorded.bestDepth).toBe(24);
+    expect(recorded.attempts).toBe(1);
+  });
+
   test('records attempt stats without mutating the input record', () => {
     const record = createDefaultDailyRecord(new Date('2026-06-27T00:00:00Z'));
     const recorded = recordDailyAttempt(record, { depth: 7, escaped: true });

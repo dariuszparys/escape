@@ -51,6 +51,45 @@ describe('enemy generation', () => {
     );
   });
 
+  test('strong enemies carry readable combat scripts for deep strata', () => {
+    expect(ENEMIES.find((enemy) => enemy.id === 'knight')?.combatScript?.archetype).toBe(
+      'tempo_pressure',
+    );
+    expect(ENEMIES.find((enemy) => enemy.id === 'necromancer')?.combatScript?.archetype).toBe(
+      'status_pressure',
+    );
+    expect(ENEMIES.find((enemy) => enemy.id === 'ogre')?.combatScript?.archetype).toBe(
+      'block_pressure',
+    );
+  });
+
+  test('a stratum-2 boss has more HP than a stratum-1 boss (depth term applied)', () => {
+    const stratum1 = spawnBoss(new SequenceRng([0]), 10);
+    const stratum2 = spawnBoss(new SequenceRng([0]), 20);
+
+    expect(stratum2.def.id).toBe(stratum1.def.id); // same boss def for a fair comparison
+    expect(stratum2.hp).toBeGreaterThan(stratum1.hp);
+    expect(stratum2.maxHp).toBe(stratum2.hp);
+  });
+
+  test('boss HP increases monotonically across deeper strata, deterministically', () => {
+    const hpAt = (depth: number) => spawnBoss(new SequenceRng([0]), depth).hp;
+    expect(hpAt(10)).toBeLessThan(hpAt(20));
+    expect(hpAt(20)).toBeLessThan(hpAt(30));
+    expect(hpAt(30)).toBe(hpAt(30)); // deterministic for a fixed seed/depth
+  });
+
+  test('the stratum-1 boss is unchanged by the depth term', () => {
+    const boss = spawnBoss(new SequenceRng([0]), 10);
+    expect(boss.hp).toBe(boss.def.baseHp);
+  });
+
+  test('normal enemy HP increases monotonically with depth across strata', () => {
+    const hpAt = (depth: number) => spawnEnemy(new SequenceRng([0]), depth, 3).hp;
+    expect(hpAt(8)).toBeLessThan(hpAt(18));
+    expect(hpAt(18)).toBeLessThan(hpAt(28));
+  });
+
   test('bosses resolve to boss pressure dungeon threat profiles', () => {
     for (const boss of BOSSES) {
       expect(getEnemyThreatProfile(boss)).toBe('boss_pressure');

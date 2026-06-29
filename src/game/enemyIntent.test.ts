@@ -106,6 +106,79 @@ describe('planEnemyIntent', () => {
     expect([...result.usedCardUids]).toEqual([123]);
   });
 
+  test('strong enemies resolve their scripts rather than falling back', () => {
+    const cases: [string, string[]][] = [
+      ['knight', ['quick_jab', 'heavy_strike', 'guard']],
+      ['necromancer', ['poison_dagger', 'slash']],
+      ['ogre', ['guard', 'slash']],
+    ];
+
+    for (const [id, cardIds] of cases) {
+      const result = planEnemyIntent({
+        enemy: enemy(id, cardIds),
+        round: 1,
+        usedCardUids: new Set(),
+        rng: new SequenceRng([0, 0]),
+      });
+
+      expect(result.source).toBe('script');
+      expect(result.action.kind).toBe('card');
+    }
+  });
+
+  test('script patterns index by round modulo length (round 4 mirrors round 1)', () => {
+    const ogre = () => enemy('ogre', ['guard', 'slash', 'iron_wall']);
+
+    const round1 = planEnemyIntent({
+      enemy: ogre(),
+      round: 1,
+      usedCardUids: new Set(),
+      rng: new SequenceRng([0, 0]),
+    });
+    const round4 = planEnemyIntent({
+      enemy: ogre(),
+      round: 4,
+      usedCardUids: new Set(),
+      rng: new SequenceRng([0, 0]),
+    });
+
+    expect(round4.source).toBe('script');
+    expect(round1.summary).toEqual(round4.summary);
+  });
+
+  test('the low-HP branch prepends heal to a script enemy preferences', () => {
+    const healthy = planEnemyIntent({
+      enemy: enemy('necromancer', ['minor_heal', 'slash']),
+      round: 1,
+      usedCardUids: new Set(),
+      rng: new SequenceRng([0, 0]),
+      lowHealth: false,
+    });
+    const wounded = planEnemyIntent({
+      enemy: enemy('necromancer', ['minor_heal', 'slash']),
+      round: 1,
+      usedCardUids: new Set(),
+      rng: new SequenceRng([0, 0]),
+      lowHealth: true,
+    });
+
+    expect(healthy.summary.family).toBe('attack'); // slash, no heal prepended
+    expect(wounded.summary.family).toBe('heal'); // heal prepended and chosen
+  });
+
+  test('a script enemy with no matching card still falls back safely', () => {
+    const result = planEnemyIntent({
+      enemy: enemy('ogre', ['minor_heal']),
+      round: 1,
+      usedCardUids: new Set(),
+      rng: new SequenceRng([0]),
+      lowHealth: false,
+    });
+
+    expect(result.source).toBe('fallback');
+    expect(result.action.kind).toBe('card');
+  });
+
   test('same seeded inputs commit equivalent actions for shared callers', () => {
     const state = enemy('armored_goblin', ['shield_bash', 'iron_wall', 'slash']);
 

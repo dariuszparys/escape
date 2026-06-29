@@ -61,6 +61,7 @@ describe('run chronicle', () => {
             enemiesDefeated: -4,
             gold: 3.2,
             emberReward: -10.1,
+            convertedEmbers: -2.5,
           },
         ],
       } as const),
@@ -82,9 +83,42 @@ describe('run chronicle', () => {
           enemiesDefeated: 0,
           gold: 3,
           emberReward: 0,
+          convertedEmbers: 0,
         },
       ],
     });
+  });
+
+  test('defaults convertedEmbers to 0 for pre-delve saves (safe migration)', () => {
+    const legacy = {
+      runsCompleted: 1,
+      escapes: 1,
+      bestDepth: 9,
+      bestGold: 40,
+      bestEnemiesDefeated: 6,
+      lastRunId: 'old-run',
+      recent: [
+        {
+          runId: 'old-run',
+          completedAt: '2026-06-20T00:00:00.000Z',
+          seed: 'old-seed',
+          dailyKey: null,
+          escaped: true,
+          depth: 9,
+          enemiesDefeated: 6,
+          gold: 40,
+          emberReward: 6,
+          // no convertedEmbers field — this is a pre-delve save
+        },
+      ],
+    };
+
+    const normalized = normalizeRunChronicle(legacy);
+    expect(normalized.recent[0].convertedEmbers).toBe(0);
+    // Ember/depth totals are untouched by the migration.
+    expect(normalized.recent[0].emberReward).toBe(6);
+    expect(normalized.bestDepth).toBe(9);
+    expect(normalized.escapes).toBe(1);
   });
 
   test('round-trips through save/load with a memory storage stub', () => {
@@ -107,6 +141,7 @@ describe('run chronicle', () => {
           enemiesDefeated: 2,
           gold: 5,
           emberReward: 10,
+          convertedEmbers: 0,
         },
       ],
     };
@@ -127,6 +162,7 @@ describe('run chronicle', () => {
       enemiesDefeated: 4,
       gold: 12,
       emberReward: 6,
+      convertedEmbers: 2,
     });
 
     expect(recorded).toEqual({
@@ -147,6 +183,7 @@ describe('run chronicle', () => {
           enemiesDefeated: 4,
           gold: 12,
           emberReward: 6,
+          convertedEmbers: 2,
         },
       ],
     });
@@ -168,6 +205,7 @@ describe('run chronicle', () => {
           enemiesDefeated: 2,
           gold: 10,
           emberReward: 6,
+          convertedEmbers: 0,
         },
       ],
     };
@@ -183,8 +221,48 @@ describe('run chronicle', () => {
         enemiesDefeated: 20,
         gold: 50,
         emberReward: 8,
+        convertedEmbers: 5,
       }),
     ).toEqual(base);
+  });
+
+  test('records a banked delve run with its deep progress and converted Embers', () => {
+    const recorded = recordRunChronicleEntry(createDefaultRunChronicle(), {
+      runId: 'delve-1',
+      completedAt: '2026-06-29T00:00:00.000Z',
+      seed: 'seed-d',
+      dailyKey: null,
+      escaped: true,
+      depth: 27,
+      enemiesDefeated: 30,
+      gold: 180,
+      emberReward: 14,
+      convertedEmbers: 8,
+    });
+
+    expect(recorded.bestDepth).toBe(27);
+    expect(recorded.bestGold).toBe(180);
+    expect(recorded.recent[0].convertedEmbers).toBe(8);
+    expect(recorded.recent[0].escaped).toBe(true);
+  });
+
+  test('records a death-in-delve run with zero converted Embers', () => {
+    const recorded = recordRunChronicleEntry(createDefaultRunChronicle(), {
+      runId: 'delve-2',
+      completedAt: '2026-06-29T00:00:00.000Z',
+      seed: 'seed-d2',
+      dailyKey: null,
+      escaped: false,
+      depth: 23,
+      enemiesDefeated: 26,
+      gold: 150,
+      emberReward: 3,
+      convertedEmbers: 0,
+    });
+
+    expect(recorded.recent[0].convertedEmbers).toBe(0);
+    expect(recorded.recent[0].escaped).toBe(false);
+    expect(recorded.bestDepth).toBe(23);
   });
 
   test('keeps only the 10 most recent runs', () => {
@@ -198,6 +276,7 @@ describe('run chronicle', () => {
       enemiesDefeated: i,
       gold: i,
       emberReward: i,
+      convertedEmbers: 0,
     }));
 
     const chronicle = runs.reduce(

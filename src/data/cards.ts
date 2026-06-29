@@ -1,4 +1,5 @@
 import { GameRng } from '../game/rng';
+import { stratumForDepth } from '../game/strata';
 
 export type CardType = 'attack' | 'block' | 'heal' | 'utility' | 'status';
 export type StatusEffectType = 'poison' | 'burn' | 'stun';
@@ -240,7 +241,19 @@ function pickWeighted(rng: GameRng, weights: [number, number, number]): 1 | 2 | 
   return 3;
 }
 
-/** Random card, tier odds shifting with dungeon depth (1..10). */
+/**
+ * Tier weights past depth 9. The depth-9 baseline is [0, 5, 5]; each stratum beyond
+ * the first shifts one point from tier 2 toward tier 3 (clamped so a sliver of tier 2
+ * always remains), so deeper strata keep improving card quality rather than freezing.
+ * Deterministic in depth — Daily reproducibility holds (KTD4).
+ */
+function deepTierWeights(depth: number): [number, number, number] {
+  const beyondFirst = Math.max(0, stratumForDepth(depth) - 1);
+  const tier2 = Math.max(1, 5 - beyondFirst);
+  return [0, tier2, 10 - tier2];
+}
+
+/** Random card, tier odds shifting with dungeon depth and continuing to climb across strata. */
 export function randomCard(rng: GameRng, depth: number): Card {
   const t =
     depth <= 3
@@ -249,7 +262,7 @@ export function randomCard(rng: GameRng, depth: number): Card {
         ? pickWeighted(rng, [4, 5, 1])
         : depth <= 9
           ? pickWeighted(rng, [2, 5, 3])
-          : pickWeighted(rng, [0, 5, 5]);
+          : pickWeighted(rng, deepTierWeights(depth));
   const pool = STANDARD_CARD_DEFS.filter((c) => c.tier === t);
   return makeCard(rng.pick(pool));
 }

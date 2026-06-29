@@ -33,6 +33,30 @@ describe('room generation', () => {
     expect(room.openDoors).toEqual([]);
     expect(room.blockedDoor).toBe('S');
   });
+
+  test('the boss re-gates at every stratum boundary past depth 10', () => {
+    for (const depth of [20, 30]) {
+      const room = makeNextRoom(new SequenceRng([0]), depth, 'N');
+      expect(room.event).toBe('boss');
+      expect(room.openDoors).toEqual([]);
+    }
+  });
+
+  test('depths between stratum boundaries roll normal events', () => {
+    for (const depth of [11, 15, 19, 21]) {
+      const room = makeNextRoom(new SequenceRng([0]), depth, 'N');
+      expect(room.event).not.toBe('boss');
+      expect(room.openDoors.length).toBeGreaterThan(0);
+    }
+  });
+
+  test('the pre-boss reward table repeats each stratum (depth 19 == depth 9)', () => {
+    // chest threshold: encounter 22, then chest fires at 0.22 in the pre-boss table.
+    expect(rollRoomEvent(new SequenceRng([0.22]), 19)).toBe('chest');
+    expect(rollRoomEvent(new SequenceRng([0.22]), 9)).toBe('chest');
+    // In the normal table chest does not start until 0.32, so depth 11 mirrors depth 1.
+    expect(rollRoomEvent(new SequenceRng([0.22]), 11)).toBe('encounter');
+  });
 });
 
 describe('trap room spike placement', () => {

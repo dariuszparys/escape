@@ -40,6 +40,9 @@ import {
   restActionCost,
   type RestActionMode,
 } from '../game/restEconomy';
+import { commitDelve, resolveBank } from '../game/delve';
+import { calculateEmberReward } from '../game/metaRewards';
+import { stratumForDepth } from '../game/strata';
 import { getRun } from '../state';
 
 const DOOR_CELL: Record<Dir, { col: number; row: number }> = {
@@ -124,6 +127,7 @@ export class DungeonScene extends Phaser.Scene {
   private visionGraphics: Phaser.GameObjects.Graphics | null = null;
   private restActionPanel: Phaser.GameObjects.Container | null = null;
   private restCardPanel: Phaser.GameObjects.Container | null = null;
+  private gatePanel: Phaser.GameObjects.Container | null = null;
 
   constructor() {
     super('Dungeon');
@@ -178,6 +182,7 @@ export class DungeonScene extends Phaser.Scene {
       this.disableDarknessOverlay();
       this.closeRestActionPanel();
       this.closeRestCardPanel();
+      this.closeGatePanel();
       this.game.events.off('battle-end');
     });
   }
@@ -502,7 +507,7 @@ export class DungeonScene extends Phaser.Scene {
         break;
       }
       case 'boss': {
-        built.enemy = spawnBoss(this.gameRng);
+        built.enemy = spawnBoss(this.gameRng, room.depth);
         this.createThreatActor(built, room, origin, built.enemy);
         break;
       }
@@ -912,7 +917,7 @@ export class DungeonScene extends Phaser.Scene {
       this.player.setVelocity(0, 0);
       return;
     }
-    if (this.restActionPanel || this.restCardPanel) {
+    if (this.restActionPanel || this.restCardPanel || this.gatePanel) {
       this.player.setVelocity(0, 0);
       return;
     }
@@ -1103,13 +1108,12 @@ export class DungeonScene extends Phaser.Scene {
       }
     }
 
-    // exit hatch
+    // exit hatch — beating the stratum boss opens the gate decision (bank or delve).
     if (
       this.exitHatch &&
       Phaser.Math.Distance.Between(px, py, this.exitHatch.x, this.exitHatch.y) < 30
     ) {
-      this.scene.stop('Hud');
-      this.scene.start('End', { victory: true });
+      this.openGateDecision();
     }
   }
 
@@ -1393,5 +1397,196 @@ export class DungeonScene extends Phaser.Scene {
     this.room.cleared = true;
     this.transitioning = false;
     this.floatText(this.player.x, this.player.y - 42, 'Left the rest room', '#b8b0c8');
+  }
+
+  // ------------------------------------------------------------ stratum gate
+
+  private closeGatePanel(): void {
+    this.gatePanel?.destroy();
+    this.gatePanel = null;
+  }
+
+  /** Present the bank-or-delve choice after a stratum boss falls (R1, R2). */
+  private openGateDecision(): void {
+    if (this.gatePanel || this.transitioning) return;
+    const run = getRun();
+    this.player.setVelocity(0, 0);
+    this.player.anims.stop();
+
+    const stratum = stratumForDepth(run.depth);
+    const reward = calculateEmberReward({
+      depth: run.depth,
+      enemiesDefeated: run.enemiesDefeated,
+      gold: run.gold,
+      escaped: true,
+      convertGold: !run.isDaily,
+    });
+    const bankLine = run.isDaily
+      ? `Bank: end the delve at depth ${run.depth} (no Ember conversion in Daily)`
+      : `Bank: convert ${run.gold} Gold → ${reward.convertedEmbers} Ember${
+          reward.convertedEmbers === 1 ? '' : 's'
+        } (+${reward.escapeEmbers} escape)`;
+
+    const cx = this.origin.x + ROOM_W / 2;
+    const cy = this.origin.y + ROOM_H / 2;
+    const panel = this.add.container(cx, cy).setDepth(300);
+    this.gatePanel = panel;
+
+    const w = 420;
+    const h = 252;
+    const bg = this.add.graphics();
+    bg.fillStyle(0x111019, 0.98);
+    bg.fillRoundedRect(-w / 2, -h / 2, w, h, 8);
+    bg.lineStyle(2, 0xf1c40f, 0.85);
+    bg.strokeRoundedRect(-w / 2, -h / 2, w, h, 8);
+    panel.add(bg);
+
+    panel.add(
+      this.add
+        .text(0, -h / 2 + 28, `STRATUM ${stratum} CLEARED`, {
+          fontFamily: 'monospace',
+          fontSize: '22px',
+          fontStyle: 'bold',
+          color: '#f1c40f',
+        })
+        .setOrigin(0.5),
+    );
+    panel.add(
+      this.add
+        .text(0, -h / 2 + 60, 'Cash out a winner, or descend into a deadlier stratum?', {
+          fontFamily: 'monospace',
+          fontSize: '11px',
+          color: '#b8b0c8',
+          align: 'center',
+          fixedWidth: w - 40,
+          wordWrap: { width: w - 40, useAdvancedWrap: true },
+        })
+        .setOrigin(0.5),
+    );
+
+    const bank = this.add
+      .text(0, -14, '[ BANK & ESCAPE ]', {
+        fontFamily: 'monospace',
+        fontSize: '16px',
+        fontStyle: 'bold',
+        color: '#5fe07a',
+        backgroundColor: '#1c2a1c',
+        padding: { x: 14, y: 9 },
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+    bank.on('pointerover', () => bank.setColor('#9bf5ad'));
+    bank.on('pointerout', () => bank.setColor('#5fe07a'));
+    bank.on('pointerdown', () => this.bankAndEscape());
+    panel.add(bank);
+
+    panel.add(
+      this.add
+        .text(0, 22, bankLine, {
+          fontFamily: 'monospace',
+          fontSize: '10px',
+          color: '#8e889a',
+          align: 'center',
+          fixedWidth: w - 40,
+          wordWrap: { width: w - 40, useAdvancedWrap: true },
+        })
+        .setOrigin(0.5),
+    );
+
+    const delve = this.add
+      .text(0, 62, `[ DELVE → STRATUM ${stratum + 1} ]`, {
+        fontFamily: 'monospace',
+        fontSize: '16px',
+        fontStyle: 'bold',
+        color: '#ff7a55',
+        backgroundColor: '#2a1c1c',
+        padding: { x: 14, y: 9 },
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+    delve.on('pointerover', () => delve.setColor('#ff9b80'));
+    delve.on('pointerout', () => delve.setColor('#ff7a55'));
+    delve.on('pointerdown', () => this.startDelveTransition());
+    panel.add(delve);
+
+    panel.add(
+      this.add
+        .text(0, 98, 'Delving forfeits all unbanked Gold if you fall.', {
+          fontFamily: 'monospace',
+          fontSize: '10px',
+          color: '#6a6478',
+          align: 'center',
+        })
+        .setOrigin(0.5),
+    );
+  }
+
+  /** Bank terminus: cash out the run as a win and route to End (R6, KTD2). */
+  private bankAndEscape(): void {
+    const run = getRun();
+    resolveBank(run);
+    this.closeGatePanel();
+    playSfx(this, 'victory');
+    this.scene.stop('Hud');
+    this.scene.start('End', { victory: true });
+  }
+
+  /**
+   * Delve terminus: advance into the next stratum. The boss room is sealed, so we
+   * fade out, rebuild the next stratum's first room at a canonical origin seeded
+   * from run.seed + stratum index (independent of the prior path), then fade in —
+   * keeping Daily strata reproducible across players (KTD1, delve-determinism risk).
+   */
+  private startDelveTransition(): void {
+    if (this.transitioning) return;
+    this.transitioning = true;
+    this.closeGatePanel();
+    this.closeDeckOverlay();
+    this.disableDarknessOverlay();
+    this.player.setVelocity(0, 0);
+    this.player.body.enable = false;
+    this.exitHatch = null;
+    playSfx(this, 'door');
+
+    const run = getRun();
+    commitDelve(run);
+    run.bossDefeated = false;
+    const nextDepth = run.depth + 1;
+    const delveSeed = [run.seed, 'stratum', run.stratum].join(':');
+    this.rng = new Phaser.Math.RandomDataGenerator([delveSeed]);
+    this.gameRng = new PhaserGameRng(this.rng);
+
+    const dir: Dir = 'S';
+    this.cameras.main.fadeOut(420, 11, 10, 18);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      const newOrigin = { x: 0, y: 0 };
+      const nextRoom = makeNextRoom(this.gameRng, nextDepth, dir);
+
+      this.wallCollider?.destroy();
+      this.wallCollider = null;
+      this.destroyBuilt(this.built);
+      this.origin = newOrigin;
+      this.built = this.buildRoom(nextRoom, newOrigin);
+      this.room = nextRoom;
+      this.attachWalls();
+      run.depth = nextDepth;
+
+      const entry = ENTRY_CELL[dir];
+      const target = {
+        x: newOrigin.x + entry.col * TILE + TILE / 2,
+        y: newOrigin.y + entry.row * TILE + TILE / 2,
+      };
+      this.player.body.reset(target.x, target.y);
+      this.player.body.enable = true;
+      this.player.setTexture('hero_down_0');
+      this.facing = 'S';
+      this.cameras.main.setScroll(newOrigin.x, newOrigin.y);
+
+      this.primeNextRoomOptions();
+      this.cameras.main.fadeIn(420, 11, 10, 18);
+      this.transitioning = false;
+      this.hud();
+      this.onRoomEntered();
+    });
   }
 }

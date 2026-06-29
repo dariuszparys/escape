@@ -1,5 +1,6 @@
-import { Dir, DIRS, DIR_VEC, MAX_DEPTH, OPPOSITE, ROOM_COLS, ROOM_ROWS } from '../config';
+import { Dir, DIRS, DIR_VEC, OPPOSITE, ROOM_COLS, ROOM_ROWS, STRATUM_SIZE } from '../config';
 import { GameRng } from '../game/rng';
+import { depthWithinStratum, isStratumBoundary } from '../game/strata';
 
 export type RoomEvent = 'start' | 'encounter' | 'chest' | 'potion' | 'rest' | 'trap' | 'boss';
 
@@ -15,8 +16,9 @@ export interface RoomData {
 }
 
 export function rollRoomEvent(rng: GameRng, depth: number): RoomEvent {
+  // The chest-heavy pre-boss table fires on the last room of every stratum.
   const table: [RoomEvent, number][] =
-    depth === MAX_DEPTH - 1
+    depthWithinStratum(depth) === STRATUM_SIZE - 1
       ? [
           ['encounter', 22],
           ['chest', 38],
@@ -116,7 +118,7 @@ export function makeStartRoom(): RoomData {
 /** Build the room behind a door. Entered moving `travelDir`, so the door at OPPOSITE(travelDir) is blocked. */
 export function makeNextRoom(rng: GameRng, depth: number, travelDir: Dir): RoomData {
   const entry = OPPOSITE[travelDir];
-  if (depth >= MAX_DEPTH) {
+  if (isStratumBoundary(depth)) {
     return { depth, event: 'boss', openDoors: [], blockedDoor: entry, spikes: [], cleared: false };
   }
   const event = rollRoomEvent(rng, depth);

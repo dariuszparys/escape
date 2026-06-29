@@ -10,12 +10,41 @@ import { combatCardScore, selectCombatHand } from './cardSelection';
 import { applyPendingPrepToRun } from './campfirePrep';
 import type { ActiveStatusEffect } from './combat';
 import { resolveRound } from './combat';
+import { commitDelve } from './delve';
 import { planEnemyIntent } from './enemyIntent';
-import { awardPotionItem, rollChestReward } from './rewards';
+import { convertGoldToEmbers } from './metaRewards';
+import { awardEnemyGold, awardPotionItem, rollChestReward } from './rewards';
 import { GameRng } from './rng';
 import { startingCardIdsForRun } from './startingCards';
+import { isStratumBoundary, stratumForDepth } from './strata';
 import { upgradeCard } from './cardUpgrade';
 import { canUseRestAction, payRestAction } from './restEconomy';
+
+/**
+ * How a simulated player treats each boss gate. The three lines bracket the
+ * push-your-luck decision so the harness can prove no single line dominates (R14).
+ */
+export type DelveStrategy = 'cautious' | 'moderate' | 'aggressive';
+
+/** Gold→Ember conversion used by the economy harness; injectable so tests can probe over-generous curves. */
+export type GoldConversion = (gold: number) => number;
+
+/** Safety cap on strata so a mis-tuned "push until death" line cannot loop unbounded (KTD8). */
+export const MAX_SIMULATED_STRATA = 12;
+
+interface SimRunOptions {
+  strategy: DelveStrategy;
+  maxStrata: number;
+  convert: GoldConversion;
+}
+
+/** Decide whether to delve the next stratum after clearing the boss of `stratumCleared`. */
+function shouldDelve(strategy: DelveStrategy, stratumCleared: number, maxStrata: number): boolean {
+  if (stratumCleared >= maxStrata) return false; // hard termination guard
+  if (strategy === 'cautious') return false; // always bank at the first gate
+  if (strategy === 'moderate') return stratumCleared < 2; // delve one stratum, then bank
+  return true; // aggressive: push until death (or the cap)
+}
 
 export interface BalanceScenario {
   prepItemIds?: InventoryItemDef['id'][];
@@ -41,13 +70,18 @@ export interface BalanceSimulationSummary {
   byEncounter: Record<string, EncounterBucketSummary>;
 }
 
-export const BALANCE_ENCOUNTER_POLICY = 'fight-taken-baseline';
-
 interface SimRunResult {
+  /** Banked successfully — the run's win condition. */
   victory: boolean;
   reachedBoss: boolean;
+  /** Cleared the first stratum boss, so the run actually faced the bank-or-delve choice. */
+  clearedFirstGate: boolean;
   deathDepth: number | null;
+  /** Deepest stratum reached, whether banked or died. */
+  stratumReached: number;
   encounters: number;
+  /** Embers minted from Gold at the bank (0 on death). */
+  convertedEmbers: number;
 }
 
 type PlayerAction =
@@ -176,6 +210,19 @@ function chooseRewardCard(run: RunState, enemyCards: readonly Card[]): void {
   }
 
   if (best) run.addCard(best);
+}
+
+export function applySimulatedPostBattleRewards(
+  run: RunState,
+  rng: GameRng,
+  depth: number,
+  enemyCards: readonly Card[],
+): void {
+  if (run.hasRelic('vampiric_blade')) {
+    run.heal(2);
+  }
+  awardEnemyGold(run, rng, depth);
+  chooseRewardCard(run, enemyCards);
 }
 
 export function applySimulatedRest(run: RunState): void {
@@ -460,22 +507,64 @@ function simulateBattle(
   return { won: state.enemyHp <= 0, enemyCards: enemy.cards };
 }
 
-export function simulateRun(seed: number, scenario: BalanceScenario): SimRunResult {
+const DEFAULT_RUN_OPTIONS: SimRunOptions = {
+  strategy: 'cautious',
+  maxStrata: MAX_SIMULATED_STRATA,
+  convert: convertGoldToEmbers,
+};
+
+export function simulateRun(
+  seed: number,
+  scenario: BalanceScenario,
+  options: Partial<SimRunOptions> = {},
+): SimRunResult {
+  const { strategy, maxStrata, convert } = { ...DEFAULT_RUN_OPTIONS, ...options };
   const rng = new SeededRng(seed >>> 0);
   const run = createScenarioRun(seed, scenario);
   let encounters = 0;
+  let reachedBoss = false;
+  let bossesCleared = 0;
 
-  for (let depth = 2; depth <= MAX_DEPTH; depth++) {
-    maybeUseDungeonPotion(run, depth === MAX_DEPTH);
+  // Depth climbs forever; a boss sits at every stratum boundary and the loop only
+  // exits on a bank or a death. The maxStrata guard caps the boundary count.
+  for (let depth = 2; ; depth++) {
+    run.depth = depth;
+    const atBoss = isStratumBoundary(depth);
+    maybeUseDungeonPotion(run, atBoss);
 
-    if (depth === MAX_DEPTH) {
-      const battle = simulateBattle(run, spawnBoss(rng), rng);
-      return {
-        victory: battle.won,
-        reachedBoss: true,
-        deathDepth: battle.won ? null : depth,
-        encounters,
-      };
+    if (atBoss) {
+      reachedBoss = true;
+      const battle = simulateBattle(run, spawnBoss(rng, depth), rng);
+      if (!battle.won) {
+        return {
+          victory: false,
+          reachedBoss: true,
+          clearedFirstGate: bossesCleared >= 1,
+          deathDepth: depth,
+          stratumReached: stratumForDepth(depth),
+          encounters,
+          convertedEmbers: 0,
+        };
+      }
+      run.enemiesDefeated++;
+      applySimulatedPostBattleRewards(run, rng, depth, battle.enemyCards);
+      bossesCleared++;
+      const stratumCleared = stratumForDepth(depth);
+      run.stratum = stratumCleared;
+
+      if (!shouldDelve(strategy, stratumCleared, maxStrata)) {
+        return {
+          victory: true,
+          reachedBoss: true,
+          clearedFirstGate: true,
+          deathDepth: null,
+          stratumReached: stratumCleared,
+          encounters,
+          convertedEmbers: convert(run.gold),
+        };
+      }
+      commitDelve(run); // advance stratum + gate-clear breather, then keep descending
+      continue;
     }
 
     const event = chooseRoomEvent(run, rng, depth);
@@ -489,15 +578,16 @@ export function simulateRun(seed: number, scenario: BalanceScenario): SimRunResu
       if (!battle.won) {
         return {
           victory: false,
-          reachedBoss: false,
+          reachedBoss,
+          clearedFirstGate: bossesCleared >= 1,
           deathDepth: depth,
+          stratumReached: stratumForDepth(depth),
           encounters,
+          convertedEmbers: 0,
         };
       }
-      if (run.hasRelic('vampiric_blade')) {
-        run.heal(2);
-      }
-      chooseRewardCard(run, battle.enemyCards);
+      run.enemiesDefeated++;
+      applySimulatedPostBattleRewards(run, rng, depth, battle.enemyCards);
       continue;
     }
 
@@ -517,13 +607,6 @@ export function simulateRun(seed: number, scenario: BalanceScenario): SimRunResu
       if (reward.kind === 'inventory_full') replaceInventoryItem(run, reward.item);
     }
   }
-
-  return {
-    victory: false,
-    reachedBoss: false,
-    deathDepth: MAX_DEPTH,
-    encounters,
-  };
 }
 
 export function simulateScenarioSummary(
@@ -559,5 +642,112 @@ export function simulateScenarioSummary(
     bossKillGivenReach: bossReached === 0 ? 0 : wins / bossReached,
     avgDeathDepth: deaths === 0 ? MAX_DEPTH : deathDepthTotal / deaths,
     byEncounter,
+  };
+}
+
+// ---------------------------------------------------------------- delve economy
+
+export interface DelveStrategySummary {
+  strategy: DelveStrategy;
+  /** Runs that actually reached the first gate, where the bank-or-delve choice applies. */
+  gateRuns: number;
+  /** Among gate-reachers: fraction that banked a win. */
+  bankRate: number;
+  /** Among gate-reachers: fraction that died chasing a deeper bank. */
+  deathRate: number;
+  /** Among gate-reachers: expected Embers minted from Gold (the line's payoff). */
+  avgConvertedEmbers: number;
+  /** Among gate-reachers: average deepest stratum reached. */
+  avgStratumReached: number;
+}
+
+export interface DelveEconomyOptions {
+  runs?: number;
+  maxStrata?: number;
+  convert?: GoldConversion;
+}
+
+export interface DelveEconomySummary {
+  maxStrata: number;
+  cautious: DelveStrategySummary;
+  moderate: DelveStrategySummary;
+  aggressive: DelveStrategySummary;
+}
+
+function summarizeStrategy(
+  strategy: DelveStrategy,
+  scenario: BalanceScenario,
+  runs: number,
+  maxStrata: number,
+  convert: GoldConversion,
+): DelveStrategySummary {
+  let gateRuns = 0;
+  let banked = 0;
+  let embersTotal = 0;
+  let strataTotal = 0;
+
+  for (let seed = 1; seed <= runs; seed++) {
+    const result = simulateRun(seed, scenario, { strategy, maxStrata, convert });
+    if (!result.clearedFirstGate) continue; // the line only diverges once the gate is reached
+    gateRuns++;
+    if (result.victory) banked++;
+    embersTotal += result.convertedEmbers;
+    strataTotal += result.stratumReached;
+  }
+
+  return {
+    strategy,
+    gateRuns,
+    bankRate: gateRuns === 0 ? 0 : banked / gateRuns,
+    deathRate: gateRuns === 0 ? 0 : (gateRuns - banked) / gateRuns,
+    avgConvertedEmbers: gateRuns === 0 ? 0 : embersTotal / gateRuns,
+    avgStratumReached: gateRuns === 0 ? 0 : strataTotal / gateRuns,
+  };
+}
+
+/**
+ * Model the bank-or-delve economy across the three strategy lines. Conditioned on
+ * reaching the first gate so the comparison isolates the push-your-luck decision
+ * rather than the base run's difficulty.
+ */
+export function simulateDelveEconomy(
+  scenario: BalanceScenario,
+  options: DelveEconomyOptions = {},
+): DelveEconomySummary {
+  const runs = options.runs ?? 240;
+  const maxStrata = options.maxStrata ?? MAX_SIMULATED_STRATA;
+  const convert = options.convert ?? convertGoldToEmbers;
+
+  return {
+    maxStrata,
+    cautious: summarizeStrategy('cautious', scenario, runs, maxStrata, convert),
+    moderate: summarizeStrategy('moderate', scenario, runs, maxStrata, convert),
+    aggressive: summarizeStrategy('aggressive', scenario, runs, maxStrata, convert),
+  };
+}
+
+export interface DelveDominance {
+  cautiousDominant: boolean;
+  aggressiveDominant: boolean;
+  hasDominantLine: boolean;
+}
+
+/**
+ * A line "dominates" when its expected Ember payoff beats both rivals by more than
+ * `margin` Embers — i.e. a rational player would always pick it, collapsing the
+ * decision. Healthy tuning keeps the three lines within a margin of each other.
+ */
+export function assessDelveDominance(economy: DelveEconomySummary, margin = 1): DelveDominance {
+  const c = economy.cautious.avgConvertedEmbers;
+  const m = economy.moderate.avgConvertedEmbers;
+  const a = economy.aggressive.avgConvertedEmbers;
+
+  const cautiousDominant = c > m + margin && c > a + margin;
+  const aggressiveDominant = a > m + margin && a > c + margin;
+
+  return {
+    cautiousDominant,
+    aggressiveDominant,
+    hasDominantLine: cautiousDominant || aggressiveDominant,
   };
 }
