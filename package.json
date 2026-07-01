@@ -11,7 +11,15 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,html,css,yml,yaml}": "prettier --write"
   },
   "dependencies": {
     "phaser": "^3.87.0"
@@ -20,6 +28,8 @@
     "@eslint/js": "^10.0.1",
     "eslint": "^10.5.0",
     "eslint-config-prettier": "^10.1.8",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.8",
     "prettier": "^3.8.5",
     "typescript": "^5.6.0",
     "typescript-eslint": "^8.62.0",
