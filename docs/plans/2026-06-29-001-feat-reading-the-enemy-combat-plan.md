@@ -1,5 +1,5 @@
 ---
-title: "feat: Reading the Enemy — make the card duel a mind-game"
+title: 'feat: Reading the Enemy — make the card duel a mind-game'
 type: feat
 date: 2026-06-29
 origin: docs/brainstorms/2026-06-29-reading-the-enemy-combat-requirements.md
@@ -22,28 +22,33 @@ The Card Battle Planning Board previews enemy intent, speed order, and status, b
 Carried from the origin requirements doc (see origin). Grouped by layer plus cross-cutting.
 
 **Layer 1 — Script the strong enemies**
+
 - R1. Every non-boss enemy resolves its turn from a defined behavior, not weighted-random fallback; strong enemies gain combat scripts.
 - R2. Each strong enemy reads as a distinct, learnable threat identity, not a generically harder weak enemy.
 - R3. Weighted-random fallback remains only a safety net for an enemy with no script and no usable card.
 
 **Layer 2 — Family matchup triangle (player-only)**
+
 - R4. Action families relate in a cyclic matchup where one family beats another.
 - R5. When the player's committed action beats the enemy's true action family, the player earns a matchup bonus; the enemy never receives a mirror bonus.
 - R6. The matchup relationship and the consequence of winning it are surfaced on the planning board before the player commits.
 - R7. The matchup is computed against the enemy's true action, so a bluff that misrepresents the family causes a player who trusts it to miss the bonus.
 
 **Layer 3 — Deceiver enemies**
+
 - R8. A deceiver can present an intent summary describing a different family than it will resolve, without changing how the round resolves mechanically.
 - R9. The planning board marks deceiver enemies so the player knows deception is possible.
 - R10. Each deceiver shows a consistent, learnable tell distinguishing feint from honest intent; the tell is deterministic for a given situation.
 - R11. The feint is constrained so a player who reads the tell and counters the true family gets the normal matchup payoff.
 
 **Layer 4 — Gold reveal (buy-down)**
+
 - R12. The player can spend Gold during battle to reveal one round's true intent, piercing a bluff and confirming an honest read.
 - R13. The reveal applies to the round it is purchased and does not persist.
 - R14. The reveal is presented as a deliberate cost decision in the battle UI, not an always-on reveal.
 
 **Cross-cutting**
+
 - R15. All new combat behavior lives in pure, unit-tested logic; Phaser scenes only render and sync it.
 - R16. Every new decision derives deterministically from the seeded RNG and does not perturb the random sequence on untaken paths, keeping Daily Descents comparable.
 
@@ -102,6 +107,7 @@ Phased by layer; each phase is independently shippable and leaves the game playa
 ### Phase 1 — Layer 1: Script the strong enemies
 
 ### U1. Script knight, necromancer, and ogre
+
 - Goal: give the three strong enemies combat scripts so the planning board previews real intent (R1, R2), with fallback retained as a safety net (R3).
 - Requirements: R1, R2, R3.
 - Dependencies: none.
@@ -118,6 +124,7 @@ Phased by layer; each phase is independently shippable and leaves the game playa
 ### Phase 2 — Layer 2: Family matchup triangle
 
 ### U2. Pure family-matchup module
+
 - Goal: define the family→role mapping, the beats cycle, and the player-only bonus computation (R4, R5).
 - Requirements: R4, R5.
 - Dependencies: none (consumed by U3, U4, U10).
@@ -132,6 +139,7 @@ Phased by layer; each phase is independently shippable and leaves the game playa
 - Verification: pure tests cover every wheel edge and the neutral cases.
 
 ### U3. Apply the matchup bonus in resolution
+
 - Goal: thread the player-only bonus into `resolveRound` and wire its computation in the battle scene (R5, R7).
 - Requirements: R5, R7.
 - Dependencies: U2.
@@ -149,6 +157,7 @@ Phased by layer; each phase is independently shippable and leaves the game playa
 - Verification: matchup outcomes change enemy HP only on a player win, and only for the player.
 
 ### U4. Surface the matchup on the planning board
+
 - Goal: show what beats the shown intent before the player commits (R6).
 - Requirements: R6.
 - Dependencies: U2.
@@ -164,6 +173,7 @@ Phased by layer; each phase is independently shippable and leaves the game playa
 ### Phase 3 — Layer 3: Deceiver enemies
 
 ### U5. Deceiver intent capability + tell
+
 - Goal: let a deceiver display a decoy family while keeping the canonical intent true, with a deterministic tell (R8, R10, R11, R7).
 - Requirements: R8, R10, R11, R7.
 - Dependencies: U2.
@@ -178,6 +188,7 @@ Phased by layer; each phase is independently shippable and leaves the game playa
 - Verification: deceivers mislead the display but resolve and score on the canonical truth.
 
 ### U6. Render the deceiver marker and tell
+
 - Goal: mark deceivers and show the tell on the board, distinct from boss telegraphs (R9, R10).
 - Requirements: R9, R10.
 - Dependencies: U4, U5.
@@ -191,6 +202,7 @@ Phased by layer; each phase is independently shippable and leaves the game playa
 - Verification: deceiver fights visibly warn the player and show the tell, with no boss audio.
 
 ### U7. Assign deceiver enemies
+
 - Goal: designate which enemies bluff (R8).
 - Requirements: R8.
 - Dependencies: U5.
@@ -204,6 +216,7 @@ Phased by layer; each phase is independently shippable and leaves the game playa
 ### Phase 4 — Layer 4: Gold reveal
 
 ### U8. Reveal logic + spendGold
+
 - Goal: reveal one round's true intent for a Gold cost, one round only, with no re-plan (R12, R13).
 - Requirements: R12, R13.
 - Dependencies: U2, U5.
@@ -218,6 +231,7 @@ Phased by layer; each phase is independently shippable and leaves the game playa
 - Verification: paying reveals the truth for exactly one round, costs Gold, and never re-rolls the enemy card.
 
 ### U9. Wire reveal + Gold UI into the battle scene
+
 - Goal: present the reveal as an in-battle cost decision with a Gold readout and defined control states (R14).
 - Requirements: R14.
 - Dependencies: U8.
@@ -232,6 +246,7 @@ Phased by layer; each phase is independently shippable and leaves the game playa
 ### Phase 5 — Balance harness
 
 ### U10. Model the matchup and reveal in the simulator
+
 - Goal: let the balance simulator account for the matchup payoff (and optionally the reveal) so the levers in KTD3/KTD4/KTD7 can be tuned, and validate no degenerate dominant line (success criteria).
 - Requirements: supports R4, R5, R12 tuning; success criteria.
 - Dependencies: U2, U3 (and U5, U8 for full modeling).
@@ -248,14 +263,17 @@ Phased by layer; each phase is independently shippable and leaves the game playa
 ## Scope Boundaries
 
 ### Deferred for later
+
 - Plan-vs-plan / multi-round commit combat — a larger restructure; revisit as a variant once the single-round reading loop proves out.
 - The combat event-bus / effect-registry refactor — U3 makes a contained, backward-compatible change to `resolveRound`; the broader refactor that would make new effect verbs fully data-driven is separate.
 
 ### Outside this initiative
+
 - Reworking auto-hand composition (player control over which cards form the hand).
 - Shareable / async Daily Descent comparison. This plan only preserves seed comparability (R16).
 
 ### Deferred to follow-up work
+
 - Symmetric (two-way) matchup for bosses — rejected for v1 (player-only, KTD2); a possible later escalation.
 
 ---
@@ -285,6 +303,7 @@ Carried from origin; enforced by the cited unit tests.
 ## Open Questions
 
 Deferred to implementation (non-blocking):
+
 - Final tuned values for the triangle wheel weighting, bonus magnitude, and reveal cost — set as directional defaults now (KTD3, KTD4, KTD7) and finalized via U10's simulator runs.
 - KTD3 maps both `heal` and `status` to the Disruption role, so a pure-heal action participates in the triangle. Confirm this is intended during U2/U10 tuning, or split heal out as matchup-neutral if it distorts balance.
 - Whether a boss joins the necromancer as a deceiver (U7) — decided during implementation once Layer 3 feel is validated; the boss-special-takes-precedence rule (U7) holds either way.

@@ -28,18 +28,18 @@ tags:
 
 ## Context
 
-We added an "Endless Descent" mode to the Phaser 3 + TypeScript roguelite *Escape the card dungeon*. Historically the dungeon ended at depth 10; the new feature lets the run continue past that point as repeating "strata," each capped by a boss "gate." At every gate the player makes a push-your-luck decision: **BANK** their unbanked Gold into permanent Embers and win, or **DELVE** one stratum deeper for a richer payout while forfeiting all carried Gold on death. The design goal (requirement R14) was that neither extreme — always-bank nor always-push — should be the strictly correct line; the gate should be a genuine choice.
+We added an "Endless Descent" mode to the Phaser 3 + TypeScript roguelite _Escape the card dungeon_. Historically the dungeon ended at depth 10; the new feature lets the run continue past that point as repeating "strata," each capped by a boss "gate." At every gate the player makes a push-your-luck decision: **BANK** their unbanked Gold into permanent Embers and win, or **DELVE** one stratum deeper for a richer payout while forfeiting all carried Gold on death. The design goal (requirement R14) was that neither extreme — always-bank nor always-push — should be the strictly correct line; the gate should be a genuine choice.
 
-The problem was a *scaling seam* we extended past its tested range. The dungeon's difficulty had only ever been exercised across depths 1–10. Two depth-scaled systems sat behind a single function, `randomCard(rng, depth)` in `src/data/cards.ts`:
+The problem was a _scaling seam_ we extended past its tested range. The dungeon's difficulty had only ever been exercised across depths 1–10. Two depth-scaled systems sat behind a single function, `randomCard(rng, depth)` in `src/data/cards.ts`:
 
 - the player's **chest rewards** (better cards as you go deeper), and
 - **enemy deck generation** in `spawnEnemy` (`src/data/enemies.ts`), which builds each enemy's hand from the same card pool.
 
-Endless Descent quietly pushed `depth` well past 10 for the first time, and a separate enrichment change (unit U8) added a "deep tier shift" (`deepTierWeights`) to bias card tiers toward tier‑3 past depth 9. The intent was to make the *player's* deep chests more exciting. Because the seam was shared, the same tier‑3 flood also armed every deep *enemy*. Nobody anticipated this, because no consumer audit was done before extending the curve into untested depth.
+Endless Descent quietly pushed `depth` well past 10 for the first time, and a separate enrichment change (unit U8) added a "deep tier shift" (`deepTierWeights`) to bias card tiers toward tier‑3 past depth 9. The intent was to make the _player's_ deep chests more exciting. Because the seam was shared, the same tier‑3 flood also armed every deep _enemy_. Nobody anticipated this, because no consumer audit was done before extending the curve into untested depth.
 
 ## Guidance
 
-**(a) Audit every consumer of a scaling/difficulty seam before extending it.** A function parameterized by `depth`, `level`, or `difficulty` is a contract with *every* caller. Before you push its input past the range it was validated against — or change its output curve — enumerate who reads it. Here, one grep for `randomCard(` would have shown it feeding both `spawnEnemy` (enemy power) and the chest-reward path (player reward). A change framed as "make player rewards better at depth" was, mechanically, also "make enemies deadlier at depth."
+**(a) Audit every consumer of a scaling/difficulty seam before extending it.** A function parameterized by `depth`, `level`, or `difficulty` is a contract with _every_ caller. Before you push its input past the range it was validated against — or change its output curve — enumerate who reads it. Here, one grep for `randomCard(` would have shown it feeding both `spawnEnemy` (enemy power) and the chest-reward path (player reward). A change framed as "make player rewards better at depth" was, mechanically, also "make enemies deadlier at depth."
 
 ```ts
 // src/data/cards.ts — the shared seam, consumed by BOTH sides:
@@ -79,7 +79,7 @@ The same principle applied to the rest of the difficulty curve, which we softene
 // src/data/enemies.ts
 export const DEEP_HP_SLOPE = 0.3;
 export function enemyHpForDepth(baseHp: number, depth: number): number {
-  if (depth <= MAX_DEPTH) return baseHp + depth;             // stratum 1: linear
+  if (depth <= MAX_DEPTH) return baseHp + depth; // stratum 1: linear
   return baseHp + MAX_DEPTH + Math.round((depth - MAX_DEPTH) * DEEP_HP_SLOPE); // beyond: gentle
 }
 
@@ -112,11 +112,11 @@ export function convertGoldToEmbers(gold: number): number {
 
 ## Why This Matters
 
-Without the harness, this feature would have shipped unplayable. Delving would have been a guaranteed death sentence — a full‑HP player lost single deep encounters because tier‑3-armed enemies out-DPSed any deck a marginal gate-1 survivor could field — making BANK the only viable play and collapsing the entire push-your-luck loop into a non-choice. The feature's whole reason to exist would have been broken on arrival, and likely shipped, because every encounter *looked* survivable on paper (the player was at full HP).
+Without the harness, this feature would have shipped unplayable. Delving would have been a guaranteed death sentence — a full‑HP player lost single deep encounters because tier‑3-armed enemies out-DPSed any deck a marginal gate-1 survivor could field — making BANK the only viable play and collapsing the entire push-your-luck loop into a non-choice. The feature's whole reason to exist would have been broken on arrival, and likely shipped, because every encounter _looked_ survivable on paper (the player was at full HP).
 
-The **"no dominant line" assertion** is the specific mechanism that surfaced it. A win-rate check alone would not have: the base run still won at expected rates. It was only when the simulator compared *strategies* — and saw `cautious` post both the highest expected Ember yield *and* zero risk — that the degeneracy became visible. A dominant strictly-better line is exactly the failure mode push-your-luck designs must avoid, and it is invisible to per-run pass/fail testing.
+The **"no dominant line" assertion** is the specific mechanism that surfaced it. A win-rate check alone would not have: the base run still won at expected rates. It was only when the simulator compared _strategies_ — and saw `cautious` post both the highest expected Ember yield _and_ zero risk — that the degeneracy became visible. A dominant strictly-better line is exactly the failure mode push-your-luck designs must avoid, and it is invisible to per-run pass/fail testing.
 
-The coupled-constants point matters because these five values **drift apart if edited one at a time.** Raise the stratum-clear heal without re-checking the enemy deck cap and `aggressive` stops being punished; tighten the conversion guard without re-checking HP slopes and `moderate` collapses back into `cautious`. They only express a balanced design *as a set*, validated together.
+The coupled-constants point matters because these five values **drift apart if edited one at a time.** Raise the stratum-clear heal without re-checking the enemy deck cap and `aggressive` stops being punished; tighten the conversion guard without re-checking HP slopes and `moderate` collapses back into `cautious`. They only express a balanced design _as a set_, validated together.
 
 ## When to Apply
 
@@ -142,12 +142,12 @@ cards.push(randomCard(rng, cardDepth));
 
 **Harness signal — before vs. after (400 seeds, deterministic).**
 
-- **Before fix:** all three strategies died in stratum 2, even at full HP. `cautious` strictly dominated — highest expected Ember yield *and* zero risk. The R14 "no dominant line" assertion failed.
+- **Before fix:** all three strategies died in stratum 2, even at full HP. `cautious` strictly dominated — highest expected Ember yield _and_ zero risk. The R14 "no dominant line" assertion failed.
 - **After fix:** `cautious` EV ≈ 2 Embers (safe), `moderate` ≈ 1 Ember (a real gamble — ~23% bank deeper for more, ~77% die forfeiting everything, landing inside the 1.5-Ember dominance margin), `aggressive` ≈ 0 (pushing forever is correctly punished). No strategy dominates.
 
-**Conversion guard — the harness as a guardrail.** Feeding the simulator an over-generous conversion (1 Ember per Gold, no cap) correctly *trips* the dominance gate — endless delving becomes strictly best. The real bounded `convertGoldToEmbers` (rate `GOLD_PER_EMBER` plus the saturating `CONVERSION_GUARD_CAP`) passes. The assertion thus doubles as a regression guard against future economy tweaks.
+**Conversion guard — the harness as a guardrail.** Feeding the simulator an over-generous conversion (1 Ember per Gold, no cap) correctly _trips_ the dominance gate — endless delving becomes strictly best. The real bounded `convertGoldToEmbers` (rate `GOLD_PER_EMBER` plus the saturating `CONVERSION_GUARD_CAP`) passes. The assertion thus doubles as a regression guard against future economy tweaks.
 
-**Side finding (test re-baseline).** The simulator originally awarded Gold from chests only, not from defeated enemies — diverging from the live game. It now calls `awardEnemyGold` on encounter and boss wins to match. Better-funded runs fund better rest-action decks, which nudged base-run win rates up and forced a re-baseline of the existing win-rate bands in `balanceSimulator.test.ts` (the shift is documented inline in those tests). Worth noting because it means simulator fidelity changes can legitimately move *unrelated* baselines.
+**Side finding (test re-baseline).** The simulator originally awarded Gold from chests only, not from defeated enemies — diverging from the live game. It now calls `awardEnemyGold` on encounter and boss wins to match. Better-funded runs fund better rest-action decks, which nudged base-run win rates up and forced a re-baseline of the existing win-rate bands in `balanceSimulator.test.ts` (the shift is documented inline in those tests). Worth noting because it means simulator fidelity changes can legitimately move _unrelated_ baselines.
 
 ## Related
 
