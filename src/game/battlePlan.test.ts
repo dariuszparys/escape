@@ -49,6 +49,19 @@ function enemyAction(card = heavy): CombatAction {
   return { actor: 'enemy', kind: 'card', card };
 }
 
+function intent(
+  family: EnemyIntentSummary['family'],
+  title = `${family} intent`,
+): EnemyIntentSummary {
+  return {
+    family,
+    title,
+    speed: 4,
+    consequence: 'Telegraphed effect',
+    revealMode: 'summary',
+  };
+}
+
 describe('battle planning state', () => {
   test('orders selected player action against committed enemy intent by speed', () => {
     const state = buildBattlePlanState({
@@ -140,5 +153,120 @@ describe('battle planning state', () => {
       chosen: 'You choose Guard [spd 6]',
       actual: ['Player uses Guard', 'Player gains 7 block', 'Bandit uses Heavy Strike'],
     });
+  });
+
+  test('shows the counter role for displayed enemy intent before commit', () => {
+    const state = buildBattlePlanState({
+      enemyName: 'Bandit',
+      enemyIntent,
+      enemyAction: enemyAction(),
+      player: { label: 'You', armor: 0, statuses: [] },
+      enemy: { label: 'Bandit', armor: 0, statuses: [] },
+    });
+
+    expect(state.matchupHint).toEqual({
+      counterLine: 'Defense counters Aggression',
+      previewLine: null,
+      outcome: 'neutral',
+    });
+  });
+
+  test('marks a hovered block action as winning against attack intent', () => {
+    const state = buildBattlePlanState({
+      enemyName: 'Bandit',
+      enemyIntent,
+      enemyAction: enemyAction(),
+      playerAction: { actor: 'player', kind: 'card', card: guard },
+      player: { label: 'You', armor: 0, statuses: [] },
+      enemy: { label: 'Bandit', armor: 0, statuses: [] },
+    });
+
+    expect(state.matchupHint).toMatchObject({
+      counterLine: 'Defense counters Aggression',
+      previewLine: 'Guard: wins the matchup (Defense)',
+      outcome: 'win',
+    });
+  });
+
+  test('marks losing, tied, mixed, and special previews without promising a bonus', () => {
+    const base = {
+      enemyName: 'Bandit',
+      enemyAction: enemyAction(),
+      player: { label: 'You', armor: 0, statuses: [] },
+      enemy: { label: 'Bandit', armor: 0, statuses: [] },
+    };
+
+    expect(
+      buildBattlePlanState({
+        ...base,
+        enemyIntent: intent('block', 'Block intent'),
+        playerAction: { actor: 'player', kind: 'card', card: quick },
+      }).matchupHint,
+    ).toMatchObject({ outcome: 'lose', previewLine: 'Quick Jab: loses the matchup (Aggression)' });
+
+    expect(
+      buildBattlePlanState({
+        ...base,
+        enemyIntent,
+        playerAction: { actor: 'player', kind: 'card', card: quick },
+      }).matchupHint,
+    ).toMatchObject({ outcome: 'tie', previewLine: 'Quick Jab: ties the matchup (Aggression)' });
+
+    expect(
+      buildBattlePlanState({
+        ...base,
+        enemyIntent: intent('mixed', 'Mixed intent'),
+        playerAction: { actor: 'player', kind: 'card', card: guard },
+      }).matchupHint,
+    ).toMatchObject({
+      counterLine: 'Mixed intent: no matchup bonus',
+      outcome: 'neutral',
+      previewLine: 'Guard: neutral matchup (Defense)',
+    });
+
+    expect(
+      buildBattlePlanState({
+        ...base,
+        enemyIntent: intent('special', 'Warhammer'),
+        playerAction: { actor: 'player', kind: 'card', card: guard },
+      }).matchupHint,
+    ).toMatchObject({
+      counterLine: 'Warhammer: no matchup bonus',
+      outcome: 'neutral',
+      previewLine: 'Guard: neutral matchup (Defense)',
+    });
+  });
+
+  test('resolved phase retains the committed matchup context', () => {
+    const state = buildBattlePlanState({
+      phase: 'resolved',
+      enemyName: 'Bandit',
+      enemyIntent,
+      enemyAction: enemyAction(),
+      playerAction: { actor: 'player', kind: 'card', card: guard },
+      player: { label: 'You', armor: 0, statuses: [] },
+      enemy: { label: 'Bandit', armor: 0, statuses: [] },
+      resolvedLog: ['Player exploits the read for 3 bonus damage'],
+    });
+
+    expect(state.matchupHint).toMatchObject({
+      counterLine: 'Defense counters Aggression',
+      previewLine: 'Guard: wins the matchup (Defense)',
+      outcome: 'win',
+    });
+  });
+
+  test('matchup hint labels stay compact enough for board word wrap', () => {
+    const state = buildBattlePlanState({
+      enemyName: 'Very Long Enemy Name',
+      enemyIntent,
+      enemyAction: enemyAction(),
+      playerAction: { actor: 'player', kind: 'card', card: guard },
+      player: { label: 'You', armor: 0, statuses: [] },
+      enemy: { label: 'Very Long Enemy Name', armor: 0, statuses: [] },
+    });
+
+    expect(state.matchupHint.counterLine.length).toBeLessThanOrEqual(32);
+    expect(state.matchupHint.previewLine?.length).toBeLessThanOrEqual(40);
   });
 });

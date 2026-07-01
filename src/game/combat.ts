@@ -1,9 +1,10 @@
-import { PUNCH_DAMAGE } from '../config';
+import { MATCHUP_BONUS_DAMAGE, PUNCH_DAMAGE } from '../config';
 import { Card, CardEffect, StatusEffectType } from '../data/cards';
 import { InventoryItem } from '../data/items';
 import { HpChange } from './combatFeedback';
 import { emitCombatEvent, hasCombatEventSubscribers } from './combatEvents';
 import { dispatchEffect } from './effectHandlers';
+import { type ActionFamily, familyForEffects, matchupResult } from './familyMatchup';
 
 export interface ActiveStatusEffect {
   type: StatusEffectType;
@@ -34,6 +35,7 @@ export interface ResolveRoundInput {
   enemy: CombatantSnapshot;
   playerAction: CombatAction;
   enemyAction: CombatAction;
+  playerMatchupPayoff?: PlayerMatchupPayoff | null;
 }
 
 export interface ResolveRoundResult {
@@ -47,6 +49,13 @@ export interface ResolveRoundResult {
 /** A combatant mid-round, carrying the transient block accumulated this round. Handlers mutate this. */
 export interface MutableCombatant extends CombatantSnapshot {
   roundBlock: number;
+}
+
+export interface PlayerMatchupPayoff {
+  damage: number;
+  outcome: 'win';
+  playerFamily: ActionFamily;
+  enemyFamily: ActionFamily;
 }
 
 function cloneCombatant(combatant: CombatantSnapshot): MutableCombatant {
@@ -89,6 +98,21 @@ export function combatActionEffects(action: CombatAction): CardEffect[] {
     if (action.item.kind === 'shield') return [{ kind: 'block', amount: action.item.amount }];
   }
   return [];
+}
+
+export function matchupPayoffForAction(
+  action: CombatAction,
+  enemyFamily: ActionFamily,
+): PlayerMatchupPayoff | null {
+  const playerFamily = familyForEffects(combatActionEffects(action));
+  const result = matchupResult(playerFamily, enemyFamily);
+  if (result.outcome !== 'win') return null;
+  return {
+    damage: MATCHUP_BONUS_DAMAGE,
+    outcome: result.outcome,
+    playerFamily,
+    enemyFamily,
+  };
 }
 
 function applyStartOfRoundStatuses(combatant: MutableCombatant, log: string[]): void {
@@ -216,6 +240,19 @@ export function resolveRound(input: ResolveRoundInput): ResolveRoundResult {
     const actorHpBefore = turn.actor.hp;
     const targetHpBefore = turn.target.hp;
     const outcome = applyAction(turn.action, turn.actor, turn.target, log);
+    if (
+      turn.action.actor === 'player' &&
+      input.playerMatchupPayoff?.outcome === 'win' &&
+      turn.target.hp > 0
+    ) {
+      log.push(
+        `${turn.actor.name} exploits the read for ${input.playerMatchupPayoff.damage} bonus damage`,
+      );
+      dispatchEffect(
+        { kind: 'damage', amount: input.playerMatchupPayoff.damage },
+        { actor: turn.actor, target: turn.target, log },
+      );
+    }
     trackHp(turn.actor, actorHpBefore, actorIsPlayer);
     trackHp(turn.target, targetHpBefore, targetIsPlayer);
     if (outcome === 'skip_target') {

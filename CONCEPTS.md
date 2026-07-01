@@ -48,6 +48,14 @@ drivers). Subscribers fire in registration order and the dispatch threads no
 RNG, so it never reorders the deterministic-run draws. `vampiric_blade`'s
 post-victory heal is the first real subscriber, shared by both drivers.
 
+### Family Matchup
+
+A Card Battle read-payoff layer where the player's committed action family can
+counter the enemy's true intent family. It is player-only: the enemy applies
+pressure through scripts and card strength, while the player's reward for a
+correct read is a bounded combat bonus surfaced by the Card Battle Planning
+Board.
+
 ## Progression Loop
 
 ### Run

@@ -9,11 +9,17 @@ import { RunState } from '../state';
 import { combatCardScore, selectCombatHand } from './cardSelection';
 import { applyPendingPrepToRun } from './campfirePrep';
 import type { ActiveStatusEffect } from './combat';
-import { resolveRound } from './combat';
+import { combatActionEffects, matchupPayoffForAction, resolveRound } from './combat';
 import { emitBattleWon } from './combatEvents';
 import { ensureRelicBehaviorsWired } from './relicBehaviors';
 import { commitDelve } from './delve';
 import { planEnemyIntent } from './enemyIntent';
+import {
+  type ActionFamily,
+  familyForEffects,
+  type MatchupRole,
+  roleForFamily,
+} from './familyMatchup';
 import { convertGoldToEmbers } from './metaRewards';
 import { awardEnemyGold, awardPotionItem, rollChestReward } from './rewards';
 import { GameRng } from './rng';
@@ -61,6 +67,7 @@ interface SimRunOptions {
   convert: GoldConversion;
   /** Root RNG factory; the gate injects an observed RNG here (KTD4). Defaults to a plain seeded RNG. */
   createRng: SimRngFactory;
+  preferredRole: MatchupRole | null;
 }
 
 /** Decide whether to delve the next stratum after clearing the boss of `stratumCleared`. */
@@ -109,12 +116,12 @@ interface SimRunResult {
   convertedEmbers: number;
 }
 
-type PlayerAction =
+export type PlayerAction =
   | { kind: 'card'; card: Card }
   | { kind: 'item'; item: InventoryItem }
   | { kind: 'punch' };
 
-interface SimBattleState {
+export interface SimBattleState {
   rng: SimRng;
   round: number;
   hand: Card[];
@@ -133,10 +140,11 @@ interface SimBattleState {
   enemyUsed: Set<number>;
 }
 
-interface EnemyDecision {
+export interface EnemyDecision {
   action: Parameters<typeof resolveRound>[0]['enemyAction'];
   used: Set<number>;
   nextRng: SimRng;
+  intentFamily: ActionFamily;
 }
 
 const ITEM_VALUE: Record<string, number> = {
@@ -401,6 +409,7 @@ function chooseEnemyDecision(state: SimBattleState): EnemyDecision {
     action: intent.action,
     used: intent.usedCardUids,
     nextRng,
+    intentFamily: intent.summary.family,
   };
 }
 
@@ -425,7 +434,11 @@ function evaluateBattleState(state: SimBattleState): number {
   );
 }
 
-function applyRound(
+function roleForPlayerAction(action: PlayerAction): MatchupRole | null {
+  return roleForFamily(familyForEffects(combatActionEffects(toCombatAction(action))));
+}
+
+export function applyRound(
   state: SimBattleState,
   action: PlayerAction,
   enemyDecision: EnemyDecision,
@@ -446,6 +459,7 @@ function applyRound(
     }
   }
 
+  const playerAction = toCombatAction(action);
   const resolved = resolveRound({
     player: {
       id: 'player',
@@ -463,8 +477,9 @@ function applyRound(
       armor: next.enemyArmor,
       statuses: next.enemyStatuses,
     },
-    playerAction: toCombatAction(action),
+    playerAction,
     enemyAction: enemyDecision.action,
+    playerMatchupPayoff: matchupPayoffForAction(playerAction, enemyDecision.intentFamily),
   });
 
   next.playerHp = resolved.player.hp;
@@ -475,24 +490,41 @@ function applyRound(
   return next;
 }
 
-function choosePlayerAction(state: SimBattleState): {
+function evaluatePlayerActionScore(
+  state: SimBattleState,
+  action: PlayerAction,
+  enemyDecision: EnemyDecision,
+): number {
+  const beforePlayerHp = state.playerHp;
+  const beforeEnemyHp = state.enemyHp;
+  const next = applyRound(state, action, enemyDecision);
+  let score = evaluateBattleState(next);
+  score += (beforeEnemyHp - next.enemyHp) * 400;
+  score += (next.playerHp - beforePlayerHp) * 160;
+  if (action.kind === 'item') {
+    score -= (ITEM_VALUE[action.item.id] ?? 10) * 120;
+  }
+  return score;
+}
+
+export function choosePlayerAction(
+  state: SimBattleState,
+  preferredRole: MatchupRole | null = null,
+): {
   action: PlayerAction;
   enemyDecision: EnemyDecision;
 } {
   const enemyDecision = chooseEnemyDecision(state);
-  let bestAction = listPlayerActions(state)[0];
+  const actions = listPlayerActions(state);
+  const roleActions = preferredRole
+    ? actions.filter((action) => roleForPlayerAction(action) === preferredRole)
+    : [];
+  const candidates = roleActions.length > 0 ? roleActions : actions;
+  let bestAction = candidates[0];
   let bestScore = -Infinity;
 
-  for (const action of listPlayerActions(state)) {
-    const beforePlayerHp = state.playerHp;
-    const beforeEnemyHp = state.enemyHp;
-    const next = applyRound(state, action, enemyDecision);
-    let score = evaluateBattleState(next);
-    score += (beforeEnemyHp - next.enemyHp) * 400;
-    score += (next.playerHp - beforePlayerHp) * 160;
-    if (action.kind === 'item') {
-      score -= (ITEM_VALUE[action.item.id] ?? 10) * 120;
-    }
+  for (const action of candidates) {
+    const score = evaluatePlayerActionScore(state, action, enemyDecision);
     if (score > bestScore) {
       bestScore = score;
       bestAction = action;
@@ -506,6 +538,7 @@ function simulateBattle(
   run: RunState,
   enemy: ReturnType<typeof spawnEnemy>,
   rng: SimRng,
+  preferredRole: MatchupRole | null,
 ): { won: boolean; enemyCards: Card[] } {
   const state: SimBattleState = {
     rng,
@@ -527,7 +560,7 @@ function simulateBattle(
   };
 
   while (state.playerHp > 0 && state.enemyHp > 0 && state.round < 50) {
-    const { action, enemyDecision } = choosePlayerAction(state);
+    const { action, enemyDecision } = choosePlayerAction(state, preferredRole);
     const next = applyRound(state, action, enemyDecision);
     Object.assign(state, next);
   }
@@ -542,6 +575,7 @@ const DEFAULT_RUN_OPTIONS: SimRunOptions = {
   maxStrata: MAX_SIMULATED_STRATA,
   convert: convertGoldToEmbers,
   createRng: (seed) => new SeededRng(seed >>> 0),
+  preferredRole: null,
 };
 
 export function simulateRun(
@@ -549,7 +583,10 @@ export function simulateRun(
   scenario: BalanceScenario,
   options: Partial<SimRunOptions> = {},
 ): SimRunResult {
-  const { strategy, maxStrata, convert, createRng } = { ...DEFAULT_RUN_OPTIONS, ...options };
+  const { strategy, maxStrata, convert, createRng, preferredRole } = {
+    ...DEFAULT_RUN_OPTIONS,
+    ...options,
+  };
   const rng = createRng(seed);
   const run = createScenarioRun(seed, scenario);
   let encounters = 0;
@@ -565,7 +602,7 @@ export function simulateRun(
 
     if (atBoss) {
       reachedBoss = true;
-      const battle = simulateBattle(run, spawnBoss(rng, depth), rng);
+      const battle = simulateBattle(run, spawnBoss(rng, depth), rng, preferredRole);
       if (!battle.won) {
         return {
           victory: false,
@@ -605,6 +642,7 @@ export function simulateRun(
         run,
         spawnEnemy(rng, depth, Math.max(run.combatHand.length, 1)),
         rng,
+        preferredRole,
       );
       if (!battle.won) {
         return {
@@ -643,6 +681,7 @@ export function simulateRun(
 export function simulateScenarioSummary(
   scenario: BalanceScenario,
   runs = 400,
+  options: Partial<SimRunOptions> = {},
 ): BalanceSimulationSummary {
   let wins = 0;
   let bossReached = 0;
@@ -651,7 +690,7 @@ export function simulateScenarioSummary(
   const byEncounter: Record<string, EncounterBucketSummary> = {};
 
   for (let seed = 1; seed <= runs; seed++) {
-    const result = simulateRun(seed, scenario);
+    const result = simulateRun(seed, scenario, options);
     if (result.reachedBoss) bossReached++;
     if (result.victory) wins++;
     if (!result.victory) {
@@ -673,6 +712,60 @@ export function simulateScenarioSummary(
     bossKillGivenReach: bossReached === 0 ? 0 : wins / bossReached,
     avgDeathDepth: deaths === 0 ? MAX_DEPTH : deathDepthTotal / deaths,
     byEncounter,
+  };
+}
+
+export interface MatchupRolePolicySummary {
+  role: MatchupRole;
+  runs: number;
+  winRate: number;
+  bossReachRate: number;
+}
+
+export interface MatchupRoleDominanceOptions {
+  runs?: number;
+  margin?: number;
+}
+
+export interface MatchupRoleDominanceSummary {
+  margin: number;
+  policies: Record<MatchupRole, MatchupRolePolicySummary>;
+  spread: number;
+  dominantRole: MatchupRole | null;
+  hasDominantRole: boolean;
+}
+
+const MATCHUP_ROLES: MatchupRole[] = ['aggression', 'defense', 'disruption'];
+
+export function assessMatchupRoleDominance(
+  scenario: BalanceScenario = {},
+  options: MatchupRoleDominanceOptions = {},
+): MatchupRoleDominanceSummary {
+  const runs = options.runs ?? 120;
+  const margin = options.margin ?? 0.12;
+  const entries = MATCHUP_ROLES.map((role) => {
+    const summary = simulateScenarioSummary(scenario, runs, { preferredRole: role });
+    return [
+      role,
+      {
+        role,
+        runs,
+        winRate: summary.winRate,
+        bossReachRate: summary.bossReachRate,
+      },
+    ] as const;
+  });
+  const policies = Object.fromEntries(entries) as Record<MatchupRole, MatchupRolePolicySummary>;
+  const ordered = [...Object.values(policies)].sort((left, right) => right.winRate - left.winRate);
+  const spread = ordered[0].winRate - ordered[ordered.length - 1].winRate;
+  const dominantRole = ordered[0].winRate > ordered[1].winRate + margin ? ordered[0].role : null;
+
+  return {
+    margin,
+    policies,
+    spread,
+    dominantRole,
+    hasDominantRole: dominantRole !== null,
   };
 }
 

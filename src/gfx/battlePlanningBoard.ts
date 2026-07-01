@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { BattlePlanState, BattleStatusLane, BattleStatusLaneEntry } from '../game/battlePlan';
-import { BattleRect } from '../game/battleLayout';
+import { BattleRect, getBattlePlanningBoardRegions } from '../game/battleLayout';
 
 function addText(
   scene: Phaser.Scene,
@@ -48,11 +48,24 @@ function timelineText(state: BattlePlanState): string {
     .join('\n');
 }
 
+function matchupHintText(state: BattlePlanState): string {
+  if (!state.matchupHint.previewLine) return state.matchupHint.counterLine;
+  return `${state.matchupHint.counterLine} | ${state.matchupHint.previewLine}`;
+}
+
+function matchupHintColor(state: BattlePlanState): string {
+  if (state.matchupHint.outcome === 'win') return '#5fe07a';
+  if (state.matchupHint.outcome === 'lose') return '#ff7f6e';
+  if (state.matchupHint.outcome === 'tie') return '#cab98a';
+  return '#b8b0c8';
+}
+
 export function createBattlePlanningBoard(
   scene: Phaser.Scene,
   rect: BattleRect,
   state: BattlePlanState,
 ): Phaser.GameObjects.Container {
+  const regions = getBattlePlanningBoardRegions(rect);
   const panel = scene.add.container(rect.x, rect.y).setDepth(6);
   const bg = scene.add.graphics();
   bg.fillStyle(0x111019, 0.9);
@@ -79,23 +92,34 @@ export function createBattlePlanningBoard(
   );
 
   panel.add(
-    addText(scene, 12, 70, timelineText(state), {
+    addText(scene, regions.timeline.x, regions.timeline.y, timelineText(state), {
       fontSize: '10px',
-      fixedWidth: rect.w - 24,
+      fixedWidth: regions.timeline.w,
       lineSpacing: 3,
-      wordWrap: { width: rect.w - 24, useAdvancedWrap: true },
+      wordWrap: { width: regions.timeline.w, useAdvancedWrap: true },
     }),
   );
 
-  const laneY = 118;
+  panel.add(
+    addText(scene, regions.matchupHint.x, regions.matchupHint.y, matchupHintText(state), {
+      fontSize: '8px',
+      fontStyle: 'bold',
+      color: matchupHintColor(state),
+      fixedWidth: regions.matchupHint.w,
+      wordWrap: { width: regions.matchupHint.w, useAdvancedWrap: true },
+    }),
+  );
+
+  const laneY = regions.statusLanes.y;
+  const laneH = regions.statusLanes.h;
   const laneW = (rect.w - 30) / 2;
   for (const [index, lane] of state.statusLanes.entries()) {
     const x = 12 + index * (laneW + 6);
     const laneBg = scene.add.graphics();
     laneBg.fillStyle(0x1c1826, 0.9);
-    laneBg.fillRoundedRect(x, laneY, laneW, 58, 5);
+    laneBg.fillRoundedRect(x, laneY, laneW, laneH, 5);
     laneBg.lineStyle(1, 0x3a3544, 1);
-    laneBg.strokeRoundedRect(x, laneY, laneW, 58, 5);
+    laneBg.strokeRoundedRect(x, laneY, laneW, laneH, 5);
     panel.add(laneBg);
     panel.add(
       addText(scene, x + 7, laneY + 5, lane.label, {
@@ -117,10 +141,10 @@ export function createBattlePlanningBoard(
   if (state.phase === 'resolved' && state.resolution.actual.length > 0) {
     const actual = state.resolution.actual[state.resolution.actual.length - 1];
     panel.add(
-      addText(scene, 12, rect.h - 16, `Actual: ${actual}`, {
+      addText(scene, regions.actualLine.x, regions.actualLine.y, `Actual: ${actual}`, {
         fontSize: '8px',
         color: '#b8b0c8',
-        fixedWidth: rect.w - 24,
+        fixedWidth: regions.actualLine.w,
       }),
     );
   }

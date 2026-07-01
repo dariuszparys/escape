@@ -9,7 +9,9 @@ import { RngDrawDigest, runSignature } from './runSignature';
  */
 const GOLDEN_SEED = 7;
 const GOLDEN_SIGNATURE =
-  'v=0|boss=1|gate=0|death=10|stratum=1|enc=3|embers=0|draws=66|hash=84f9ba9c';
+  // Re-baselined from 66 draws / 84f9ba9c: the Family Matchup payoff changes
+  // combat length for this seed, so fewer existing enemy/reward draws are reached.
+  'v=0|boss=1|gate=0|death=10|stratum=1|enc=3|embers=0|draws=62|hash=58800c5';
 
 describe('RngDrawDigest', () => {
   test('samples draw order and count, not just the value set (the load-bearing property)', () => {

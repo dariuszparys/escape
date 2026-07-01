@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { CARD_DEFS, makeCard } from '../data/cards';
+import { CARD_DEFS, Card, makeCard } from '../data/cards';
 import { BOSSES, ENEMIES, EnemyInstance } from '../data/enemies';
 import { SequenceRng } from './test-rng';
 import { planEnemyIntent } from './enemyIntent';
@@ -198,5 +198,62 @@ describe('planEnemyIntent', () => {
     expect(first.action).toEqual(second.action);
     expect(first.usedCardUids).toEqual(second.usedCardUids);
     expect(first.summary).toEqual(second.summary);
+  });
+
+  test('keeps representative family summaries stable through the shared classifier', () => {
+    const enemyWithCards = (cards: Card[]): EnemyInstance => ({
+      ...enemy('rat', []),
+      cards,
+    });
+    const cases: [string, Card, string, string][] = [
+      ['attack', card('slash'), 'Attack intent', 'Deals 6 damage'],
+      ['block', card('guard'), 'Block intent', 'Gains 7 block'],
+      ['heal', card('minor_heal'), 'Healing intent', 'Heals 5 HP'],
+      [
+        'status',
+        makeCard({
+          id: 'web',
+          name: 'Web',
+          type: 'status',
+          tier: 1,
+          speed: 4,
+          color: 0,
+          description: 'Stun',
+          effects: [{ kind: 'status', status: 'stun', amount: 1, duration: 1 }],
+        }),
+        'Status intent',
+        'Applies stun 1 for 1 round',
+      ],
+      [
+        'mixed',
+        card('poison_dagger'),
+        'Mixed intent',
+        'Deals 3 damage and applies poison 2 for 3 rounds',
+      ],
+    ];
+
+    for (const [family, candidate, title, consequence] of cases) {
+      const result = planEnemyIntent({
+        enemy: enemyWithCards([candidate]),
+        round: 1,
+        usedCardUids: new Set(),
+        rng: new SequenceRng([0]),
+      });
+
+      expect(result.summary).toMatchObject({ family, title, consequence });
+    }
+
+    const boss = planEnemyIntent({
+      enemy: enemy('iron_warden', ['slash']),
+      round: 5,
+      usedCardUids: new Set(),
+      rng: new SequenceRng([0]),
+    });
+
+    expect(boss.summary).toMatchObject({
+      family: 'special',
+      title: 'Warhammer',
+      consequence: 'Gains 3 block and deals 6 damage',
+    });
   });
 });

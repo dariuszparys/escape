@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { GAME_H, GAME_W } from '../config';
-import { getBattleLayout, rectsOverlap } from './battleLayout';
+import { getBattleLayout, getBattlePlanningBoardRegions, rectsOverlap } from './battleLayout';
 
 describe('battle layout metrics', () => {
   test('planning board stays inside the canvas and away from critical regions', () => {
@@ -22,5 +22,14 @@ describe('battle layout metrics', () => {
     const boardBottom = layout.planningBoard.y + layout.planningBoard.h;
 
     expect(layout.prompt.y - boardBottom).toBeGreaterThanOrEqual(28);
+  });
+
+  test('planning board matchup hint stays clear of timeline, lanes, and resolved log', () => {
+    const { planningBoard } = getBattleLayout();
+    const regions = getBattlePlanningBoardRegions(planningBoard);
+
+    expect(rectsOverlap(regions.timeline, regions.matchupHint)).toBe(false);
+    expect(rectsOverlap(regions.matchupHint, regions.statusLanes)).toBe(false);
+    expect(rectsOverlap(regions.statusLanes, regions.actualLine)).toBe(false);
   });
 });

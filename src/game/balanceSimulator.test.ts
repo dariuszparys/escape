@@ -1,17 +1,24 @@
 import { describe, expect, test } from 'vitest';
 import { CARD_DEFS, makeCard } from '../data/cards';
+import { ENEMIES } from '../data/enemies';
 import { makeRelic } from '../data/relics';
 import { RunState } from '../state';
 import { CONVERSION_EMBER_CAP } from './metaRewards';
 import {
+  applyRound,
   applySimulatedRest,
   applySimulatedPostBattleRewards,
+  assessMatchupRoleDominance,
   assessDelveDominance,
+  choosePlayerAction,
+  createSimRng,
   MAX_SIMULATED_STRATA,
   simulateDelveEconomy,
   simulateRun,
   simulateScenarioSummary,
+  type SimBattleState,
 } from './balanceSimulator';
+import { matchupPayoffForAction, resolveRound } from './combat';
 import type { GameRng } from './rng';
 import { runSignature } from './runSignature';
 
@@ -27,7 +34,95 @@ const minRng: GameRng = {
   pick: (items) => items[0],
 };
 
+function enemyDef(id: string) {
+  const def = ENEMIES.find((candidate) => candidate.id === id);
+  if (!def) throw new Error(`Missing enemy def ${id}`);
+  return def;
+}
+
+function simState(overrides: Partial<SimBattleState> = {}): SimBattleState {
+  const quick = makeDeckCard('quick_jab');
+  const guard = makeDeckCard('guard');
+  const heavy = makeDeckCard('heavy_strike');
+  return {
+    rng: createSimRng(123),
+    round: 1,
+    hand: [quick, guard],
+    inventory: [],
+    playerHp: 20,
+    playerMaxHp: 20,
+    playerArmor: 0,
+    playerStatuses: [],
+    playerUsed: new Set(),
+    enemyDef: enemyDef('bandit'),
+    enemyCards: [heavy],
+    enemyHp: 20,
+    enemyMaxHp: 20,
+    enemyArmor: 0,
+    enemyStatuses: [],
+    enemyUsed: new Set(),
+    ...overrides,
+  };
+}
+
 describe('balance simulator', () => {
+  test('prefers a matchup-winning card over a close non-winning alternative', () => {
+    const guard = makeDeckCard('guard');
+    const quick = makeDeckCard('quick_jab');
+    const heavy = makeDeckCard('heavy_strike');
+    const { action, enemyDecision } = choosePlayerAction(
+      simState({ hand: [quick, guard], enemyCards: [heavy] }),
+    );
+
+    expect(enemyDecision.intentFamily).toBe('attack');
+    expect(action.kind === 'card' ? action.card.id : action.kind).toBe('guard');
+  });
+
+  test('simulator and live resolution apply equivalent matchup effects', () => {
+    const guard = makeDeckCard('guard');
+    const heavy = makeDeckCard('heavy_strike');
+    const state = simState({ hand: [guard], enemyCards: [heavy] });
+    const playerAction = { actor: 'player' as const, kind: 'card' as const, card: guard };
+    const enemyAction = { actor: 'enemy' as const, kind: 'card' as const, card: heavy };
+
+    const simulated = applyRound(
+      state,
+      { kind: 'card', card: guard },
+      {
+        action: enemyAction,
+        used: new Set([heavy.uid]),
+        nextRng: state.rng.clone(),
+        intentFamily: 'attack',
+      },
+    );
+    const live = resolveRound({
+      player: {
+        id: 'player',
+        name: 'Player',
+        hp: state.playerHp,
+        maxHp: state.playerMaxHp,
+        armor: state.playerArmor,
+        statuses: state.playerStatuses,
+      },
+      enemy: {
+        id: state.enemyDef.id,
+        name: state.enemyDef.name,
+        hp: state.enemyHp,
+        maxHp: state.enemyMaxHp,
+        armor: state.enemyArmor,
+        statuses: state.enemyStatuses,
+      },
+      playerAction,
+      enemyAction,
+      playerMatchupPayoff: matchupPayoffForAction(playerAction, 'attack'),
+    });
+
+    expect(simulated.playerHp).toBe(live.player.hp);
+    expect(simulated.enemyHp).toBe(live.enemy.hp);
+    expect(simulated.playerStatuses).toEqual(live.player.statuses);
+    expect(simulated.enemyStatuses).toEqual(live.enemy.statuses);
+  });
+
   test('simulated victory rewards include vampiric healing and enemy card choice', () => {
     const run = new RunState('seed', 'sim-victory-rewards');
     const slash = makeDeckCard('slash');
@@ -78,7 +173,9 @@ describe('balance simulator', () => {
     expect(summary.winRate).toBeGreaterThanOrEqual(0.11);
     // Re-baselined from 0.15: the simulator now awards enemy Gold (matching the real
     // game), so rest actions are slightly better funded and the win rate edges up.
-    expect(summary.winRate).toBeLessThanOrEqual(0.17);
+    // Re-baselined from 0.17: read-aware action choice now earns the same 3-damage
+    // matchup payoff as live combat, improving correct defensive lines without adding RNG.
+    expect(summary.winRate).toBeLessThanOrEqual(0.21);
     expect(summary.bossReachRate).toBeGreaterThanOrEqual(0.28);
     // Re-baselined from 0.40: strong enemies now play coherent combat scripts (U4),
     // which nudged boss-kill-given-reach down a hair without changing the band's intent.
@@ -116,10 +213,12 @@ describe('balance simulator', () => {
       expect(summary).not.toEqual(varietyOnly);
       // Lower bound re-baselined from 0.07: enemy Gold funding shifts the weakest kits' win rates.
       expect(summary.winRate).toBeGreaterThanOrEqual(0.06);
-      expect(summary.winRate).toBeLessThanOrEqual(0.18);
-      // Re-baselined from 0.36: strong-enemy scripts (U4) and enemy-Gold funding nudge
-      // the duelist's boss-reach rate up; still under the variety-only 0.42 ceiling.
-      expect(summary.bossReachRate).toBeLessThanOrEqual(0.42);
+      // Upper bound re-baselined from 0.18: the duelist benefits most from read-aware
+      // matchup scoring because its opener can pick the right counter more often.
+      expect(summary.winRate).toBeLessThanOrEqual(0.27);
+      // Re-baselined from 0.42: matchup payoff lifts the duelist's boss reach, while
+      // the weaker kits remain well below this ceiling.
+      expect(summary.bossReachRate).toBeLessThanOrEqual(0.47);
     }
   });
 
@@ -135,10 +234,24 @@ describe('balance simulator', () => {
     );
 
     expect(prepared.winRate).toBeGreaterThanOrEqual(0.3);
-    expect(prepared.winRate).toBeLessThanOrEqual(0.35);
+    // Re-baselined from 0.35: bombs plus Scout Flame compound with read-aware combat,
+    // but the prepared line still wins less than half the 400-run spread.
+    expect(prepared.winRate).toBeLessThanOrEqual(0.47);
     expect(prepared.winRate).toBeGreaterThan(baseline.winRate + 0.1);
     expect(prepared.bossReachRate).toBeGreaterThan(baseline.bossReachRate);
     expect(prepared.bossKillGivenReach).toBeGreaterThanOrEqual(0.5);
+  });
+});
+
+describe('matchup role policy guard', () => {
+  test('no single always-one-role policy dominates the seed spread', () => {
+    const dominance = assessMatchupRoleDominance({}, { runs: 120, margin: 0.12 });
+
+    expect(dominance.hasDominantRole).toBe(false);
+    expect(dominance.dominantRole).toBeNull();
+    expect(dominance.policies.aggression.runs).toBe(120);
+    expect(dominance.policies.defense.runs).toBe(120);
+    expect(dominance.policies.disruption.runs).toBe(120);
   });
 });
 

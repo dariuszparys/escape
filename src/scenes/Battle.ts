@@ -10,7 +10,12 @@ import { compactRewardImpactLabel, createRewardImpactText } from '../gfx/rewardI
 import { BattlePlanPhase, buildBattlePlanState } from '../game/battlePlan';
 import { BattleLayout, getBattleLayout } from '../game/battleLayout';
 import { buildBattleRoundHistory } from '../game/battleLog';
-import { ActiveStatusEffect, CombatAction, resolveRound } from '../game/combat';
+import {
+  ActiveStatusEffect,
+  CombatAction,
+  matchupPayoffForAction,
+  resolveRound,
+} from '../game/combat';
 import { emitBattleWon } from '../game/combatEvents';
 import { ensureRelicBehaviorsWired } from '../game/relicBehaviors';
 import { EnemyIntentPlan, planEnemyIntent } from '../game/enemyIntent';
@@ -486,6 +491,7 @@ export class BattleScene extends Phaser.Scene {
     this.enemyIntent = null;
     this.renderPlanningBoard(playerAction, 'planning', [], enemyTurn);
     this.setPrompt('Resolving round...');
+    const playerMatchupPayoff = matchupPayoffForAction(playerAction, enemyTurn.summary.family);
 
     const resolved = resolveRound({
       player: {
@@ -506,6 +512,7 @@ export class BattleScene extends Phaser.Scene {
       },
       playerAction,
       enemyAction: enemyTurn.action,
+      playerMatchupPayoff,
     });
 
     const enemyHpChange = resolved.enemyHpChange;

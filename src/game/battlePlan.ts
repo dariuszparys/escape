@@ -2,6 +2,14 @@ import { orderedBattleActions } from './battleLog';
 import { CombatAction, combatActionEffects, combatActionLabel, combatActionSpeed } from './combat';
 import { ActiveStatusEffect } from './combat';
 import { EnemyIntentSummary } from './enemyIntent';
+import {
+  counterTextForFamily,
+  familyForEffects,
+  type MatchupOutcome,
+  matchupResult,
+  roleLabel,
+  roleForFamily,
+} from './familyMatchup';
 
 export type BattlePlanPhase = 'planning' | 'resolved';
 export type BattleStatusLaneKind = ActiveStatusEffect['type'] | 'armor' | 'block';
@@ -32,10 +40,17 @@ export interface BattleSpeedTimelineEntry {
   rank: number;
 }
 
+export interface BattleMatchupHint {
+  counterLine: string;
+  previewLine: string | null;
+  outcome: MatchupOutcome;
+}
+
 export interface BattlePlanState {
   phase: BattlePlanPhase;
   predictionLine: string;
   choiceLine: string | null;
+  matchupHint: BattleMatchupHint;
   speedTimeline: BattleSpeedTimelineEntry[];
   statusLanes: BattleStatusLane[];
   resolution: {
@@ -122,6 +137,35 @@ function choiceLine(action: CombatAction | undefined): string | null {
   return `You choose ${combatActionLabel(action)} [spd ${combatActionSpeed(action)}]`;
 }
 
+function previewLine(action: CombatAction, outcome: MatchupOutcome): string {
+  const label = combatActionLabel(action);
+  if (outcome === 'win') return `${label}: wins the matchup`;
+  if (outcome === 'lose') return `${label}: loses the matchup`;
+  if (outcome === 'tie') return `${label}: ties the matchup`;
+  return `${label}: neutral matchup`;
+}
+
+function buildMatchupHint(
+  enemyIntent: EnemyIntentSummary,
+  playerAction: CombatAction | undefined,
+): BattleMatchupHint {
+  const enemyRole = roleForFamily(enemyIntent.family);
+  const counterLine = enemyRole
+    ? counterTextForFamily(enemyIntent.family)
+    : `${enemyIntent.title}: no matchup bonus`;
+
+  if (!playerAction) return { counterLine, previewLine: null, outcome: 'neutral' };
+
+  const playerFamily = familyForEffects(combatActionEffects(playerAction));
+  const result = matchupResult(playerFamily, enemyIntent.family);
+  const playerRole = result.playerRole ? roleLabel(result.playerRole) : 'Neutral';
+  return {
+    counterLine,
+    previewLine: `${previewLine(playerAction, result.outcome)} (${playerRole})`,
+    outcome: result.outcome,
+  };
+}
+
 function speedTimeline(input: BuildBattlePlanStateInput): BattleSpeedTimelineEntry[] {
   if (!input.playerAction) {
     return [
@@ -152,6 +196,7 @@ export function buildBattlePlanState(input: BuildBattlePlanStateInput): BattlePl
     phase: input.phase ?? 'planning',
     predictionLine: predicted,
     choiceLine: chosen,
+    matchupHint: buildMatchupHint(input.enemyIntent, input.playerAction),
     speedTimeline: speedTimeline(input),
     statusLanes: buildStatusLanes({
       player: { ...input.player, plannedAction: input.playerAction ?? input.player.plannedAction },

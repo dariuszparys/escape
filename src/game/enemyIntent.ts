@@ -1,9 +1,10 @@
 import { Card, CardEffect, cardEffectAmount } from '../data/cards';
 import { EnemyCombatArchetype, EnemyCombatPreference, EnemyInstance } from '../data/enemies';
 import { CombatAction, combatActionSpeed } from './combat';
+import { type ActionFamily, familyForEffects, intentTitleForFamily } from './familyMatchup';
 import { GameRng } from './rng';
 
-export type EnemyIntentFamily = 'attack' | 'block' | 'heal' | 'status' | 'special' | 'mixed';
+export type EnemyIntentFamily = ActionFamily;
 export type EnemyIntentRevealMode = 'summary' | 'exact';
 export type EnemyIntentSource = 'script' | 'fallback' | 'boss_special';
 
@@ -51,34 +52,11 @@ function summarizeEffects(effects: readonly CardEffect[]): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-function familyForEffects(effects: readonly CardEffect[]): EnemyIntentFamily {
-  const hasDamage = effects.some((effect) => effect.kind === 'damage');
-  const hasBlock = effects.some((effect) => effect.kind === 'block');
-  const hasHeal = effects.some((effect) => effect.kind === 'heal');
-  const hasStatus = effects.some((effect) => effect.kind === 'status');
-
-  if (hasStatus) return hasDamage || hasBlock || hasHeal ? 'mixed' : 'status';
-  if (hasDamage && (hasBlock || hasHeal)) return 'mixed';
-  if (hasDamage) return 'attack';
-  if (hasBlock) return 'block';
-  if (hasHeal) return 'heal';
-  return 'mixed';
-}
-
-function titleForFamily(family: EnemyIntentFamily): string {
-  if (family === 'attack') return 'Attack intent';
-  if (family === 'block') return 'Block intent';
-  if (family === 'heal') return 'Healing intent';
-  if (family === 'status') return 'Status intent';
-  if (family === 'special') return 'Special intent';
-  return 'Mixed intent';
-}
-
 function summarizeCard(card: Card, revealMode: EnemyIntentRevealMode): EnemyIntentSummary {
   const family = familyForEffects(card.effects);
   return {
     family,
-    title: titleForFamily(family),
+    title: intentTitleForFamily(family),
     speed: card.speed,
     consequence: summarizeEffects(card.effects),
     revealMode,

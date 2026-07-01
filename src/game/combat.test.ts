@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'vitest';
+import { MATCHUP_BONUS_DAMAGE } from '../config';
 import { CardEffect, makeCard } from '../data/cards';
 import { makeItem } from '../data/items';
-import { resolveRound } from './combat';
+import { matchupPayoffForAction, resolveRound } from './combat';
 import { registerEffectHandler } from './effectHandlers';
 
 const strike = makeCard({
@@ -23,6 +24,16 @@ const quick = makeCard({
   color: 0,
   description: 'Deal 4',
   effects: [{ kind: 'damage', amount: 4 }],
+});
+const guard = makeCard({
+  id: 'guard',
+  name: 'Guard',
+  type: 'block',
+  tier: 1,
+  speed: 6,
+  color: 0,
+  description: 'Gain 7 block',
+  effects: [{ kind: 'block', amount: 7 }],
 });
 const slow = makeCard({
   id: 'slow',
@@ -82,6 +93,16 @@ const shieldBash = makeCard({
     { kind: 'damage', amount: 3 },
     { kind: 'block', amount: 4 },
   ],
+});
+const lowBlock = makeCard({
+  id: 'low-block',
+  name: 'Low Block',
+  type: 'block',
+  tier: 1,
+  speed: 8,
+  color: 0,
+  description: 'Gain 1 block',
+  effects: [{ kind: 'block', amount: 1 }],
 });
 
 describe('resolveRound', () => {
@@ -333,5 +354,122 @@ describe('resolveRound open resolution seam (U2)', () => {
         enemyAction: { actor: 'enemy', kind: 'none' },
       }),
     ).toThrow(/no effect handler/);
+  });
+});
+
+describe('resolveRound family matchup payoff', () => {
+  test('omitting payoff data preserves existing resolution even for winning families', () => {
+    const result = resolveRound({
+      player: { id: 'player', name: 'Player', hp: 20, maxHp: 20, armor: 0, statuses: [] },
+      enemy: { id: 'enemy', name: 'Enemy', hp: 20, maxHp: 20, armor: 0, statuses: [] },
+      playerAction: { actor: 'player', kind: 'card', card: guard },
+      enemyAction: { actor: 'enemy', kind: 'card', card: slow },
+    });
+
+    expect(result.enemy.hp).toBe(20);
+    expect(result.enemyHpChange.damage).toBe(0);
+    expect(result.log).not.toContain(
+      `Player exploits the read for ${MATCHUP_BONUS_DAMAGE} bonus damage`,
+    );
+  });
+
+  test('defense beating an attack intent awards player-only bonus damage', () => {
+    const playerAction = { actor: 'player' as const, kind: 'card' as const, card: guard };
+    const payoff = matchupPayoffForAction(playerAction, 'attack');
+    const result = resolveRound({
+      player: { id: 'player', name: 'Player', hp: 20, maxHp: 20, armor: 0, statuses: [] },
+      enemy: { id: 'enemy', name: 'Enemy', hp: 20, maxHp: 20, armor: 0, statuses: [] },
+      playerAction,
+      enemyAction: { actor: 'enemy', kind: 'card', card: slow },
+      playerMatchupPayoff: payoff,
+    });
+
+    expect(payoff).toMatchObject({
+      damage: MATCHUP_BONUS_DAMAGE,
+      outcome: 'win',
+      playerFamily: 'block',
+      enemyFamily: 'attack',
+    });
+    expect(result.enemy.hp).toBe(20 - MATCHUP_BONUS_DAMAGE);
+    expect(result.enemyHpChange.damage).toBe(MATCHUP_BONUS_DAMAGE);
+    expect(result.log).toContain(
+      `Player exploits the read for ${MATCHUP_BONUS_DAMAGE} bonus damage`,
+    );
+    expect(result.log).toContain(`Enemy takes ${MATCHUP_BONUS_DAMAGE} damage`);
+  });
+
+  test('losing, tied, mixed, and special matchups do not create payoff data', () => {
+    expect(
+      matchupPayoffForAction({ actor: 'player', kind: 'card', card: quick }, 'block'),
+    ).toBeNull();
+    expect(
+      matchupPayoffForAction({ actor: 'player', kind: 'card', card: quick }, 'attack'),
+    ).toBeNull();
+    expect(
+      matchupPayoffForAction({ actor: 'player', kind: 'card', card: shieldBash }, 'attack'),
+    ).toBeNull();
+    expect(
+      matchupPayoffForAction({ actor: 'player', kind: 'card', card: guard }, 'special'),
+    ).toBeNull();
+  });
+
+  test('enemy never receives a mirror bonus from a winning family', () => {
+    const result = resolveRound({
+      player: { id: 'player', name: 'Player', hp: 20, maxHp: 20, armor: 0, statuses: [] },
+      enemy: { id: 'enemy', name: 'Enemy', hp: 20, maxHp: 20, armor: 0, statuses: [] },
+      playerAction: { actor: 'player', kind: 'card', card: quick },
+      enemyAction: { actor: 'enemy', kind: 'card', card: guard },
+      playerMatchupPayoff: matchupPayoffForAction(
+        { actor: 'player', kind: 'card', card: quick },
+        'block',
+      ),
+    });
+
+    expect(result.player.hp).toBe(20);
+    expect(result.enemy.hp).toBe(16);
+    expect(result.log.some((line) => line.includes('exploits the read'))).toBe(false);
+  });
+
+  test('stunned player action does not receive a provided payoff', () => {
+    const result = resolveRound({
+      player: {
+        id: 'player',
+        name: 'Player',
+        hp: 20,
+        maxHp: 20,
+        armor: 0,
+        statuses: [{ type: 'stun', amount: 1, remainingTurns: 1 }],
+      },
+      enemy: { id: 'enemy', name: 'Enemy', hp: 20, maxHp: 20, armor: 0, statuses: [] },
+      playerAction: { actor: 'player', kind: 'card', card: guard },
+      enemyAction: { actor: 'enemy', kind: 'card', card: slow },
+      playerMatchupPayoff: {
+        damage: MATCHUP_BONUS_DAMAGE,
+        outcome: 'win',
+        playerFamily: 'block',
+        enemyFamily: 'attack',
+      },
+    });
+
+    expect(result.enemy.hp).toBe(20);
+    expect(result.log).toContain('Player is stunned');
+    expect(result.log.some((line) => line.includes('exploits the read'))).toBe(false);
+  });
+
+  test('bonus damage is reduced by existing armor and round block', () => {
+    const playerAction = { actor: 'player' as const, kind: 'card' as const, card: heal };
+    const result = resolveRound({
+      player: { id: 'player', name: 'Player', hp: 18, maxHp: 20, armor: 0, statuses: [] },
+      enemy: { id: 'enemy', name: 'Enemy', hp: 20, maxHp: 20, armor: 1, statuses: [] },
+      playerAction,
+      enemyAction: { actor: 'enemy', kind: 'card', card: lowBlock },
+      playerMatchupPayoff: matchupPayoffForAction(playerAction, 'block'),
+    });
+
+    expect(result.player.hp).toBe(20);
+    expect(result.enemy.hp).toBe(19);
+    expect(result.enemyHpChange.damage).toBe(1);
+    expect(result.log).toContain('Enemy gains 1 block');
+    expect(result.log).toContain('Enemy takes 1 damage');
   });
 });

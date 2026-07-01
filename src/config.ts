@@ -18,6 +18,7 @@ export const POTION_HEAL = 8;
 export const TRAP_DAMAGE = 3;
 export const VISION_RADIUS = 36; // trap-room field-of-view halo around the player
 export const PUNCH_DAMAGE = 3; // innate attack, always available in battle
+export const MATCHUP_BONUS_DAMAGE = 3; // player-only reward for correctly countering intent
 export const MAX_ARMOR = 3;
 
 export const PLAYER_SPEED = 210;
