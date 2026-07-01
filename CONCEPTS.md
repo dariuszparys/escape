@@ -31,6 +31,23 @@ card changes the next combat hand. It describes outcomes such as entering hand,
 replacing a role, improving an in-hand card, or staying collection-only without
 showing raw hand-selection scores.
 
+### Combat Effect Handler Registry
+
+The open resolution seam for combat effects. `resolveRound` dispatches each
+effect to a string-keyed handler rather than a closed if/else, so a new effect
+kind resolves by registering a handler — no edit to the dispatch body. Authored
+content stays typed as the closed `CardEffect` union; the resolver operates on
+the broader `ResolvableEffect` shape. An unregistered kind throws (fail-fast).
+
+### Combat Event Bus
+
+A deterministic, RNG-free subscriber surface for battle-lifecycle moments. It
+carries exactly four events: `roundStart`, `damageDealt`, and `statusApplied`
+(emitted from inside `resolveRound`) and `battleWon` (emitted by the battle
+drivers). Subscribers fire in registration order and the dispatch threads no
+RNG, so it never reorders the deterministic-run draws. `vampiric_blade`'s
+post-victory heal is the first real subscriber, shared by both drivers.
+
 ## Progression Loop
 
 ### Run

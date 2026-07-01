@@ -11,6 +11,8 @@ import { BattlePlanPhase, buildBattlePlanState } from '../game/battlePlan';
 import { BattleLayout, getBattleLayout } from '../game/battleLayout';
 import { buildBattleRoundHistory } from '../game/battleLog';
 import { ActiveStatusEffect, CombatAction, resolveRound } from '../game/combat';
+import { emitBattleWon } from '../game/combatEvents';
+import { ensureRelicBehaviorsWired } from '../game/relicBehaviors';
 import { EnemyIntentPlan, planEnemyIntent } from '../game/enemyIntent';
 import { GameRng } from '../game/rng';
 import { previewRewardImpact } from '../game/rewardImpact';
@@ -628,11 +630,13 @@ export class BattleScene extends Phaser.Scene {
     const run = getRun();
     this.closeDeckOverlay();
     run.enemiesDefeated++;
-    if (run.hasRelic('vampiric_blade')) {
+    ensureRelicBehaviorsWired();
+    const { heal } = emitBattleWon(run.relics.map((relic) => relic.id));
+    if (heal > 0) {
       const before = run.hp;
-      run.heal(2);
+      run.heal(heal);
       if (run.hp > before) {
-        this.combatPop(this.heroSprite.x + 40, this.heroSprite.y - 30, '+2 HP', '#5fe07a');
+        this.combatPop(this.heroSprite.x + 40, this.heroSprite.y - 30, `+${heal} HP`, '#5fe07a');
       }
     }
     playSfx(this, 'victory');

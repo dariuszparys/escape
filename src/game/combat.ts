@@ -2,6 +2,8 @@ import { PUNCH_DAMAGE } from '../config';
 import { Card, CardEffect, StatusEffectType } from '../data/cards';
 import { InventoryItem } from '../data/items';
 import { HpChange } from './combatFeedback';
+import { emitCombatEvent, hasCombatEventSubscribers } from './combatEvents';
+import { dispatchEffect } from './effectHandlers';
 
 export interface ActiveStatusEffect {
   type: StatusEffectType;
@@ -42,7 +44,8 @@ export interface ResolveRoundResult {
   enemyHpChange: HpChange;
 }
 
-interface MutableCombatant extends CombatantSnapshot {
+/** A combatant mid-round, carrying the transient block accumulated this round. Handlers mutate this. */
+export interface MutableCombatant extends CombatantSnapshot {
   roundBlock: number;
 }
 
@@ -88,12 +91,6 @@ export function combatActionEffects(action: CombatAction): CardEffect[] {
   return [];
 }
 
-function formatStatusLine(status: ActiveStatusEffect): string {
-  if (status.type === 'stun') return 'stunned';
-  const rounds = `${status.remainingTurns} round${status.remainingTurns === 1 ? '' : 's'}`;
-  return `${status.type}ed (${status.amount} for ${rounds})`;
-}
-
 function applyStartOfRoundStatuses(combatant: MutableCombatant, log: string[]): void {
   const next: ActiveStatusEffect[] = [];
   for (const status of combatant.statuses) {
@@ -121,16 +118,6 @@ function consumeStun(combatant: MutableCombatant): boolean {
   return true;
 }
 
-function addStatus(target: MutableCombatant, status: ActiveStatusEffect): void {
-  const existing = target.statuses.find((candidate) => candidate.type === status.type);
-  if (!existing) {
-    target.statuses.push(status);
-    return;
-  }
-  existing.amount = Math.max(existing.amount, status.amount);
-  existing.remainingTurns = Math.max(existing.remainingTurns, status.remainingTurns);
-}
-
 function applyAction(
   action: CombatAction,
   actor: MutableCombatant,
@@ -146,28 +133,7 @@ function applyAction(
   }
 
   for (const effect of combatActionEffects(action)) {
-    if (effect.kind === 'block') {
-      actor.roundBlock += effect.amount;
-      log.push(`${actor.name} gains ${effect.amount} block`);
-    } else if (effect.kind === 'heal') {
-      const healed = Math.min(actor.maxHp, actor.hp + effect.amount) - actor.hp;
-      actor.hp += healed;
-      if (healed > 0) log.push(`${actor.name} heals ${healed} HP`);
-    } else if (effect.kind === 'damage') {
-      const reduction = target.armor + target.roundBlock;
-      const dealt = Math.max(0, effect.amount - reduction);
-      target.hp = Math.max(0, target.hp - dealt);
-      if (dealt > 0) log.push(`${target.name} takes ${dealt} damage`);
-      else log.push(`${target.name} blocks the hit`);
-    } else if (effect.kind === 'status') {
-      addStatus(target, {
-        type: effect.status,
-        amount: effect.amount,
-        remainingTurns: effect.duration,
-      });
-      const current = target.statuses.find((status) => status.type === effect.status);
-      if (current) log.push(`${target.name} is ${formatStatusLine(current)}`);
-    }
+    dispatchEffect(effect, { actor, target, log });
   }
 
   return 'normal';
@@ -201,6 +167,10 @@ export function resolveRound(input: ResolveRoundInput): ResolveRoundResult {
   if (player.hp <= 0 || enemy.hp <= 0) {
     return { player, enemy, log, playerHpChange, enemyHpChange };
   }
+
+  // Round-level lifecycle signal: the action phase is underway. Inert (and allocation-free)
+  // until a subscriber registers — I1/I5 are the first real consumers (KTD2).
+  if (hasCombatEventSubscribers('roundStart')) emitCombatEvent({ type: 'roundStart' });
 
   const playerStunned = consumeStun(player);
   const enemyStunned = consumeStun(enemy);

@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'vitest';
-import { makeCard } from '../data/cards';
+import { CardEffect, makeCard } from '../data/cards';
 import { makeItem } from '../data/items';
 import { resolveRound } from './combat';
+import { registerEffectHandler } from './effectHandlers';
 
 const strike = makeCard({
   id: 'strike',
@@ -255,5 +256,82 @@ describe('resolveRound', () => {
     expect(result.enemy.hp).toBe(20);
     expect(result.log).toContain('Player is stunned');
     expect(result.player.statuses).toEqual([]);
+  });
+});
+
+describe('resolveRound open resolution seam (U2)', () => {
+  const cinderHex = makeCard({
+    id: 'cinder-hex',
+    name: 'Cinder Hex',
+    type: 'status',
+    tier: 1,
+    speed: 9,
+    color: 0,
+    description: 'Deal 2, burn 2 for 2',
+    effects: [
+      { kind: 'damage', amount: 2 },
+      { kind: 'status', status: 'burn', amount: 2, duration: 2 },
+    ],
+  });
+
+  test('a multi-effect card applies each effect in authored order through the registry', () => {
+    const result = resolveRound({
+      player: { id: 'player', name: 'Player', hp: 20, maxHp: 20, armor: 0, statuses: [] },
+      enemy: { id: 'enemy', name: 'Enemy', hp: 20, maxHp: 20, armor: 0, statuses: [] },
+      playerAction: { actor: 'player', kind: 'card', card: cinderHex },
+      enemyAction: { actor: 'enemy', kind: 'none' },
+    });
+
+    expect(result.enemy.hp).toBe(18);
+    expect(result.enemy.statuses).toEqual([{ type: 'burn', amount: 2, remainingTurns: 2 }]);
+  });
+
+  test('a custom effect kind resolves after registration alone — no applyAction edit (R1)', () => {
+    const dispose = registerEffectHandler('siphon', (effect, { actor, target, log }) => {
+      const amount = effect.amount ?? 0;
+      target.hp = Math.max(0, target.hp - amount);
+      actor.hp = Math.min(actor.maxHp, actor.hp + amount);
+      log.push(`${actor.name} siphons ${amount}`);
+    });
+
+    try {
+      const siphon = { kind: 'siphon', amount: 4 } as unknown as CardEffect;
+      const result = resolveRound({
+        player: { id: 'player', name: 'Player', hp: 10, maxHp: 20, armor: 0, statuses: [] },
+        enemy: { id: 'enemy', name: 'Enemy', hp: 20, maxHp: 20, armor: 0, statuses: [] },
+        playerAction: {
+          actor: 'player',
+          kind: 'special',
+          name: 'Siphon',
+          speed: 9,
+          effects: [siphon],
+        },
+        enemyAction: { actor: 'enemy', kind: 'none' },
+      });
+
+      expect(result.enemy.hp).toBe(16);
+      expect(result.player.hp).toBe(14);
+      expect(result.log).toContain('Player siphons 4');
+    } finally {
+      dispose();
+    }
+  });
+
+  test('an unregistered effect kind reaching the resolver throws (fail-fast)', () => {
+    const bogus = { kind: 'unregistered_verb', amount: 1 } as unknown as CardEffect;
+    expect(() =>
+      resolveRound({
+        player: { id: 'player', name: 'Player', hp: 20, maxHp: 20, armor: 0, statuses: [] },
+        enemy: { id: 'enemy', name: 'Enemy', hp: 20, maxHp: 20, armor: 0, statuses: [] },
+        playerAction: {
+          actor: 'player',
+          kind: 'special',
+          name: 'Bogus',
+          speed: 9,
+          effects: [bogus],
+        },
+        enemyAction: { actor: 'enemy', kind: 'none' },
+      }),
+    ).toThrow(/no effect handler/);
   });
 });

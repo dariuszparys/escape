@@ -10,6 +10,8 @@ import { combatCardScore, selectCombatHand } from './cardSelection';
 import { applyPendingPrepToRun } from './campfirePrep';
 import type { ActiveStatusEffect } from './combat';
 import { resolveRound } from './combat';
+import { emitBattleWon } from './combatEvents';
+import { ensureRelicBehaviorsWired } from './relicBehaviors';
 import { commitDelve } from './delve';
 import { planEnemyIntent } from './enemyIntent';
 import { convertGoldToEmbers } from './metaRewards';
@@ -29,6 +31,27 @@ export type DelveStrategy = 'cautious' | 'moderate' | 'aggressive';
 /** Gold→Ember conversion used by the economy harness; injectable so tests can probe over-generous curves. */
 export type GoldConversion = (gold: number) => number;
 
+/**
+ * A cloneable RNG threaded through the simulation. The seed-stability gate (R5)
+ * injects an *observed* implementation via `SimRunOptions.createRng` so it can sample
+ * RNG draw order without reaching into the module-private `SeededRng`.
+ */
+export interface SimRng extends GameRng {
+  clone(): SimRng;
+}
+
+/** Factory for the simulation's root RNG, given a seed. Injectable so the gate can observe draws. */
+export type SimRngFactory = (seed: number) => SimRng;
+
+/**
+ * Build the default simulation RNG for a seed, optionally observing every `frac()` draw.
+ * `observer` is fired *after* each result is computed (side-effect only), so an observed
+ * RNG produces byte-identical values to an unobserved one — the gate samples without perturbing.
+ */
+export function createSimRng(seed: number, observer?: (frac: number) => void): SimRng {
+  return new SeededRng(seed >>> 0, observer);
+}
+
 /** Safety cap on strata so a mis-tuned "push until death" line cannot loop unbounded (KTD8). */
 export const MAX_SIMULATED_STRATA = 12;
 
@@ -36,6 +59,8 @@ interface SimRunOptions {
   strategy: DelveStrategy;
   maxStrata: number;
   convert: GoldConversion;
+  /** Root RNG factory; the gate injects an observed RNG here (KTD4). Defaults to a plain seeded RNG. */
+  createRng: SimRngFactory;
 }
 
 /** Decide whether to delve the next stratum after clearing the boss of `stratumCleared`. */
@@ -90,7 +115,7 @@ type PlayerAction =
   | { kind: 'punch' };
 
 interface SimBattleState {
-  rng: SeededRng;
+  rng: SimRng;
   round: number;
   hand: Card[];
   inventory: InventoryItem[];
@@ -111,7 +136,7 @@ interface SimBattleState {
 interface EnemyDecision {
   action: Parameters<typeof resolveRound>[0]['enemyAction'];
   used: Set<number>;
-  nextRng: SeededRng;
+  nextRng: SimRng;
 }
 
 const ITEM_VALUE: Record<string, number> = {
@@ -122,11 +147,14 @@ const ITEM_VALUE: Record<string, number> = {
   iron_armor: 12,
 };
 
-class SeededRng implements GameRng {
-  constructor(private state: number) {}
+class SeededRng implements SimRng {
+  constructor(
+    private state: number,
+    private readonly observer?: (frac: number) => void,
+  ) {}
 
   clone(): SeededRng {
-    return new SeededRng(this.state);
+    return new SeededRng(this.state, this.observer);
   }
 
   frac(): number {
@@ -134,7 +162,9 @@ class SeededRng implements GameRng {
     let value = this.state;
     value = Math.imul(value ^ (value >>> 15), value | 1);
     value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
-    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+    const result = ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+    this.observer?.(result);
+    return result;
   }
 
   between(min: number, max: number): number {
@@ -218,9 +248,9 @@ export function applySimulatedPostBattleRewards(
   depth: number,
   enemyCards: readonly Card[],
 ): void {
-  if (run.hasRelic('vampiric_blade')) {
-    run.heal(2);
-  }
+  ensureRelicBehaviorsWired();
+  const { heal } = emitBattleWon(run.relics.map((relic) => relic.id));
+  if (heal > 0) run.heal(heal);
   awardEnemyGold(run, rng, depth);
   chooseRewardCard(run, enemyCards);
 }
@@ -304,7 +334,7 @@ function roomEventScore(run: RunState, event: RoomEvent): number {
   }
 }
 
-function chooseRoomEvent(run: RunState, rng: SeededRng, depth: number): RoomEvent {
+function chooseRoomEvent(run: RunState, rng: SimRng, depth: number): RoomEvent {
   if (run.scoutCharges <= 0) {
     return rollRoomEvent(rng, depth);
   }
@@ -475,7 +505,7 @@ function choosePlayerAction(state: SimBattleState): {
 function simulateBattle(
   run: RunState,
   enemy: ReturnType<typeof spawnEnemy>,
-  rng: SeededRng,
+  rng: SimRng,
 ): { won: boolean; enemyCards: Card[] } {
   const state: SimBattleState = {
     rng,
@@ -511,6 +541,7 @@ const DEFAULT_RUN_OPTIONS: SimRunOptions = {
   strategy: 'cautious',
   maxStrata: MAX_SIMULATED_STRATA,
   convert: convertGoldToEmbers,
+  createRng: (seed) => new SeededRng(seed >>> 0),
 };
 
 export function simulateRun(
@@ -518,8 +549,8 @@ export function simulateRun(
   scenario: BalanceScenario,
   options: Partial<SimRunOptions> = {},
 ): SimRunResult {
-  const { strategy, maxStrata, convert } = { ...DEFAULT_RUN_OPTIONS, ...options };
-  const rng = new SeededRng(seed >>> 0);
+  const { strategy, maxStrata, convert, createRng } = { ...DEFAULT_RUN_OPTIONS, ...options };
+  const rng = createRng(seed);
   const run = createScenarioRun(seed, scenario);
   let encounters = 0;
   let reachedBoss = false;

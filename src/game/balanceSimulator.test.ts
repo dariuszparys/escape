@@ -13,6 +13,7 @@ import {
   simulateScenarioSummary,
 } from './balanceSimulator';
 import type { GameRng } from './rng';
+import { runSignature } from './runSignature';
 
 function makeDeckCard(id: string) {
   const def = CARD_DEFS.find((card) => card.id === id);
@@ -203,6 +204,26 @@ describe('delve economy', () => {
       for (const line of [economy.cautious, economy.moderate, economy.aggressive]) {
         expect(line.avgConvertedEmbers).toBeLessThanOrEqual(CONVERSION_EMBER_CAP);
       }
+    }
+  });
+});
+
+describe('determinism gate (R5)', () => {
+  // The seed-stability safety net for the Combat Content Engine refactor: a fixed seed must
+  // produce a draw-order-sensitive run signature that never drifts. Authored against current
+  // behavior before any refactor unit; every later unit keeps this green (KTD5). If a change
+  // here goes red without an intentional-determinism note, it is a regression, not a rebaseline.
+  test('a fixed seed produces an identical run signature across double runs', () => {
+    for (let seed = 1; seed <= 50; seed++) {
+      expect(runSignature(seed)).toBe(runSignature(seed));
+    }
+  });
+
+  test('the signature stays stable under a non-default strategy', () => {
+    for (let seed = 1; seed <= 25; seed++) {
+      const first = runSignature(seed, {}, { strategy: 'aggressive' });
+      const second = runSignature(seed, {}, { strategy: 'aggressive' });
+      expect(first).toBe(second);
     }
   });
 });
