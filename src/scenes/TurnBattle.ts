@@ -30,7 +30,6 @@ import {
   TurnBattleRect,
 } from '../game/turnBattleLayout';
 import {
-  BattleStartModifier,
   cardCost,
   createBattle,
   endTurn,
@@ -88,12 +87,11 @@ interface SliceSceneData {
   restartCount?: number;
 }
 
-/** The Dungeon's launch payload (R14): the same run inputs the old scene consumed, plus the threat modifier (R17). */
+/** The Dungeon's launch payload (R14): the same run inputs the old scene consumed. */
 export interface RunBattleSceneData {
   mode: 'run';
   enemy: EnemyInstance;
   rng: GameRng;
-  modifier: BattleStartModifier | null;
 }
 
 type TurnBattleSceneData = SliceSceneData | RunBattleSceneData;
@@ -133,7 +131,6 @@ export class TurnBattleScene extends Phaser.Scene {
   private baseSeed = '';
   private restartCount = 0;
   private display!: EnemyDisplay;
-  private modifier: BattleStartModifier | null = null;
   private playerMaxHp = 0;
   private rng!: GameRng;
 
@@ -200,7 +197,6 @@ export class TurnBattleScene extends Phaser.Scene {
       this.mode = 'run';
       this.baseSeed = '';
       this.restartCount = 0;
-      this.modifier = data.modifier;
       this.rng = data.rng;
       const def = data.enemy.def;
       this.display = {
@@ -218,7 +214,6 @@ export class TurnBattleScene extends Phaser.Scene {
       this.mode = 'slice';
       this.baseSeed = data.seed ?? String(Math.random());
       this.restartCount = data.restartCount ?? 0;
-      this.modifier = null;
       const sliceDef = sliceEnemy(data.enemyId);
       this.display = {
         id: sliceDef.id,
@@ -304,7 +299,6 @@ export class TurnBattleScene extends Phaser.Scene {
         pattern: this.display.pattern,
         // swift_boots re-specified for the deck model (U12): +1 draw each turn.
         drawSize: run?.hasRelic('swift_boots') ? 6 : undefined,
-        modifier: this.modifier ?? undefined,
       },
       this.rng,
     );

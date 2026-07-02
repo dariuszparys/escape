@@ -19,12 +19,6 @@ export const VISION_RADIUS = 36; // trap-room field-of-view halo around the play
 export const MAX_ARMOR = 3;
 
 export const PLAYER_SPEED = 210;
-export const ROOM_THREAT_CONTACT_RADIUS = 34;
-export const ROOM_THREAT_SAFE_RADIUS = TILE * 2.35;
-export const ROOM_THREAT_MIN_X = TILE * 2;
-export const ROOM_THREAT_MAX_X = ROOM_W - TILE * 2;
-export const ROOM_THREAT_MIN_Y = TILE * 2;
-export const ROOM_THREAT_MAX_Y = ROOM_H - TILE * 2;
 
 export type Dir = 'N' | 'E' | 'S' | 'W';
 export const DIRS: Dir[] = ['N', 'E', 'S', 'W'];

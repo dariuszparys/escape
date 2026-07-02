@@ -140,13 +140,10 @@ describe('createBattle (U1 core)', () => {
     expect(telegraph.magnitude).toBe(7);
   });
 
-  test('threat modifier hook grants enemy opening block (R17 shape)', () => {
-    const result = createBattle(
-      baseConfig({ modifier: { enemyOpeningBlock: 5 } }),
-      new SequenceRng(),
-    );
-    expect(result.state.enemy.block).toBe(5);
-    expect(eventOf(result.events, 'blockGained').blockAfter).toBe(5);
+  test('AE3: a battle starts the enemy at block 0 with no opening modifier', () => {
+    const result = createBattle(baseConfig(), new SequenceRng());
+    expect(result.state.enemy.block).toBe(0);
+    expect(types(result.events)).not.toContain('blockGained');
   });
 });
 

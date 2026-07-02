@@ -2,7 +2,6 @@ import { MAX_DEPTH } from '../config';
 import { GameRng } from '../game/rng';
 import type { ActiveStatusEffect } from '../game/combat';
 import { empowerPattern, type IntentPattern } from '../game/intentPatterns';
-import type { RoomThreatProfileId } from '../dungeon/roomThreat';
 
 export type EnemyTier = 'weak' | 'medium' | 'strong';
 
@@ -13,7 +12,6 @@ export interface EnemyDef {
   baseHp: number;
   tier?: EnemyTier;
   boss: boolean;
-  dungeonThreatProfile: RoomThreatProfileId;
   /** Authored turn-battle behavior (R6): an intent cycle, boss specials folded in as interval entries. */
   pattern: IntentPattern;
 }
@@ -36,7 +34,6 @@ export const ENEMIES: EnemyDef[] = [
     baseHp: 8,
     tier: 'weak',
     boss: false,
-    dungeonThreatProfile: 'ignore',
     pattern: {
       cycle: [
         {
@@ -64,7 +61,6 @@ export const ENEMIES: EnemyDef[] = [
     baseHp: 10,
     tier: 'weak',
     boss: false,
-    dungeonThreatProfile: 'patrol',
     pattern: {
       cycle: [
         {
@@ -92,7 +88,6 @@ export const ENEMIES: EnemyDef[] = [
     baseHp: 12,
     tier: 'weak',
     boss: false,
-    dungeonThreatProfile: 'patrol',
     pattern: {
       cycle: [
         {
@@ -123,7 +118,6 @@ export const ENEMIES: EnemyDef[] = [
     baseHp: 16,
     tier: 'medium',
     boss: false,
-    dungeonThreatProfile: 'alert_chase',
     pattern: {
       cycle: [
         {
@@ -154,7 +148,6 @@ export const ENEMIES: EnemyDef[] = [
     baseHp: 17,
     tier: 'medium',
     boss: false,
-    dungeonThreatProfile: 'alert_chase',
     pattern: {
       cycle: [
         {
@@ -185,7 +178,6 @@ export const ENEMIES: EnemyDef[] = [
     baseHp: 19,
     tier: 'medium',
     boss: false,
-    dungeonThreatProfile: 'alert_chase',
     pattern: {
       cycle: [
         {
@@ -216,7 +208,6 @@ export const ENEMIES: EnemyDef[] = [
     baseHp: 23,
     tier: 'strong',
     boss: false,
-    dungeonThreatProfile: 'alert_chase',
     pattern: {
       cycle: [
         {
@@ -250,7 +241,6 @@ export const ENEMIES: EnemyDef[] = [
     baseHp: 24,
     tier: 'strong',
     boss: false,
-    dungeonThreatProfile: 'alert_chase',
     pattern: {
       cycle: [
         {
@@ -281,7 +271,6 @@ export const ENEMIES: EnemyDef[] = [
     baseHp: 27,
     tier: 'strong',
     boss: false,
-    dungeonThreatProfile: 'alert_chase',
     pattern: {
       cycle: [
         {
@@ -314,7 +303,6 @@ export const BOSSES: EnemyDef[] = [
     texture: 'boss_minotaur',
     baseHp: 44,
     boss: true,
-    dungeonThreatProfile: 'boss_pressure',
     pattern: {
       cycle: [
         {
@@ -355,7 +343,6 @@ export const BOSSES: EnemyDef[] = [
     texture: 'boss_lich',
     baseHp: 40,
     boss: true,
-    dungeonThreatProfile: 'boss_pressure',
     pattern: {
       cycle: [
         {
@@ -396,7 +383,6 @@ export const BOSSES: EnemyDef[] = [
     texture: 'boss_demon',
     baseHp: 42,
     boss: true,
-    dungeonThreatProfile: 'boss_pressure',
     pattern: {
       cycle: [
         {
@@ -525,10 +511,6 @@ export function getEnemyTierForDepth(depth: number): EnemyTier {
   if (depth <= 3) return 'weak';
   if (depth <= 6) return 'medium';
   return 'strong';
-}
-
-export function getEnemyThreatProfile(def: EnemyDef): RoomThreatProfileId {
-  return def.dungeonThreatProfile;
 }
 
 /**

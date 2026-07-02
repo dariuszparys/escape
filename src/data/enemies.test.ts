@@ -1,9 +1,7 @@
 import { describe, expect, test } from 'vitest';
-import { ROOM_THREAT_PROFILES } from '../dungeon/roomThreat';
 import {
   BOSSES,
   ENEMIES,
-  getEnemyThreatProfile,
   getEnemyTierForDepth,
   intentBonusForDepth,
   spawnBoss,
@@ -24,15 +22,6 @@ describe('enemy generation', () => {
     const boss = spawnBoss(new SequenceRng([0]));
     expect(boss.def.boss).toBe(true);
     expect(boss.def.pattern.special?.interval).toBeGreaterThanOrEqual(2);
-  });
-
-  test('normal enemies resolve to known non-boss dungeon threat profiles', () => {
-    for (const enemy of ENEMIES) {
-      const profile = getEnemyThreatProfile(enemy);
-
-      expect(profile).not.toBe('boss_pressure');
-      expect(ROOM_THREAT_PROFILES[profile]).toBeDefined();
-    }
   });
 
   test('a stratum-2 boss has more HP than a stratum-1 boss (depth term applied)', () => {
@@ -60,12 +49,6 @@ describe('enemy generation', () => {
     const hpAt = (depth: number) => spawnEnemy(new SequenceRng([0]), depth).hp;
     expect(hpAt(8)).toBeLessThan(hpAt(18));
     expect(hpAt(18)).toBeLessThan(hpAt(28));
-  });
-
-  test('bosses resolve to boss pressure dungeon threat profiles', () => {
-    for (const boss of BOSSES) {
-      expect(getEnemyThreatProfile(boss)).toBe('boss_pressure');
-    }
   });
 });
 

@@ -57,11 +57,6 @@ export interface TurnBattleState {
   outcome: BattleOutcome | null;
 }
 
-/** Room-threat reach-in hook (R17). Shape only for the slice; U10 designs the real modifiers. */
-export interface BattleStartModifier {
-  enemyOpeningBlock?: number;
-}
-
 export interface TurnEngineConfig {
   /** The full card collection — the deck IS the collection (R1). */
   deck: readonly Card[];
@@ -70,7 +65,6 @@ export interface TurnEngineConfig {
   pattern: IntentPattern;
   energyPerTurn?: number;
   drawSize?: number;
-  modifier?: BattleStartModifier;
 }
 
 export type TurnCommandRejection =
@@ -455,16 +449,6 @@ export function createBattle(config: TurnEngineConfig, rng: GameRng): TurnComman
     outcome: null,
   };
   const rt: EngineRuntime = { state, events: [], log: [], rng };
-  const openingBlock = config.modifier?.enemyOpeningBlock ?? 0;
-  if (openingBlock > 0) {
-    state.enemy.block = openingBlock;
-    rt.events.push({
-      type: 'blockGained',
-      targetId: state.enemy.id,
-      amount: openingBlock,
-      blockAfter: openingBlock,
-    });
-  }
   startPlayerTurn(rt);
   return finish(rt);
 }

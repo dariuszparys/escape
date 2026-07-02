@@ -21,16 +21,16 @@ npm run dev      # http://localhost:5173
 - Every later room has four doors — the one you came through is barred.
   Rooms are randomized: **encounters, treasure chests, health potions,
   paid rest rooms, or spike traps**.
-- Encounter rooms place one visible monster in the room. Touching the monster
-  starts simultaneous card combat: you play a card (or drink a potion), the
-  enemy plays one. The battle screen previews enemy intent, speed order, and
-  active status consequences before you commit. Attacks are reduced by the
-  opponent's block and your collected armor. Cards refresh once a whole hand has
-  been used.
-- Normal encounters can be escaped through an open door before fighting, but
-  skipped fights give no enemy-card or Gold reward. Win a fight and you may
-  steal one enemy card — hand limit is **5**. Card rewards, chest cards, and
-  rest-room upgrades or removals preview whether the next combat hand changes.
+- Encounter rooms place one visible monster in the room. Entering an uncleared
+  encounter room starts the card battle immediately — entry is commitment, so
+  you avoid a fight by not entering the room, not by slipping past the monster.
+  You play a card (or drink a potion), the enemy plays one. The battle screen
+  previews enemy intent, speed order, and active status consequences before you
+  commit. Attacks are reduced by the opponent's block and your collected armor.
+  Cards refresh once a whole hand has been used.
+- Win a fight and you may steal one enemy card — hand limit is **5**. Card
+  rewards, chest cards, and rest-room upgrades or removals preview whether the
+  next combat hand changes.
 - **Gold** is earned and spent inside the current run, including paid rest-room
   deck upgrades or removals. **Embers** persist after the run and unlock
   long-term campfire progression.

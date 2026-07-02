@@ -5,12 +5,22 @@ concepts and durable implementation boundaries.
 
 ## Dungeon Loop
 
-### Room Threat System
+### Instant Encounter
 
-A dungeon-room behavior layer that manages visible pre-battle threats. In the
-first version it owns one active monster's room intent, movement, contact
-trigger, and cleanup before handing off to Card Battle. Normal encounter
-threats can be escaped without fight rewards; boss threats remain mandatory.
+Entering an uncleared encounter or boss room starts the Card Battle
+immediately — entry is commitment. A brief entry cue (a red exclamation,
+camera shake, and hit sting) plays over locked input, then the battle launches.
+There is no in-room monster phase to move through, no contact trigger, and no
+way to slip back out to skip the fight; the monster is a static sprite that
+fades on victory. Avoiding a fight means not entering the room, informed by the
+Scout Charge reveal of adjacent room types.
+
+### Scout Charge
+
+A limited Run resource that reveals the event type of the adjacent unexplored
+rooms behind the current room's open doors. The reveal fires at most once per
+room and its text persists until the player moves on; Scout Charges are the
+informed-routing tool for choosing which rooms to commit to.
 
 ### Card Battle
 
