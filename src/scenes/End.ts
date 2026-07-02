@@ -89,7 +89,7 @@ export class EndScene extends Phaser.Scene {
             'The dungeon falls silent behind you.',
             'Sunlight. Fresh air. Freedom.',
             '',
-            `Escaped with ${run.hp}/${run.maxHp} HP and ${run.hand.length} cards.`,
+            `Escaped with ${run.hp}/${run.maxHp} HP and ${run.cardCollection.length} cards.`,
             emberLine,
           ].join('\n'),
           {

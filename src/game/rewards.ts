@@ -1,4 +1,4 @@
-import { randomCard } from '../data/cards';
+import { Card, randomCard } from '../data/cards';
 import { InventoryItem, makeItem, randomItemIdForDepth } from '../data/items';
 import { randomRelic } from '../data/relics';
 import { RunState } from '../state';
@@ -38,8 +38,6 @@ export function rollChestReward(run: RunState, rng: GameRng, depth: number): Rew
     const card = randomCard(rng, depth);
     const impact = previewRewardImpact({
       collection: run.cardCollection,
-      combatHand: run.combatHand,
-      handLimit: run.handLimit,
       change: { kind: 'add', card },
     });
     run.addCard(card);
@@ -76,4 +74,20 @@ export function awardEnemyGold(run: RunState, rng: GameRng, depth: number): numb
   const amount = Math.floor(base * run.goldMultiplier);
   run.addGold(amount);
   return amount;
+}
+
+/**
+ * R25: the victory reward — up to `count` depth-appropriate random cards,
+ * deduplicated by def so the choice is always a real choice. The pool can
+ * collapse below `count` only if a tier's def list is tiny; offers then shrink
+ * rather than repeat.
+ */
+export function rollVictoryCardOffers(rng: GameRng, depth: number, count = 3): Card[] {
+  const offers: Card[] = [];
+  for (let attempts = 0; offers.length < count && attempts < 24; attempts++) {
+    const card = randomCard(rng, depth);
+    if (offers.some((offer) => offer.id === card.id)) continue;
+    offers.push(card);
+  }
+  return offers;
 }

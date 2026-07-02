@@ -8,7 +8,7 @@ import { TitleScene } from './scenes/Title';
 import { CampfireScene } from './scenes/Campfire';
 import { ProgressionScene } from './scenes/Progression';
 import { DungeonScene } from './scenes/Dungeon';
-import { BattleScene } from './scenes/Battle';
+import { TurnBattleScene } from './scenes/TurnBattle';
 import { HudScene } from './scenes/Hud';
 import { EndScene } from './scenes/End';
 import { getRun } from './state';
@@ -36,7 +36,7 @@ const game = new Phaser.Game({
     CampfireScene,
     ProgressionScene,
     DungeonScene,
-    BattleScene,
+    TurnBattleScene,
     HudScene,
     EndScene,
   ],

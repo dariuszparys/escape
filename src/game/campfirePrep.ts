@@ -9,6 +9,7 @@ import {
   BONUS_STARTING_CARD_PICKS,
   DEFAULT_STARTING_CARD_CHOICES,
   DEFAULT_STARTING_CARD_PICKS,
+  STARTING_DECK_PAD_IDS,
 } from './startingCards';
 
 function activeStarterKit(progression?: MetaProgressionState): StarterKitDef | null {
@@ -43,6 +44,12 @@ export function applyPendingPrepToRun(
   run.starterKitId = starterKit?.id ?? null;
   run.scoutCharges = pendingPrep.scoutFlame ? 1 : 0;
   run.curseIds = [...curseIds];
+
+  // R15: pad the opening collection toward the draw size before kit and picks.
+  for (const padId of STARTING_DECK_PAD_IDS) {
+    const def = CARD_DEFS.find((card) => card.id === padId);
+    if (def) run.addCard(makeCard(def));
+  }
 
   if (starterKit) {
     run.addCard(makeSignatureCard(starterKit));

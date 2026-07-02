@@ -4,6 +4,10 @@ export type SfxKey =
   | 'step'
   | 'door'
   | 'card_play'
+  | 'card_draw'
+  | 'shuffle'
+  | 'end_turn'
+  | 'reject'
   | 'hit_enemy'
   | 'hit_player'
   | 'block'
@@ -112,6 +116,10 @@ const SPECS: Record<SfxKey, RenderSpec> = {
     },
   },
   card_play: tone(660, undefined, 'square', 0.35, 0.05),
+  card_draw: tone(520, 640, 'triangle', 0.22, 0.05),
+  shuffle: noise(0.28, 0.35, 'bandpass', 600),
+  end_turn: tone(330, 220, 'square', 0.28, 0.12),
+  reject: tone(140, 90, 'square', 0.32, 0.09),
   hit_enemy: noise(0.12, 0.6, 'bandpass', 800),
   hit_player: noise(0.14, 0.6, 'lowpass', 300),
   block: {

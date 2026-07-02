@@ -22,7 +22,7 @@ describe('relic defs', () => {
 
     expect(relic.id).toBe('swift_boots');
     expect(relic.name).toBe('Swift Boots');
-    expect(relic.description).toBe('Combat hand holds 6 cards instead of 5.');
+    expect(relic.description).toBe('Draw 6 cards each battle turn instead of 5.');
     expect(relic.uid).toBeGreaterThan(0);
   });
 

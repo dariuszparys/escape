@@ -19,7 +19,7 @@ export const RELIC_DEFS: RelicDef[] = [
   {
     id: 'swift_boots',
     name: 'Swift Boots',
-    description: 'Combat hand holds 6 cards instead of 5.',
+    description: 'Draw 6 cards each battle turn instead of 5.',
     color: 0x7fb2e8,
   },
   { id: 'iron_will', name: 'Iron Will', description: 'Max armor raised to 4.', color: 0x90d8e8 },

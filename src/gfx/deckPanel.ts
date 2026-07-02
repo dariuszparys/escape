@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { Card } from '../data/cards';
-import { orderedDeckEntries } from '../game/deckOrdering';
+import { cardCost } from '../game/turnEngine';
 
 function cardTypeTag(card: Card): string {
   return card.type === 'attack'
@@ -14,15 +14,21 @@ function cardTypeTag(card: Card): string {
           : 'STAT';
 }
 
+/**
+ * Collection browser (U12): under the deck model every card fights, so the
+ * panel lists the whole collection — no hand/reserve split, no selection
+ * priority copy. Sorted for reading (tier, then name), never draw order.
+ */
 export function createDeckPanel(
   scene: Phaser.Scene,
   title: string,
   x: number,
   y: number,
   collection: readonly Card[],
-  combatHand: readonly Card[],
 ): Phaser.GameObjects.Container {
-  const entries = orderedDeckEntries(collection, combatHand);
+  const entries = [...collection].sort(
+    (a, b) => b.tier - a.tier || a.name.localeCompare(b.name) || a.uid - b.uid,
+  );
   const width = 420;
   const height = 348;
   const panel = scene.add.container(x, y).setDepth(300);
@@ -50,7 +56,7 @@ export function createDeckPanel(
       .text(
         0,
         -height / 2 + 58,
-        'Top 5 cards fight, and at least 3 offensive cards stay in hand.',
+        `${entries.length} cards — your whole collection is your battle deck.`,
         {
           fontFamily: 'monospace',
           fontSize: '10px',
@@ -61,34 +67,19 @@ export function createDeckPanel(
       .setOrigin(0.5),
   );
 
-  panel.add(
-    scene.add
-      .text(0, -height / 2 + 78, 'Priority: tier > combat score > total value > name', {
-        fontFamily: 'monospace',
-        fontSize: '10px',
-        color: '#6a6478',
-        align: 'center',
-      })
-      .setOrigin(0.5),
-  );
-
   const visibleEntries = entries.slice(0, 12);
-  for (const [index, entry] of visibleEntries.entries()) {
-    const rowY = -height / 2 + 112 + index * 18;
-    const badge = entry.inHand ? 'HAND' : 'RES ';
-    const name =
-      entry.card.name.length > 18
-        ? `${entry.card.name.slice(0, 17)}…`
-        : entry.card.name.padEnd(18, ' ');
+  for (const [index, card] of visibleEntries.entries()) {
+    const rowY = -height / 2 + 88 + index * 18;
+    const name = card.name.length > 20 ? `${card.name.slice(0, 19)}…` : card.name.padEnd(20, ' ');
     panel.add(
       scene.add.text(
         -width / 2 + 22,
         rowY,
-        `${String(index + 1).padStart(2, ' ')}. ${badge} ${name} ${cardTypeTag(entry.card)} s${entry.card.speed}`,
+        `${String(index + 1).padStart(2, ' ')}. ${name} ${cardTypeTag(card)}  ${cardCost(card)}⚡ T${card.tier}`,
         {
           fontFamily: 'monospace',
           fontSize: '11px',
-          color: entry.inHand ? '#f5edd8' : '#8e889a',
+          color: '#f5edd8',
         },
       ),
     );
@@ -97,7 +88,7 @@ export function createDeckPanel(
   if (entries.length > visibleEntries.length) {
     panel.add(
       scene.add
-        .text(0, height / 2 - 38, `+${entries.length - visibleEntries.length} more reserve cards`, {
+        .text(0, height / 2 - 38, `+${entries.length - visibleEntries.length} more cards`, {
           fontFamily: 'monospace',
           fontSize: '11px',
           color: '#6a6478',

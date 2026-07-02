@@ -31,15 +31,13 @@ export function createRewardImpactText(
 }
 
 export function compactRewardImpactLabel(impact: RewardImpactPreview): string {
-  if (impact.kind === 'collection_only') return 'Collection only\nHand unchanged';
-  if (impact.kind === 'unchanged') return 'Hand unchanged';
-  if (impact.kind === 'enters_hand') return 'Enters hand';
-  if (impact.kind === 'replaces_card') {
-    return `Enters hand\nReplaces ${impact.leaving?.name ?? 'a card'}`;
+  const pct = `${Math.round(impact.drawOdds * 100)}%`;
+  if (impact.kind === 'grows_deck') {
+    return `Deck ${impact.deckBefore} \u2192 ${impact.deckAfter}\n~${pct} per opening hand`;
   }
-  if (impact.kind === 'improves_role') return 'Improves hand';
-  if (impact.kind === 'removes_hand_card') {
-    return impact.entering ? `Opens slot\nAdds ${impact.entering.name}` : 'Leaves hand';
+  if (impact.kind === 'improves_card') return 'Improves in place\nDeck size unchanged';
+  if (impact.kind === 'thins_deck') {
+    return `Deck ${impact.deckBefore} \u2192 ${impact.deckAfter}\nDraws run stronger`;
   }
-  return impact.label;
+  return 'Deck unchanged';
 }

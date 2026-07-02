@@ -4,7 +4,7 @@ import { makeRelic } from './data/relics';
 import { RunState } from './state';
 
 describe('RunState.removeCard', () => {
-  test('removes an existing card and refreshes combat hand', () => {
+  test('removes an existing card from the collection', () => {
     const run = new RunState();
     run.cardCollection = [
       makeCard({
@@ -12,7 +12,7 @@ describe('RunState.removeCard', () => {
         name: 'Strike',
         type: 'attack',
         tier: 1,
-        speed: 5,
+        cost: 1,
         color: 0,
         description: 'Deal 5 damage',
         effects: [{ kind: 'damage', amount: 5 }],
@@ -22,7 +22,7 @@ describe('RunState.removeCard', () => {
         name: 'Guard',
         type: 'block',
         tier: 1,
-        speed: 6,
+        cost: 1,
         color: 0,
         description: 'Gain 7 block',
         effects: [{ kind: 'block', amount: 7 }],
@@ -32,20 +32,18 @@ describe('RunState.removeCard', () => {
         name: 'Minor Heal',
         type: 'heal',
         tier: 1,
-        speed: 4,
+        cost: 1,
         color: 0,
         description: 'Restore 5 HP',
         effects: [{ kind: 'heal', amount: 5 }],
       }),
     ];
-    run.refreshCombatHand();
 
     const removedUid = run.cardCollection[1].uid;
     const result = run.removeCard(removedUid);
 
     expect(result).toBe(true);
     expect(run.cardCollection).toHaveLength(2);
-    expect(run.combatHand.map((card) => card.uid)).not.toContain(removedUid);
   });
 
   test('returns false and does nothing for unknown cards', () => {
@@ -56,7 +54,7 @@ describe('RunState.removeCard', () => {
         name: 'Strike',
         type: 'attack',
         tier: 1,
-        speed: 5,
+        cost: 1,
         color: 0,
         description: 'Deal 5 damage',
         effects: [{ kind: 'damage', amount: 5 }],
@@ -66,13 +64,12 @@ describe('RunState.removeCard', () => {
         name: 'Guard',
         type: 'block',
         tier: 1,
-        speed: 6,
+        cost: 1,
         color: 0,
         description: 'Gain 7 block',
         effects: [{ kind: 'block', amount: 7 }],
       }),
     ];
-    run.refreshCombatHand();
     const uid = run.cardCollection[0].uid;
     const unchanged = run.cardCollection.map((card) => card.uid);
 
@@ -90,13 +87,12 @@ describe('RunState.removeCard', () => {
         name: 'Strike',
         type: 'attack',
         tier: 1,
-        speed: 5,
+        cost: 1,
         color: 0,
         description: 'Deal 5 damage',
         effects: [{ kind: 'damage', amount: 5 }],
       }),
     ];
-    run.refreshCombatHand();
 
     const removed = run.removeCard(run.cardCollection[0].uid);
 
@@ -104,27 +100,13 @@ describe('RunState.removeCard', () => {
     expect(run.cardCollection).toHaveLength(1);
   });
 
-  test('adds swift boots and expands combat hand size to 6', () => {
+  test('swift boots is a battle-side relic: owning it changes no run state (U12)', () => {
     const run = new RunState('seed');
-    for (let i = 0; i < 7; i++) {
-      run.addCard(
-        makeCard({
-          id: `card-${i}`,
-          name: `Card ${i}`,
-          type: 'attack',
-          tier: i < 2 ? 1 : 2,
-          speed: 5,
-          color: 0,
-          description: 'card',
-          effects: [{ kind: 'damage', amount: i + 1 }],
-        }),
-      );
-    }
-
     run.addRelic(makeRelic('swift_boots'));
 
-    expect(run.handLimit).toBe(6);
-    expect(run.combatHand).toHaveLength(6);
+    // Its +1 draw applies inside the turn battle; here it is just owned.
+    expect(run.hasRelic('swift_boots')).toBe(true);
+    expect(run.maxArmor).toBe(3);
   });
 
   test('adds iron will to increase max armor to 4', () => {

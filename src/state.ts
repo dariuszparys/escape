@@ -1,10 +1,9 @@
-import { MAX_ARMOR, MAX_HAND, MAX_INVENTORY, PLAYER_MAX_HP } from './config';
+import { MAX_ARMOR, MAX_INVENTORY, PLAYER_MAX_HP } from './config';
 import { Card } from './data/cards';
 import type { CampfireCurseId } from './data/campfireBargains';
 import { InventoryItem, makeItem } from './data/items';
 import { RelicId, Relic } from './data/relics';
 import type { StarterKitId } from './data/starterKits';
-import { selectCombatHand } from './game/cardSelection';
 import { DEFAULT_STARTING_CARD_CHOICES, DEFAULT_STARTING_CARD_PICKS } from './game/startingCards';
 
 let nextRunId = 1;
@@ -20,14 +19,12 @@ export class RunState {
   hp = PLAYER_MAX_HP;
   maxHp = PLAYER_MAX_HP;
   cardCollection: Card[] = [];
-  combatHand: Card[] = [];
   inventory: InventoryItem[] = [];
   gold = 0;
   armor = 0; // each point = 1 flat damage reduction in battle
   depth = 1;
   enemiesDefeated = 0;
   relics: Relic[] = [];
-  handLimit = MAX_HAND;
   maxArmor = MAX_ARMOR;
   startingCardChoices = DEFAULT_STARTING_CARD_CHOICES;
   startingCardPicks = DEFAULT_STARTING_CARD_PICKS;
@@ -48,15 +45,6 @@ export class RunState {
     this.runId = runId;
   }
 
-  get hand(): Card[] {
-    return this.combatHand;
-  }
-
-  set hand(cards: Card[]) {
-    this.cardCollection = [...cards];
-    this.refreshCombatHand();
-  }
-
   get potions(): number {
     return this.inventory.filter((item) => item.kind === 'heal').length;
   }
@@ -67,17 +55,12 @@ export class RunState {
     this.inventory = [...nonPotions, ...potions].slice(0, MAX_INVENTORY);
   }
 
-  get handFull(): boolean {
-    return this.combatHand.length >= this.handLimit;
-  }
-
   get inventoryFull(): boolean {
     return this.inventory.length >= MAX_INVENTORY;
   }
 
   addCard(card: Card): boolean {
     this.cardCollection.push(card);
-    this.refreshCombatHand();
     return true;
   }
 
@@ -86,12 +69,7 @@ export class RunState {
     const index = this.cardCollection.findIndex((candidate) => candidate.uid === uid);
     if (index < 0) return false;
     this.cardCollection.splice(index, 1);
-    this.refreshCombatHand();
     return true;
-  }
-
-  refreshCombatHand(): void {
-    this.combatHand = selectCombatHand(this.cardCollection, this.handLimit);
   }
 
   addItem(item: InventoryItem): boolean {
@@ -144,9 +122,7 @@ export class RunState {
     if (this.hasRelic(relic.id)) return;
 
     this.relics.push(relic);
-    this.handLimit = this.hasRelic('swift_boots') ? MAX_HAND + 1 : MAX_HAND;
     this.maxArmor = this.hasRelic('iron_will') ? MAX_ARMOR + 1 : MAX_ARMOR;
-    this.refreshCombatHand();
   }
 }
 

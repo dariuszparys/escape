@@ -1,5 +1,13 @@
 export const STARTING_CARD_IDS = ['slash', 'guard', 'quick_jab', 'minor_heal'] as const;
 
+/**
+ * R15: the deck model needs a body. Every run opens with these basics so the
+ * starting collection sits near the draw size (5) before picks and kit
+ * signatures — a 2-card deck would reshuffle mid-turn forever. Composition is
+ * a playtest question; the pad's existence is structural.
+ */
+export const STARTING_DECK_PAD_IDS = ['strike', 'strike', 'guard', 'guard'] as const;
+
 export const DEFAULT_STARTING_CARD_CHOICES = 3;
 export const DEFAULT_STARTING_CARD_PICKS = 2;
 export const BONUS_STARTING_CARD_CHOICES = 4;

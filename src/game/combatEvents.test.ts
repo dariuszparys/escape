@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, test } from 'vitest';
 import { makeCard } from '../data/cards';
-import { resolveRound } from './combat';
+import { createIntentState, telegraphIntent } from './intentPatterns';
+import { SequenceRng } from './test-rng';
+import { playCard, TurnBattleState } from './turnEngine';
 import {
   type CombatEventType,
   emitBattleWon,
@@ -17,39 +19,51 @@ afterEach(() => {
   while (disposers.length) disposers.pop()?.();
 });
 
-const venomStrike = makeCard({
-  id: 'venom-strike',
-  name: 'Venom Strike',
-  type: 'status',
-  tier: 1,
-  speed: 9,
-  color: 0,
-  description: 'Deal 3, poison',
-  effects: [
-    { kind: 'damage', amount: 3 },
-    { kind: 'status', status: 'poison', amount: 2, duration: 3 },
-  ],
-});
-
 function playVenomStrike(): void {
-  resolveRound({
-    player: { id: 'player', name: 'Player', hp: 20, maxHp: 20, armor: 0, statuses: [] },
-    enemy: { id: 'enemy', name: 'Enemy', hp: 20, maxHp: 20, armor: 0, statuses: [] },
-    playerAction: { actor: 'player', kind: 'card', card: venomStrike },
-    enemyAction: { actor: 'enemy', kind: 'none' },
+  const venomStrike = makeCard({
+    id: 'venom-strike',
+    name: 'Venom Strike',
+    type: 'status',
+    tier: 1,
+    cost: 1,
+    color: 0,
+    description: 'Deal 3, poison',
+    effects: [
+      { kind: 'damage', amount: 3 },
+      { kind: 'status', status: 'poison', amount: 2, duration: 3 },
+    ],
   });
+  let intent = createIntentState({
+    cycle: [{ name: 'Claw', telegraph: '...', effects: [{ kind: 'damage', amount: 3 }] }],
+  });
+  intent = telegraphIntent(intent, 1);
+  const state: TurnBattleState = {
+    turn: 1,
+    energy: 3,
+    energyPerTurn: 3,
+    drawSize: 5,
+    drawPile: [],
+    hand: [venomStrike],
+    discardPile: [],
+    player: { id: 'player', name: 'Player', hp: 20, maxHp: 20, armor: 0, block: 0, statuses: [] },
+    enemy: { id: 'enemy', name: 'Enemy', hp: 20, maxHp: 20, armor: 0, block: 0, statuses: [] },
+    intent,
+    playerStunned: false,
+    phase: 'player',
+    outcome: null,
+  };
+  playCard(state, venomStrike.uid, new SequenceRng());
 }
 
 describe('combat event bus', () => {
-  test('round-level events fire from resolveRound in lifecycle order', () => {
+  test('handler-level events fire from engine resolution in causal order', () => {
     const seen: CombatEventType[] = [];
-    track(subscribeCombatEvent('roundStart', () => seen.push('roundStart')));
     track(subscribeCombatEvent('damageDealt', () => seen.push('damageDealt')));
     track(subscribeCombatEvent('statusApplied', () => seen.push('statusApplied')));
 
     playVenomStrike();
 
-    expect(seen).toEqual(['roundStart', 'damageDealt', 'statusApplied']);
+    expect(seen).toEqual(['damageDealt', 'statusApplied']);
   });
 
   test('damageDealt and statusApplied carry the resolved payload', () => {
@@ -98,10 +112,10 @@ describe('combat event bus', () => {
   });
 
   test('with no subscribers the bus is inert (zero-behavior emit path)', () => {
-    expect(hasCombatEventSubscribers('roundStart')).toBe(false);
+    expect(hasCombatEventSubscribers('turnStarted')).toBe(false);
     expect(hasCombatEventSubscribers('damageDealt')).toBe(false);
     // Emitting into an empty bus is a no-op and never throws.
-    expect(() => emitCombatEvent({ type: 'roundStart' })).not.toThrow();
+    expect(() => emitCombatEvent({ type: 'turnStarted', turn: 1 })).not.toThrow();
   });
 
   test('a disposed subscriber stops receiving events', () => {

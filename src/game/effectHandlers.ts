@@ -15,11 +15,18 @@ export interface ResolvableEffect {
   readonly duration?: number;
 }
 
-/** What a handler may read and mutate: the acting/target combatants and the round log. */
+/**
+ * What a handler may read and mutate: the acting/target combatants and the round log.
+ * The optional hooks reach engine state the combatant pair cannot (piles, energy); the
+ * turn engine supplies them, the round-based resolver does not — handlers that need a
+ * hook no-op gracefully when it is absent.
+ */
 export interface EffectContext {
   actor: MutableCombatant;
   target: MutableCombatant;
   log: string[];
+  drawCards?: (count: number) => void;
+  gainEnergy?: (amount: number) => void;
 }
 
 export type EffectHandler = (effect: ResolvableEffect, ctx: EffectContext) => void;
@@ -49,7 +56,7 @@ export function hasEffectHandler(kind: string): boolean {
 export function dispatchEffect(effect: ResolvableEffect, ctx: EffectContext): void {
   const handler = handlers.get(effect.kind);
   if (!handler) {
-    throw new Error(`resolveRound: no effect handler registered for kind "${effect.kind}"`);
+    throw new Error(`dispatchEffect: no effect handler registered for kind "${effect.kind}"`);
   }
   handler(effect, ctx);
 }
@@ -70,8 +77,7 @@ function addStatus(target: MutableCombatant, status: ActiveStatusEffect): void {
   existing.remainingTurns = Math.max(existing.remainingTurns, status.remainingTurns);
 }
 
-// The four built-in resolvers, registered at module load. Each reproduces exactly the mutation
-// `applyAction` performed inline before the refactor (R2). Registering them here — rather than in
+// Built-in resolvers, registered at module load. Registering them here — rather than in
 // a switch — is what lets a new kind be added by registration alone (R1).
 registerEffectHandler('block', (effect, { actor, log }) => {
   const amount = effect.amount ?? 0;
@@ -100,6 +106,20 @@ registerEffectHandler('damage', (effect, { actor, target, log }) => {
       amount: dealt,
     });
   }
+});
+
+registerEffectHandler('draw', (effect, { actor, log, drawCards }) => {
+  const count = effect.amount ?? 0;
+  if (!drawCards || count <= 0) return;
+  drawCards(count);
+  log.push(`${actor.name} draws ${count} card${count === 1 ? '' : 's'}`);
+});
+
+registerEffectHandler('energy', (effect, { actor, log, gainEnergy }) => {
+  const amount = effect.amount ?? 0;
+  if (!gainEnergy || amount <= 0) return;
+  gainEnergy(amount);
+  log.push(`${actor.name} gains ${amount} energy`);
 });
 
 registerEffectHandler('status', (effect, { target, log }) => {

@@ -14,6 +14,17 @@ export class TitleScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Development entry for the turn-battle slice (R13), mirroring Campfire's
+    // `?seed=` read. One step from URL to battle; the run loop stays untouched.
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('battle') === 'slice') {
+      this.scene.start('TurnBattle', {
+        enemyId: params.get('enemy') ?? undefined,
+        seed: params.get('seed') ?? String(Math.random()),
+      });
+      return;
+    }
+
     const cx = GAME_W / 2;
     const layout = createTitleLayout();
 
@@ -62,9 +73,9 @@ export class TitleScene extends Phaser.Scene {
       'Gold now, Embers later',
     ]);
     this.addInfoColumn(cx + 204, layout, 'BATTLE', [
+      'Spend energy on cards',
+      'End turn, read intents',
       'Beat enemies for cards',
-      'Punch is always ready',
-      'P drinks a potion',
     ]);
 
     const start = this.add

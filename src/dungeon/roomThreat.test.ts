@@ -7,6 +7,7 @@ import {
   evaluateRoomThreatEscape,
   isInsideRoomThreatBounds,
   updateRoomThreatState,
+  battleStartModifier,
 } from './roomThreat';
 
 function countingRng(fractions: number[] = [0]): { rng: GameRng; fracCalls: () => number } {
@@ -166,6 +167,30 @@ describe('room threat rules', () => {
       }).state;
 
       expect(isInsideRoomThreatBounds(state.position)).toBe(true);
+    }
+  });
+});
+
+describe('battleStartModifier (R17/KTD7)', () => {
+  const state = (kind: 'normal' | 'boss', intent: 'ignore' | 'alert' | 'chase') => ({
+    kind,
+    intent,
+  });
+
+  test('an ambushed enemy grants no modifier', () => {
+    expect(battleStartModifier(state('normal', 'ignore'))).toBeNull();
+  });
+
+  test('alerted and chasing enemies start guarded, chase harder than alert', () => {
+    const alert = battleStartModifier(state('normal', 'alert'));
+    const chase = battleStartModifier(state('normal', 'chase'));
+    expect(alert?.enemyOpeningBlock).toBe(2);
+    expect(chase?.enemyOpeningBlock).toBe(3);
+  });
+
+  test('boss pressure outranks every normal intent', () => {
+    for (const intent of ['ignore', 'alert', 'chase'] as const) {
+      expect(battleStartModifier(state('boss', intent))?.enemyOpeningBlock).toBe(4);
     }
   });
 });

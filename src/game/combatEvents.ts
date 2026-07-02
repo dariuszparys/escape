@@ -1,5 +1,6 @@
-import type { StatusEffectType } from '../data/cards';
+import type { Card, StatusEffectType } from '../data/cards';
 import type { RelicId } from '../data/relics';
+import type { IntentKind, IntentVoidReason } from './intentPatterns';
 
 /**
  * The controlled mutation surface a `battleWon` subscriber writes into (KTD2). Kept minimal for
@@ -11,13 +12,19 @@ export interface BattleWonResult {
 }
 
 /**
- * The combat/battle event bus's canonical event set — exactly four (KTD2). Round-level events
- * (`roundStart`, `damageDealt`, `statusApplied`) are emitted from inside `resolveRound`; the
- * battle-level `battleWon` is emitted by the drivers, since victory is detected by the caller.
- * The dispatch signature threads no `rng`, so the framework never invites RNG into a subscriber.
+ * The combat/battle event bus's canonical event set. `damageDealt` and
+ * `statusApplied` are emitted live from the effect handlers during resolution;
+ * the battle-level `battleWon` is emitted by the drivers (scene, simulator)
+ * after victory, since rewards precede it. The dispatch signature threads no
+ * `rng`, so the framework never invites RNG into a subscriber.
+ *
+ * The turn-lifecycle events extend the union for the turn engine (KTD3): the
+ * engine returns them as an ordered presentation list that the queue replays,
+ * and mirrors them onto this bus for future subscribers. Events carry
+ * post-mutation values (`hpAfter`, `blockAfter`, pile counts) so a presentation
+ * executor can render each step without consulting engine state.
  */
 export type CombatEvent =
-  | { readonly type: 'roundStart' }
   | {
       readonly type: 'damageDealt';
       readonly sourceId: string;
@@ -35,7 +42,72 @@ export type CombatEvent =
       readonly type: 'battleWon';
       readonly relicIds: readonly RelicId[];
       readonly result: BattleWonResult;
-    };
+    }
+  | { readonly type: 'turnStarted'; readonly turn: number }
+  | { readonly type: 'blockExpired'; readonly targetId: string; readonly amount: number }
+  | {
+      readonly type: 'statusTicked';
+      readonly targetId: string;
+      readonly status: StatusEffectType;
+      readonly amount: number;
+      readonly hpAfter: number;
+      readonly remainingTurns: number;
+    }
+  | { readonly type: 'stunned'; readonly targetId: string }
+  | { readonly type: 'energyChanged'; readonly energy: number; readonly max: number }
+  | {
+      readonly type: 'cardDrawn';
+      readonly card: Card;
+      readonly handCount: number;
+      readonly drawCount: number;
+      readonly discardCount: number;
+    }
+  | { readonly type: 'reshuffled'; readonly count: number }
+  | {
+      readonly type: 'intentTelegraphed';
+      readonly name: string;
+      readonly telegraph: string;
+      readonly kind: IntentKind;
+      readonly magnitude: number;
+    }
+  | { readonly type: 'intentVoided'; readonly reason: IntentVoidReason }
+  | {
+      readonly type: 'cardPlayed';
+      readonly card: Card;
+      readonly cost: number;
+      readonly energyAfter: number;
+    }
+  | {
+      readonly type: 'damageResolved';
+      readonly sourceId: string;
+      readonly targetId: string;
+      readonly amount: number;
+      readonly blockAbsorbed: number;
+      readonly hpAfter: number;
+      readonly blockAfter: number;
+    }
+  | {
+      readonly type: 'blockGained';
+      readonly targetId: string;
+      readonly amount: number;
+      readonly blockAfter: number;
+    }
+  | {
+      readonly type: 'healed';
+      readonly targetId: string;
+      readonly amount: number;
+      readonly hpAfter: number;
+    }
+  | { readonly type: 'cardDiscarded'; readonly card: Card; readonly discardCount: number }
+  | { readonly type: 'handDiscarded'; readonly count: number; readonly discardCount: number }
+  | { readonly type: 'itemUsed'; readonly itemName: string }
+  | { readonly type: 'enemyBeatStarted'; readonly name: string }
+  | { readonly type: 'enemyBeatFizzled'; readonly reason: IntentVoidReason }
+  | {
+      readonly type: 'noPlayableCards';
+      readonly reason: 'empty_hand' | 'unaffordable' | 'stunned';
+    }
+  | { readonly type: 'battleEnded'; readonly outcome: 'victory' | 'defeat' };
 
 export type CombatEventType = CombatEvent['type'];
 export type CombatEventOf<T extends CombatEventType> = Extract<CombatEvent, { type: T }>;

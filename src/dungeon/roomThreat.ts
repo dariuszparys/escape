@@ -11,6 +11,7 @@ import {
   TILE,
 } from '../config';
 import type { GameRng } from '../game/rng';
+import type { BattleStartModifier } from '../game/turnEngine';
 
 export type RoomThreatKind = 'normal' | 'boss';
 export type RoomThreatIntent = 'ignore' | 'alert' | 'chase';
@@ -306,4 +307,19 @@ export function isInsideRoomThreatBounds(point: Point): boolean {
     point.y >= ROOM_THREAT_MIN_Y &&
     point.y <= ROOM_THREAT_MAX_Y
   );
+}
+
+/**
+ * R17/KTD7: map the room's threat state at the moment of contact into the
+ * battle's starting modifier — the only site that holds both vocabularies.
+ * An enemy that saw you coming starts guarded; an ambushed one (ignoring or
+ * still patrolling) starts flat-footed with no modifier.
+ */
+export function battleStartModifier(
+  state: Pick<RoomThreatState, 'kind' | 'intent'>,
+): BattleStartModifier | null {
+  if (state.kind === 'boss') return { enemyOpeningBlock: 4 };
+  if (state.intent === 'chase') return { enemyOpeningBlock: 3 };
+  if (state.intent === 'alert') return { enemyOpeningBlock: 2 };
+  return null;
 }

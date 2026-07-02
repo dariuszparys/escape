@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { randomCard } from './cards';
+import { CARD_DEFS, randomCard } from './cards';
 import { SequenceRng } from '../game/test-rng';
 
 describe('randomCard deep-stratum tier weights', () => {
@@ -37,5 +37,23 @@ describe('randomCard deep-stratum tier weights', () => {
     const b = randomCard(new SequenceRng([0.42, 0.3]), 33);
     expect(a.tier).toBe(b.tier);
     expect(a.id).toBe(b.id);
+  });
+});
+
+describe('card costs (U8, R2/R6)', () => {
+  test('every def carries an explicit cost within the legal range', () => {
+    for (const def of CARD_DEFS) {
+      expect(def.cost, `${def.id} must have an authored cost`).toBeDefined();
+      expect(def.cost).toBeGreaterThanOrEqual(0);
+      expect(def.cost).toBeLessThanOrEqual(3);
+    }
+  });
+
+  test('higher tiers never cost less than a zero-cost trick would suggest', () => {
+    // Structural sanity, not tuning: tier 1 stays 0-1, tiers 2-3 stay 1-2.
+    for (const def of CARD_DEFS) {
+      if (def.tier === 1) expect(def.cost).toBeLessThanOrEqual(1);
+      else expect(def.cost).toBeGreaterThanOrEqual(1);
+    }
   });
 });

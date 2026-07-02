@@ -3,7 +3,6 @@ import { CARD_DEFS, makeCard } from '../data/cards';
 import { makeRelic } from '../data/relics';
 import { RunState } from '../state';
 import { applySimulatedPostBattleRewards } from './balanceSimulator';
-import { resolveRound } from './combat';
 import { emitBattleWon, subscribeCombatEvent } from './combatEvents';
 import { ensureRelicBehaviorsWired, relicBattleWonHeal } from './relicBehaviors';
 import type { GameRng } from './rng';
@@ -58,20 +57,15 @@ describe('relic battle-lifecycle bindings', () => {
     expect(run.hp).toBe(run.maxHp); // only 1 effective HP restored — capped
   });
 
-  test('battleWon fires once per victory, never per round', () => {
+  test('battleWon is a driver signal — the engine itself never emits it', () => {
     let battleWon = 0;
     disposers.push(subscribeCombatEvent('battleWon', () => battleWon++));
 
-    for (let round = 0; round < 3; round++) {
-      resolveRound({
-        player: { id: 'player', name: 'Player', hp: 20, maxHp: 20, armor: 0, statuses: [] },
-        enemy: { id: 'enemy', name: 'Enemy', hp: 20, maxHp: 20, armor: 0, statuses: [] },
-        playerAction: { actor: 'player', kind: 'punch' },
-        enemyAction: { actor: 'enemy', kind: 'none' },
-      });
-    }
+    // A full lethal engine command ends the battle (battleEnded), yet battleWon
+    // stays silent until a driver (scene or simulator) emits it after rewards.
+    applySimulatedPostBattleRewards(new RunState('s', 'drv'), minRng, 2);
 
-    expect(battleWon).toBe(0); // resolveRound only emits round-level events
+    expect(battleWon).toBe(1);
   });
 
   test('both drivers route the vampiric heal through the same subscriber (R4)', () => {
@@ -79,10 +73,9 @@ describe('relic battle-lifecycle bindings', () => {
     const simRun = new RunState('s', 'sim');
     const slash = makeDeckCard('slash');
     simRun.cardCollection = [slash];
-    simRun.combatHand = [slash];
     simRun.hp = simRun.maxHp - 5;
     simRun.addRelic(makeRelic('vampiric_blade'));
-    applySimulatedPostBattleRewards(simRun, minRng, 10, []);
+    applySimulatedPostBattleRewards(simRun, minRng, 10);
 
     // Scene-equivalent driver — same shared subscriber, same heal.
     const sceneRun = new RunState('c', 'scene');

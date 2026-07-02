@@ -1,33 +1,10 @@
-import { Card, CardEffect, randomCard, randomCardOfTier, randomOffensiveCard } from './cards';
 import { MAX_DEPTH } from '../config';
 import { GameRng } from '../game/rng';
 import type { ActiveStatusEffect } from '../game/combat';
+import { empowerPattern, type IntentPattern } from '../game/intentPatterns';
 import type { RoomThreatProfileId } from '../dungeon/roomThreat';
 
 export type EnemyTier = 'weak' | 'medium' | 'strong';
-
-export interface BossSpecial {
-  name: string;
-  telegraph: string;
-  interval: number;
-  speed: number;
-  effects: CardEffect[];
-}
-
-export type EnemyCombatPreference =
-  | 'fast_damage'
-  | 'damage'
-  | 'block_damage'
-  | 'status'
-  | 'block'
-  | 'heal';
-
-export type EnemyCombatArchetype = 'tempo_pressure' | 'status_pressure' | 'block_pressure';
-
-export interface EnemyCombatScript {
-  archetype: EnemyCombatArchetype;
-  pattern: EnemyCombatPreference[][];
-}
 
 export interface EnemyDef {
   id: string;
@@ -37,8 +14,8 @@ export interface EnemyDef {
   tier?: EnemyTier;
   boss: boolean;
   dungeonThreatProfile: RoomThreatProfileId;
-  combatScript?: EnemyCombatScript;
-  special?: BossSpecial;
+  /** Authored turn-battle behavior (R6): an intent cycle, boss specials folded in as interval entries. */
+  pattern: IntentPattern;
 }
 
 export interface EnemyInstance {
@@ -47,7 +24,8 @@ export interface EnemyInstance {
   maxHp: number;
   armor: number;
   statuses: ActiveStatusEffect[];
-  cards: Card[];
+  /** The def's pattern empowered for spawn depth (R10's second axis under the turn model). */
+  pattern: IntentPattern;
 }
 
 export const ENEMIES: EnemyDef[] = [
@@ -59,6 +37,25 @@ export const ENEMIES: EnemyDef[] = [
     tier: 'weak',
     boss: false,
     dungeonThreatProfile: 'ignore',
+    pattern: {
+      cycle: [
+        {
+          name: 'Scratch',
+          telegraph: 'bares tiny claws...',
+          effects: [{ kind: 'damage', amount: 3 }],
+        },
+        {
+          name: 'Gnaw',
+          telegraph: 'snaps its yellowed teeth...',
+          effects: [{ kind: 'damage', amount: 4 }],
+        },
+        {
+          name: 'Skitter',
+          telegraph: 'darts between shadows...',
+          effects: [{ kind: 'block', amount: 3 }],
+        },
+      ],
+    },
   },
   {
     id: 'slime',
@@ -68,6 +65,25 @@ export const ENEMIES: EnemyDef[] = [
     tier: 'weak',
     boss: false,
     dungeonThreatProfile: 'patrol',
+    pattern: {
+      cycle: [
+        {
+          name: 'Ooze Slap',
+          telegraph: 'a pseudopod rears back...',
+          effects: [{ kind: 'damage', amount: 4 }],
+        },
+        {
+          name: 'Congeal',
+          telegraph: 'its surface hardens...',
+          effects: [{ kind: 'block', amount: 4 }],
+        },
+        {
+          name: 'Engulf',
+          telegraph: 'it swells and looms...',
+          effects: [{ kind: 'damage', amount: 5 }],
+        },
+      ],
+    },
   },
   {
     id: 'skeleton',
@@ -77,6 +93,28 @@ export const ENEMIES: EnemyDef[] = [
     tier: 'weak',
     boss: false,
     dungeonThreatProfile: 'patrol',
+    pattern: {
+      cycle: [
+        {
+          name: 'Bone Slash',
+          telegraph: 'raises a jagged blade...',
+          effects: [{ kind: 'damage', amount: 5 }],
+        },
+        {
+          name: 'Rattle Guard',
+          telegraph: 'pulls its ribs in tight...',
+          effects: [
+            { kind: 'block', amount: 4 },
+            { kind: 'damage', amount: 2 },
+          ],
+        },
+        {
+          name: 'Heavy Swing',
+          telegraph: 'winds up a two-handed swing...',
+          effects: [{ kind: 'damage', amount: 7 }],
+        },
+      ],
+    },
   },
   {
     id: 'bandit',
@@ -86,12 +124,26 @@ export const ENEMIES: EnemyDef[] = [
     tier: 'medium',
     boss: false,
     dungeonThreatProfile: 'alert_chase',
-    combatScript: {
-      archetype: 'tempo_pressure',
-      pattern: [
-        ['fast_damage', 'damage'],
-        ['damage', 'fast_damage'],
-        ['damage', 'fast_damage'],
+    pattern: {
+      cycle: [
+        {
+          name: 'Quick Slash',
+          telegraph: 'a knife flashes...',
+          effects: [{ kind: 'damage', amount: 6 }],
+        },
+        {
+          name: 'Feint',
+          telegraph: 'circles behind a raised cloak...',
+          effects: [
+            { kind: 'damage', amount: 4 },
+            { kind: 'block', amount: 3 },
+          ],
+        },
+        {
+          name: 'Lunge',
+          telegraph: 'coils for a deep lunge...',
+          effects: [{ kind: 'damage', amount: 8 }],
+        },
       ],
     },
   },
@@ -103,9 +155,27 @@ export const ENEMIES: EnemyDef[] = [
     tier: 'medium',
     boss: false,
     dungeonThreatProfile: 'alert_chase',
-    combatScript: {
-      archetype: 'status_pressure',
-      pattern: [['status'], ['status', 'damage'], ['status', 'damage']],
+    pattern: {
+      cycle: [
+        {
+          name: 'Ember Curse',
+          telegraph: 'chants a smoldering curse...',
+          effects: [{ kind: 'status', status: 'burn', amount: 2, duration: 2 }],
+        },
+        {
+          name: 'Talon Rake',
+          telegraph: 'circles with bared talons...',
+          effects: [{ kind: 'damage', amount: 5 }],
+        },
+        {
+          name: 'Venom Spit',
+          telegraph: 'gathers a mouthful of venom...',
+          effects: [
+            { kind: 'damage', amount: 3 },
+            { kind: 'status', status: 'poison', amount: 2, duration: 2 },
+          ],
+        },
+      ],
     },
   },
   {
@@ -116,12 +186,26 @@ export const ENEMIES: EnemyDef[] = [
     tier: 'medium',
     boss: false,
     dungeonThreatProfile: 'alert_chase',
-    combatScript: {
-      archetype: 'block_pressure',
-      pattern: [
-        ['block_damage', 'damage'],
-        ['damage', 'block_damage'],
-        ['block_damage', 'damage', 'block'],
+    pattern: {
+      cycle: [
+        {
+          name: 'Shield Up',
+          telegraph: 'hunkers behind its shield...',
+          effects: [{ kind: 'block', amount: 6 }],
+        },
+        {
+          name: 'Shield Slam',
+          telegraph: 'braces to slam shield-first...',
+          effects: [
+            { kind: 'damage', amount: 5 },
+            { kind: 'block', amount: 3 },
+          ],
+        },
+        {
+          name: 'Crush',
+          telegraph: 'hefts its mace overhead...',
+          effects: [{ kind: 'damage', amount: 7 }],
+        },
       ],
     },
   },
@@ -133,13 +217,29 @@ export const ENEMIES: EnemyDef[] = [
     tier: 'strong',
     boss: false,
     dungeonThreatProfile: 'alert_chase',
-    // Relentless tempo: leads fast, then disciplined pressure with a guarded swing.
-    combatScript: {
-      archetype: 'tempo_pressure',
-      pattern: [
-        ['fast_damage', 'damage'],
-        ['damage', 'block_damage'],
-        ['fast_damage', 'damage'],
+    pattern: {
+      cycle: [
+        {
+          name: 'Sword Combo',
+          telegraph: 'settles into a dueling stance...',
+          effects: [
+            { kind: 'damage', amount: 4 },
+            { kind: 'damage', amount: 4 },
+          ],
+        },
+        {
+          name: 'Guarded Cut',
+          telegraph: 'advances behind its blade...',
+          effects: [
+            { kind: 'block', amount: 5 },
+            { kind: 'damage', amount: 5 },
+          ],
+        },
+        {
+          name: 'Heavy Blade',
+          telegraph: 'raises its blade high...',
+          effects: [{ kind: 'damage', amount: 10 }],
+        },
       ],
     },
   },
@@ -151,10 +251,27 @@ export const ENEMIES: EnemyDef[] = [
     tier: 'strong',
     boss: false,
     dungeonThreatProfile: 'alert_chase',
-    // Status-first attrition: stacks afflictions, then converts them into damage.
-    combatScript: {
-      archetype: 'status_pressure',
-      pattern: [['status', 'damage'], ['status'], ['status', 'damage']],
+    pattern: {
+      cycle: [
+        {
+          name: 'Soul Rot',
+          telegraph: 'whispers a rotting litany...',
+          effects: [{ kind: 'status', status: 'poison', amount: 3, duration: 2 }],
+        },
+        {
+          name: 'Dark Bolt',
+          telegraph: 'shadow coils around its hand...',
+          effects: [{ kind: 'damage', amount: 7 }],
+        },
+        {
+          name: 'Withering Hex',
+          telegraph: 'traces a searing sigil...',
+          effects: [
+            { kind: 'damage', amount: 4 },
+            { kind: 'status', status: 'burn', amount: 2, duration: 2 },
+          ],
+        },
+      ],
     },
   },
   {
@@ -165,13 +282,26 @@ export const ENEMIES: EnemyDef[] = [
     tier: 'strong',
     boss: false,
     dungeonThreatProfile: 'alert_chase',
-    // Block-pressure bruiser: braces hard, then unloads a heavy, guarded smash.
-    combatScript: {
-      archetype: 'block_pressure',
-      pattern: [
-        ['block', 'damage'],
-        ['block_damage', 'damage'],
-        ['damage', 'block'],
+    pattern: {
+      cycle: [
+        {
+          name: 'Brace Up',
+          telegraph: 'plants its feet and tenses...',
+          effects: [{ kind: 'block', amount: 8 }],
+        },
+        {
+          name: 'Smash',
+          telegraph: 'drags its club back...',
+          effects: [{ kind: 'damage', amount: 9 }],
+        },
+        {
+          name: 'Guarded Smash',
+          telegraph: 'swings from behind a raised arm...',
+          effects: [
+            { kind: 'block', amount: 4 },
+            { kind: 'damage', amount: 7 },
+          ],
+        },
       ],
     },
   },
@@ -185,15 +315,38 @@ export const BOSSES: EnemyDef[] = [
     baseHp: 44,
     boss: true,
     dungeonThreatProfile: 'boss_pressure',
-    special: {
-      name: 'Warhammer',
-      telegraph: 'The Iron Warden braces behind iron plates...',
-      interval: 5,
-      speed: 4,
-      effects: [
-        { kind: 'block', amount: 3 },
-        { kind: 'damage', amount: 6 },
+    pattern: {
+      cycle: [
+        {
+          name: 'Hammer Swing',
+          telegraph: 'the hammer starts its arc...',
+          effects: [{ kind: 'damage', amount: 7 }],
+        },
+        {
+          name: 'Iron Guard',
+          telegraph: 'iron plates grind together...',
+          effects: [
+            { kind: 'block', amount: 8 },
+            { kind: 'damage', amount: 4 },
+          ],
+        },
+        {
+          name: 'Crush',
+          telegraph: 'both hands find the haft...',
+          effects: [{ kind: 'damage', amount: 10 }],
+        },
       ],
+      special: {
+        interval: 5,
+        entry: {
+          name: 'Warhammer',
+          telegraph: 'The Iron Warden braces behind iron plates...',
+          effects: [
+            { kind: 'block', amount: 3 },
+            { kind: 'damage', amount: 6 },
+          ],
+        },
+      },
     },
   },
   {
@@ -203,12 +356,38 @@ export const BOSSES: EnemyDef[] = [
     baseHp: 40,
     boss: true,
     dungeonThreatProfile: 'boss_pressure',
-    special: {
-      name: 'Bone Staff',
-      telegraph: 'The Bone Oracle raises a staff of splintered bone...',
-      interval: 4,
-      speed: 6,
-      effects: [{ kind: 'status', status: 'poison', amount: 1, duration: 2 }],
+    pattern: {
+      cycle: [
+        {
+          name: 'Bone Bolt',
+          telegraph: 'splinters swirl into a dart...',
+          effects: [{ kind: 'damage', amount: 6 }],
+        },
+        {
+          name: 'Siphon',
+          telegraph: 'a pale thread reaches for you...',
+          effects: [
+            { kind: 'damage', amount: 4 },
+            { kind: 'heal', amount: 3 },
+          ],
+        },
+        {
+          name: 'Splinter Guard',
+          telegraph: 'bones knit into a lattice...',
+          effects: [
+            { kind: 'block', amount: 6 },
+            { kind: 'damage', amount: 3 },
+          ],
+        },
+      ],
+      special: {
+        interval: 4,
+        entry: {
+          name: 'Bone Staff',
+          telegraph: 'The Bone Oracle raises a staff of splintered bone...',
+          effects: [{ kind: 'status', status: 'poison', amount: 1, duration: 2 }],
+        },
+      },
     },
   },
   {
@@ -218,15 +397,126 @@ export const BOSSES: EnemyDef[] = [
     baseHp: 42,
     boss: true,
     dungeonThreatProfile: 'boss_pressure',
-    special: {
-      name: 'Flame Axe',
-      telegraph: 'The Flame Tyrant gathers heat around its axe...',
-      interval: 5,
-      speed: 5,
-      effects: [
-        { kind: 'damage', amount: 5 },
-        { kind: 'status', status: 'burn', amount: 1, duration: 2 },
+    pattern: {
+      cycle: [
+        {
+          name: 'Axe Swing',
+          telegraph: 'the axe head glows dull red...',
+          effects: [{ kind: 'damage', amount: 8 }],
+        },
+        {
+          name: 'Cinder Guard',
+          telegraph: 'ash whirls into a shroud...',
+          effects: [
+            { kind: 'block', amount: 6 },
+            { kind: 'damage', amount: 3 },
+          ],
+        },
+        {
+          name: 'Overhead Chop',
+          telegraph: 'it heaves the axe skyward...',
+          effects: [{ kind: 'damage', amount: 10 }],
+        },
       ],
+      special: {
+        interval: 5,
+        entry: {
+          name: 'Flame Axe',
+          telegraph: 'The Flame Tyrant gathers heat around its axe...',
+          effects: [
+            { kind: 'damage', amount: 5 },
+            { kind: 'status', status: 'burn', amount: 1, duration: 2 },
+          ],
+        },
+      },
+    },
+  },
+];
+
+/**
+ * Slice-only enemies for the turn-battle playground (U3/U7). Authored intent
+ * cycles replace preference-matrix scripts; the run-loop enemies migrate to
+ * this shape in Milestone 2 (U9). Not referenced by the live game path.
+ */
+export interface SliceEnemyDef {
+  id: string;
+  name: string;
+  texture: string;
+  hp: number;
+  armor: number;
+  pattern: IntentPattern;
+}
+
+export const SLICE_ENEMIES: SliceEnemyDef[] = [
+  {
+    id: 'slice_skeleton',
+    name: 'Restless Skeleton',
+    texture: 'skeleton',
+    hp: 30,
+    armor: 0,
+    // Tempo pressure: readable rhythm of pokes, a guarded swing, and a heavy hit to block against.
+    pattern: {
+      cycle: [
+        {
+          name: 'Bone Slash',
+          telegraph: 'raises a jagged blade...',
+          effects: [{ kind: 'damage', amount: 7 }],
+        },
+        {
+          name: 'Rattle Guard',
+          telegraph: 'pulls its ribs in tight...',
+          effects: [
+            { kind: 'block', amount: 6 },
+            { kind: 'damage', amount: 3 },
+          ],
+        },
+        {
+          name: 'Heavy Swing',
+          telegraph: 'winds up a two-handed swing...',
+          effects: [{ kind: 'damage', amount: 11 }],
+        },
+      ],
+    },
+  },
+  {
+    id: 'slice_cultist',
+    name: 'Ashen Cultist',
+    texture: 'bat',
+    hp: 34,
+    armor: 0,
+    // Status pressure plus an interval special, exercising ticks and the boss-style telegraph.
+    pattern: {
+      cycle: [
+        {
+          name: 'Ember Curse',
+          telegraph: 'chants a smoldering curse...',
+          effects: [{ kind: 'status', status: 'burn', amount: 2, duration: 2 }],
+        },
+        {
+          name: 'Talon Rake',
+          telegraph: 'circles with bared talons...',
+          effects: [{ kind: 'damage', amount: 5 }],
+        },
+        {
+          name: 'Venom Spit',
+          telegraph: 'gathers a mouthful of venom...',
+          effects: [
+            { kind: 'damage', amount: 3 },
+            { kind: 'status', status: 'poison', amount: 2, duration: 2 },
+          ],
+        },
+      ],
+      special: {
+        interval: 4,
+        entry: {
+          name: 'Ash Storm',
+          telegraph: 'the air fills with burning ash...',
+          effects: [
+            { kind: 'damage', amount: 8 },
+            { kind: 'status', status: 'burn', amount: 2, duration: 2 },
+          ],
+        },
+      },
     },
   },
 ];
@@ -255,26 +545,24 @@ export function enemyHpForDepth(baseHp: number, depth: number): number {
 }
 
 /**
- * Enemy deck quality is capped at the late-base-run tier curve. The deep tier-shift
- * (U8) is meant to enrich the player's chest rewards, not arm enemies with a tier-3
- * flood — uncapped, deep enemies out-DPS any deck and make the delve unwinnable
- * (found via the U7 harness). Their HP still scales with depth (R10).
+ * Extra intent damage per depth. The old model scaled enemy pressure by rolling
+ * depth-tiered decks; the turn model scales the authored intents instead. The
+ * player's multi-card action economy outpaces flat intents entirely (U13 found
+ * ~99% sim win rates without this axis). Same shape as HP: linear through the
+ * first stratum, gentler beyond.
  */
-const ENEMY_DECK_DEPTH_CAP = 6;
+export function intentBonusForDepth(depth: number): number {
+  if (depth <= MAX_DEPTH) return Math.floor(depth / 2);
+  return Math.floor(MAX_DEPTH / 2) + Math.round((depth - MAX_DEPTH) * 0.15);
+}
 
-/** Enemy mirrors the player combat hand size, capped to keep fights readable. */
-export function spawnEnemy(rng: GameRng, depth: number, playerHandSize: number): EnemyInstance {
+/** Enemy behavior is its authored intent pattern (U9), empowered for depth; spawns roll no card decks. */
+export function spawnEnemy(rng: GameRng, depth: number): EnemyInstance {
   const tier = getEnemyTierForDepth(depth);
   const def = rng.pick(ENEMIES.filter((enemy) => enemy.tier === tier));
   const hp = enemyHpForDepth(def.baseHp, depth);
-  const cardDepth = Math.min(depth, ENEMY_DECK_DEPTH_CAP);
-  const handSize = Math.min(Math.max(playerHandSize, 2), 5);
-  const cards: Card[] = [];
-  const minOffense = Math.max(1, Math.floor(handSize / 2));
-  for (let i = 0; i < handSize; i++) {
-    cards.push(i < minOffense ? randomOffensiveCard(rng, cardDepth) : randomCard(rng, cardDepth));
-  }
-  return { def, hp, maxHp: hp, armor: 0, statuses: [], cards };
+  const pattern = empowerPattern(def.pattern, intentBonusForDepth(depth));
+  return { def, hp, maxHp: hp, armor: 0, statuses: [], pattern };
 }
 
 /** Extra boss HP per depth past the first stratum boundary, so deeper bosses escalate (R10). */
@@ -284,9 +572,6 @@ export function spawnBoss(rng: GameRng, depth: number = MAX_DEPTH): EnemyInstanc
   const def = rng.pick(BOSSES);
   // Anchored at MAX_DEPTH so the stratum-1 boss is unchanged; deeper strata add HP.
   const hp = def.baseHp + Math.max(0, depth - MAX_DEPTH) * BOSS_HP_PER_DEPTH_BEYOND_FIRST;
-  const cards: Card[] = [];
-  for (let i = 0; i < 5; i++) {
-    cards.push(i < 1 ? randomOffensiveCard(rng, depth) : randomCardOfTier(rng, [1, 2, 3]));
-  }
-  return { def, hp, maxHp: hp, armor: 0, statuses: [], cards };
+  const pattern = empowerPattern(def.pattern, intentBonusForDepth(depth));
+  return { def, hp, maxHp: hp, armor: 0, statuses: [], pattern };
 }

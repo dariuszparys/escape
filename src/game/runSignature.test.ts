@@ -9,9 +9,11 @@ import { RngDrawDigest, runSignature } from './runSignature';
  */
 const GOLDEN_SEED = 7;
 const GOLDEN_SIGNATURE =
-  // Re-baselined from 66 draws / 84f9ba9c: the Family Matchup payoff changes
-  // combat length for this seed, so fewer existing enemy/reward draws are reached.
-  'v=0|boss=1|gate=0|death=10|stratum=1|enc=3|embers=0|draws=62|hash=58800c5';
+  // Re-goldened for the turn-system rebuild (U13): the simulator's battle kernel
+  // now runs the real turn engine (multi-card turns, piles, intents), replacing
+  // the round-model resolution entirely — an intentional determinism change.
+  // This seed now banks a win where the round model died at the boss.
+  'v=1|boss=1|gate=1|death=-|stratum=1|enc=3|embers=3|draws=142|hash=f9880739';
 
 describe('RngDrawDigest', () => {
   test('samples draw order and count, not just the value set (the load-bearing property)', () => {
@@ -69,11 +71,12 @@ describe('runSignature', () => {
   });
 
   test('a death and a bank produce stable, distinct signatures', () => {
-    // seed 1 dies in stratum 1; seed 9 banks a victory — the gate must not collapse these.
-    const death = runSignature(1);
+    // Under the rebuilt combat, seed 16 dies at the boss; seed 9 banks a victory —
+    // the gate must not collapse these.
+    const death = runSignature(16);
     const bank = runSignature(9);
 
-    expect(death).toBe(runSignature(1));
+    expect(death).toBe(runSignature(16));
     expect(bank).toBe(runSignature(9));
     expect(death).not.toBe(bank);
     expect(death.startsWith('v=0|')).toBe(true);

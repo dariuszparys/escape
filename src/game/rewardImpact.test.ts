@@ -1,147 +1,82 @@
 import { describe, expect, test } from 'vitest';
-import { Card, makeCard } from '../data/cards';
-import { selectCombatHand } from './cardSelection';
-import { previewRewardImpact } from './rewardImpact';
+import { Card, CardEffect, makeCard } from '../data/cards';
+import { openingHandOdds, previewRewardImpact } from './rewardImpact';
 
-function attack(id: string, name: string, damage: number, tier: 1 | 2 | 3 = 1): Card {
+function card(name: string, effects: CardEffect[] = [{ kind: 'damage', amount: 5 }]): Card {
   return makeCard({
-    id,
+    id: name.toLowerCase().replace(/ /g, '_'),
     name,
     type: 'attack',
-    tier,
-    speed: 5,
+    tier: 1,
+    cost: 1,
     color: 0,
-    description: `Deal ${damage} damage`,
-    effects: [{ kind: 'damage', amount: damage }],
+    description: name,
+    effects,
   });
 }
 
-function block(id: string, name: string, amount: number, tier: 1 | 2 | 3 = 1): Card {
-  return makeCard({
-    id,
-    name,
-    type: 'block',
-    tier,
-    speed: 6,
-    color: 0,
-    description: `Gain ${amount} block`,
-    effects: [{ kind: 'block', amount }],
-  });
+function collection(size: number): Card[] {
+  return Array.from({ length: size }, (_, index) => card(`Card ${index}`));
 }
 
-function makeHand(collection: readonly Card[]) {
-  return selectCombatHand(collection);
-}
-
-describe('previewRewardImpact', () => {
-  test('labels a stolen card as collection-only when it misses the next hand', () => {
-    const collection = [
-      attack('thunder', 'Thunder', 12, 3),
-      attack('smash', 'Smash', 11, 3),
-      attack('cleave', 'Cleave', 10, 3),
-      block('aegis', 'Aegis', 14, 3),
-      block('wall', 'Iron Wall', 10, 2),
-    ];
-    const candidate = attack('scratch', 'Scratch', 2);
-
-    const impact = previewRewardImpact({
-      collection,
-      combatHand: makeHand(collection),
-      change: { kind: 'add', card: candidate },
-    });
-
-    expect(impact.kind).toBe('collection_only');
-    expect(impact.label).toBe('Scratch stays in collection; next hand unchanged.');
-    expect(impact.label).not.toMatch(/score/i);
+describe('openingHandOdds', () => {
+  test('a deck at or below draw size guarantees the draw', () => {
+    expect(openingHandOdds(4, 5)).toBe(1);
+    expect(openingHandOdds(5, 5)).toBe(1);
   });
 
-  test('names the entering card and replaced role when a stronger card enters hand', () => {
-    const collection = [
-      attack('jab', 'Jab', 2),
-      attack('slash', 'Slash', 3),
-      attack('strike', 'Strike', 4),
-      block('guard', 'Guard', 7),
-      block('wall', 'Wall', 8),
-    ];
-    const candidate = attack('thunder', 'Thunder', 12, 3);
+  test('larger decks dilute the odds proportionally', () => {
+    expect(openingHandOdds(10, 5)).toBeCloseTo(0.5);
+    expect(openingHandOdds(20, 5)).toBeCloseTo(0.25);
+  });
+});
 
+describe('previewRewardImpact (KTD9 — deck vocabulary)', () => {
+  test('adding a card grows the deck and reports its opening-hand odds', () => {
+    const deck = collection(9);
     const impact = previewRewardImpact({
-      collection,
-      combatHand: makeHand(collection),
-      change: { kind: 'add', card: candidate },
+      collection: deck,
+      change: { kind: 'add', card: card('Thunder') },
     });
-
-    expect(impact.kind).toBe('replaces_card');
-    expect(impact.entering?.name).toBe('Thunder');
-    expect(impact.leaving?.name).toBe('Jab');
-    expect(impact.label).toBe("Thunder enters hand, replacing Jab's attack role.");
-    expect(impact.label).not.toMatch(/score/i);
+    expect(impact.kind).toBe('grows_deck');
+    expect(impact.deckBefore).toBe(9);
+    expect(impact.deckAfter).toBe(10);
+    expect(impact.drawOdds).toBeCloseTo(0.5);
+    expect(impact.label).toContain('Thunder');
+    expect(impact.label).toContain('10-card deck');
+    // No trace of the retired hand-membership vocabulary.
+    expect(impact.label).not.toMatch(/enters hand|replaces/i);
   });
 
-  test('labels an in-hand upgrade as improving its role without mutating the card', () => {
-    const guard = block('guard', 'Guard', 7);
-    const collection = [
-      attack('jab', 'Jab', 2),
-      attack('slash', 'Slash', 3),
-      attack('strike', 'Strike', 4),
-      guard,
-      block('wall', 'Wall', 8),
-    ];
-
+  test('upgrading improves in place without changing deck size', () => {
+    const deck = collection(8);
     const impact = previewRewardImpact({
-      collection,
-      combatHand: makeHand(collection),
-      change: { kind: 'upgrade', cardUid: guard.uid },
+      collection: deck,
+      change: { kind: 'upgrade', cardUid: deck[2].uid },
     });
-
-    expect(impact.kind).toBe('improves_role');
-    expect(impact.label).toBe('Guard+ stays in hand and improves its block role.');
-    expect(guard.name).toBe('Guard');
-    expect(guard.effects).toEqual([{ kind: 'block', amount: 7 }]);
+    expect(impact.kind).toBe('improves_card');
+    expect(impact.deckBefore).toBe(8);
+    expect(impact.deckAfter).toBe(8);
+    expect(impact.label).toContain(deck[2].name);
   });
 
-  test('labels reserve removal as next-hand unchanged', () => {
-    const reserve = attack('scratch', 'Scratch', 1);
-    const collection = [
-      attack('thunder', 'Thunder', 12, 3),
-      attack('smash', 'Smash', 11, 3),
-      attack('cleave', 'Cleave', 10, 3),
-      block('aegis', 'Aegis', 14, 3),
-      block('wall', 'Iron Wall', 10, 2),
-      reserve,
-    ];
-
+  test('removing thins the deck', () => {
+    const deck = collection(12);
     const impact = previewRewardImpact({
-      collection,
-      combatHand: makeHand(collection),
-      change: { kind: 'remove', cardUid: reserve.uid },
+      collection: deck,
+      change: { kind: 'remove', cardUid: deck[0].uid },
     });
+    expect(impact.kind).toBe('thins_deck');
+    expect(impact.deckAfter).toBe(11);
+    expect(impact.label).toContain('11-card deck');
+  });
 
+  test('an unknown uid reports the deck unchanged', () => {
+    const impact = previewRewardImpact({
+      collection: collection(6),
+      change: { kind: 'remove', cardUid: 999999 },
+    });
     expect(impact.kind).toBe('unchanged');
-    expect(impact.label).toBe('Scratch was in reserve; next hand unchanged.');
-  });
-
-  test('names the reserve card that enters after removing a current hand card', () => {
-    const removed = attack('smash', 'Smash', 11, 3);
-    const reserve = attack('slash', 'Slash', 5);
-    const collection = [
-      attack('thunder', 'Thunder', 12, 3),
-      removed,
-      attack('cleave', 'Cleave', 10, 3),
-      block('aegis', 'Aegis', 14, 3),
-      block('wall', 'Iron Wall', 10, 2),
-      reserve,
-    ];
-
-    const impact = previewRewardImpact({
-      collection,
-      combatHand: makeHand(collection),
-      change: { kind: 'remove', cardUid: removed.uid },
-    });
-
-    expect(impact.kind).toBe('removes_hand_card');
-    expect(impact.entering?.name).toBe('Slash');
-    expect(impact.leaving?.name).toBe('Smash');
-    expect(impact.label).toBe('Smash leaves hand; Slash enters as an attack role.');
+    expect(impact.deckAfter).toBe(6);
   });
 });

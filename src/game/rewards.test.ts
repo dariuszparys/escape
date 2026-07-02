@@ -7,7 +7,7 @@ import { awardEnemyGold, awardPotionItem, rollChestReward } from './rewards';
 import { SequenceRng } from './test-rng';
 
 describe('rewards', () => {
-  test('cards go to collection and refresh combat hand without discarding overflow cards', () => {
+  test('every added card stays in the collection — the deck IS the collection (R1)', () => {
     const run = new RunState('seed');
     for (let i = 0; i < 7; i++) {
       run.addCard(
@@ -16,7 +16,7 @@ describe('rewards', () => {
           name: `Card ${i}`,
           type: 'attack',
           tier: i < 2 ? 1 : 2,
-          speed: 5,
+          cost: 1,
           color: 0,
           description: 'card',
           effects: [{ kind: 'damage', amount: i + 1 }],
@@ -25,14 +25,6 @@ describe('rewards', () => {
     }
 
     expect(run.cardCollection).toHaveLength(7);
-    expect(run.combatHand).toHaveLength(5);
-    expect(run.combatHand.map((card) => card.id)).toEqual([
-      'card-6',
-      'card-5',
-      'card-4',
-      'card-3',
-      'card-2',
-    ]);
   });
 
   test('inventory accepts only three items', () => {
@@ -115,14 +107,14 @@ describe('rewards', () => {
     expect(run.gold).toBe(17);
   });
 
-  test('chest card rewards include next-hand impact preview text', () => {
+  test('chest card rewards speak deck vocabulary in the impact preview (KTD9)', () => {
     const run = new RunState('seed');
     const result = rollChestReward(run, new SequenceRng([0, 0]), 5);
 
     expect(result.kind).toBe('card');
     if (result.kind !== 'card') throw new Error(`Unexpected result: ${result.kind}`);
-    expect(result.impactLabel).toMatch(/hand|collection/);
-    expect(result.impactLabel).not.toMatch(/score/i);
+    expect(result.impactLabel).toMatch(/deck/);
+    expect(result.impactLabel).not.toMatch(/enters hand|replaces/i);
     expect(run.cardCollection).toHaveLength(1);
   });
 

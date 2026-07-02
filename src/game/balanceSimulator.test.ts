@@ -1,24 +1,24 @@
 import { describe, expect, test } from 'vitest';
 import { CARD_DEFS, makeCard } from '../data/cards';
-import { ENEMIES } from '../data/enemies';
 import { makeRelic } from '../data/relics';
 import { RunState } from '../state';
 import { CONVERSION_EMBER_CAP } from './metaRewards';
 import {
-  applyRound,
   applySimulatedRest,
   applySimulatedPostBattleRewards,
-  assessMatchupRoleDominance,
+  assessCardEmphasisDominance,
   assessDelveDominance,
-  choosePlayerAction,
   createSimRng,
   MAX_SIMULATED_STRATA,
+  SIM_BATTLE_TURN_CAP,
+  SIM_DECK_THIN_THRESHOLD,
+  simulateBattle,
   simulateDelveEconomy,
   simulateRun,
   simulateScenarioSummary,
-  type SimBattleState,
 } from './balanceSimulator';
-import { matchupPayoffForAction, resolveRound } from './combat';
+import { spawnEnemy } from '../data/enemies';
+import { restActionCost } from './restEconomy';
 import type { GameRng } from './rng';
 import { runSignature } from './runSignature';
 
@@ -34,152 +34,115 @@ const minRng: GameRng = {
   pick: (items) => items[0],
 };
 
-function enemyDef(id: string) {
-  const def = ENEMIES.find((candidate) => candidate.id === id);
-  if (!def) throw new Error(`Missing enemy def ${id}`);
-  return def;
-}
-
-function simState(overrides: Partial<SimBattleState> = {}): SimBattleState {
-  const quick = makeDeckCard('quick_jab');
-  const guard = makeDeckCard('guard');
-  const heavy = makeDeckCard('heavy_strike');
-  return {
-    rng: createSimRng(123),
-    round: 1,
-    hand: [quick, guard],
-    inventory: [],
-    playerHp: 20,
-    playerMaxHp: 20,
-    playerArmor: 0,
-    playerStatuses: [],
-    playerUsed: new Set(),
-    enemyDef: enemyDef('bandit'),
-    enemyCards: [heavy],
-    enemyHp: 20,
-    enemyMaxHp: 20,
-    enemyArmor: 0,
-    enemyStatuses: [],
-    enemyUsed: new Set(),
-    ...overrides,
-  };
-}
-
-describe('balance simulator', () => {
-  test('prefers a matchup-winning card over a close non-winning alternative', () => {
-    const guard = makeDeckCard('guard');
-    const quick = makeDeckCard('quick_jab');
-    const heavy = makeDeckCard('heavy_strike');
-    const { action, enemyDecision } = choosePlayerAction(
-      simState({ hand: [quick, guard], enemyCards: [heavy] }),
-    );
-
-    expect(enemyDecision.intentFamily).toBe('attack');
-    expect(action.kind === 'card' ? action.card.id : action.kind).toBe('guard');
+describe('balance simulator battle kernel (U13)', () => {
+  test('simulated battles run the real turn engine and terminate across seeds', () => {
+    for (let seed = 1; seed <= 40; seed++) {
+      const rng = createSimRng(seed);
+      const run = new RunState(String(seed), `sim-battle-${seed}`);
+      run.cardCollection = [
+        makeDeckCard('strike'),
+        makeDeckCard('strike'),
+        makeDeckCard('guard'),
+        makeDeckCard('slash'),
+        makeDeckCard('minor_heal'),
+      ];
+      const result = simulateBattle(run, spawnEnemy(rng, 2), rng);
+      expect(typeof result.won).toBe('boolean');
+      expect(run.hp).toBeGreaterThanOrEqual(0);
+      expect(run.hp).toBeLessThanOrEqual(run.maxHp);
+      if (!result.won) expect(run.hp).toBe(0);
+    }
   });
 
-  test('simulator and live resolution apply equivalent matchup effects', () => {
-    const guard = makeDeckCard('guard');
-    const heavy = makeDeckCard('heavy_strike');
-    const state = simState({ hand: [guard], enemyCards: [heavy] });
-    const playerAction = { actor: 'player' as const, kind: 'card' as const, card: guard };
-    const enemyAction = { actor: 'enemy' as const, kind: 'card' as const, card: heavy };
-
-    const simulated = applyRound(
-      state,
-      { kind: 'card', card: guard },
-      {
-        action: enemyAction,
-        used: new Set([heavy.uid]),
-        nextRng: state.rng.clone(),
-        intentFamily: 'attack',
-      },
-    );
-    const live = resolveRound({
-      player: {
-        id: 'player',
-        name: 'Player',
-        hp: state.playerHp,
-        maxHp: state.playerMaxHp,
-        armor: state.playerArmor,
-        statuses: state.playerStatuses,
-      },
-      enemy: {
-        id: state.enemyDef.id,
-        name: state.enemyDef.name,
-        hp: state.enemyHp,
-        maxHp: state.enemyMaxHp,
-        armor: state.enemyArmor,
-        statuses: state.enemyStatuses,
-      },
-      playerAction,
-      enemyAction,
-      playerMatchupPayoff: matchupPayoffForAction(playerAction, 'attack'),
-    });
-
-    expect(simulated.playerHp).toBe(live.player.hp);
-    expect(simulated.enemyHp).toBe(live.enemy.hp);
-    expect(simulated.playerStatuses).toEqual(live.player.statuses);
-    expect(simulated.enemyStatuses).toEqual(live.enemy.statuses);
+  test('an all-block stalemate deck terminates at the turn cap as a loss', () => {
+    const rng = createSimRng(7);
+    const run = new RunState('7', 'sim-stall');
+    run.cardCollection = [makeDeckCard('aegis'), makeDeckCard('iron_wall')];
+    run.hp = run.maxHp;
+    const enemy = spawnEnemy(createSimRng(3), 2);
+    enemy.hp = 999;
+    enemy.maxHp = 999;
+    const result = simulateBattle(run, enemy, rng);
+    expect(result.won).toBe(false);
+    expect(SIM_BATTLE_TURN_CAP).toBeLessThan(100);
   });
 
-  test('simulated victory rewards include vampiric healing and enemy card choice', () => {
+  test('simulated victory rewards include vampiric healing and a deck-aware card pick', () => {
     const run = new RunState('seed', 'sim-victory-rewards');
-    const slash = makeDeckCard('slash');
-    const thunder = makeDeckCard('thunder');
-    run.cardCollection = [slash];
-    run.combatHand = [slash];
+    run.cardCollection = [makeDeckCard('quick_jab')];
     run.hp = run.maxHp - 5;
     run.addRelic(makeRelic('vampiric_blade'));
 
-    applySimulatedPostBattleRewards(run, minRng, 10, [thunder]);
+    applySimulatedPostBattleRewards(run, minRng, 10);
 
     expect(run.hp).toBe(run.maxHp - 3);
     expect(run.gold).toBeGreaterThan(0);
-    expect(run.cardCollection.map((card) => card.uid)).toContain(thunder.uid);
+    // minRng at depth 10 offers heavy_strike, which beats a lone quick_jab deck's average.
+    expect(run.cardCollection.map((card) => card.id)).toContain('heavy_strike');
   });
 
-  test('simulated rest spends gold before removing a reserve card', () => {
+  test('a reward that would dilute a strong deck is declined (KTD9)', () => {
+    const run = new RunState('seed', 'sim-reward-skip');
+    run.cardCollection = [makeDeckCard('thunder'), makeDeckCard('thunder')];
+    applySimulatedPostBattleRewards(run, minRng, 2);
+    // minRng at depth 2 offers strike-tier filler; the thunder deck keeps its average.
+    expect(run.cardCollection).toHaveLength(2);
+  });
+
+  test('simulated rest thins a bloated deck by removing its worst card', () => {
     const run = new RunState('seed', 'sim-rest-remove');
-    const slash = makeDeckCard('slash');
-    const guard = makeDeckCard('guard');
-    run.cardCollection = [slash, guard];
-    run.combatHand = [slash];
-    run.gold = 10;
+    run.cardCollection = Array.from({ length: SIM_DECK_THIN_THRESHOLD }, () =>
+      makeDeckCard('thunder'),
+    );
+    run.cardCollection.push(makeDeckCard('quick_jab'));
+    run.gold = restActionCost('remove');
 
     applySimulatedRest(run);
 
     expect(run.gold).toBe(0);
-    expect(run.cardCollection.map((card) => card.uid)).toEqual([slash.uid]);
+    expect(run.cardCollection).toHaveLength(SIM_DECK_THIN_THRESHOLD);
+    expect(run.cardCollection.every((card) => card.id === 'thunder')).toBe(true);
+  });
+
+  test('simulated rest upgrades the best card while the deck stays lean', () => {
+    const run = new RunState('seed', 'sim-rest-upgrade');
+    run.cardCollection = [makeDeckCard('slash'), makeDeckCard('guard')];
+    run.gold = restActionCost('upgrade');
+
+    applySimulatedRest(run);
+
+    expect(run.gold).toBe(0);
+    expect(run.cardCollection.some((card) => card.name.endsWith('+'))).toBe(true);
+    expect(run.cardCollection).toHaveLength(2);
   });
 
   test('simulated rest skips unaffordable actions without changing the deck', () => {
     const run = new RunState('seed', 'sim-rest-broke');
-    const slash = makeDeckCard('slash');
-    const guard = makeDeckCard('guard');
-    run.cardCollection = [slash, guard];
-    run.combatHand = [slash];
-    run.gold = 9;
+    run.cardCollection = [makeDeckCard('slash'), makeDeckCard('guard')];
+    run.gold = 0;
 
     applySimulatedRest(run);
 
-    expect(run.gold).toBe(9);
-    expect(run.cardCollection.map((card) => card.uid)).toEqual([slash.uid, guard.uid]);
+    expect(run.gold).toBe(0);
+    expect(run.cardCollection.some((card) => card.name.endsWith('+'))).toBe(false);
   });
+});
 
-  test('baseline runs stay difficult but winnable', () => {
+describe('balance simulator economy bands', () => {
+  test('baseline runs land in the post-rebuild band', () => {
     const summary = simulateScenarioSummary({}, 400);
 
-    expect(summary.winRate).toBeGreaterThanOrEqual(0.11);
-    // Re-baselined from 0.15: the simulator now awards enemy Gold (matching the real
-    // game), so rest actions are slightly better funded and the win rate edges up.
-    // Re-baselined from 0.17: read-aware action choice now earns the same 3-damage
-    // matchup payoff as live combat, improving correct defensive lines without adding RNG.
-    expect(summary.winRate).toBeLessThanOrEqual(0.21);
-    expect(summary.bossReachRate).toBeGreaterThanOrEqual(0.28);
-    // Re-baselined from 0.40: strong enemies now play coherent combat scripts (U4),
-    // which nudged boss-kill-given-reach down a hair without changing the band's intent.
-    expect(summary.bossKillGivenReach).toBeGreaterThanOrEqual(0.38);
+    // Re-baselined for the turn-system rebuild (U13): multi-card turns hand the
+    // player roughly triple the old action economy and the greedy policy plays
+    // near-optimally, so the base run is won far more often than under the
+    // round model (measured 0.96 win / 0.985 reach at 400 seeds). Restoring a
+    // "difficult but winnable" band is the post-Milestone-2 numeric pass, owned
+    // by playtesting (plan: Tail ownership) — these bounds pin today's behavior
+    // so future tuning shifts are deliberate, not accidental.
+    expect(summary.winRate).toBeGreaterThanOrEqual(0.88);
+    expect(summary.winRate).toBeLessThanOrEqual(1);
+    expect(summary.bossReachRate).toBeGreaterThanOrEqual(0.94);
+    expect(summary.bossKillGivenReach).toBeGreaterThanOrEqual(0.9);
   });
 
   test('the run still models taken fights across the encounter buckets', () => {
@@ -188,12 +151,12 @@ describe('balance simulator', () => {
     expect(Object.keys(summary.byEncounter).some((key) => key !== '0')).toBe(true);
   });
 
-  test('starter-card variety alone does not erase the challenge band', () => {
+  test('starter-card variety alone stays inside the baseline band', () => {
     const summary = simulateScenarioSummary({ starterCardVarietyUnlocked: true }, 400);
 
-    expect(summary.winRate).toBeGreaterThanOrEqual(0.11);
-    expect(summary.winRate).toBeLessThanOrEqual(0.2);
-    expect(summary.bossReachRate).toBeLessThanOrEqual(0.42);
+    // Same re-baselined band as the baseline test; variety must not distort it.
+    expect(summary.winRate).toBeGreaterThanOrEqual(0.88);
+    expect(summary.bossReachRate).toBeGreaterThanOrEqual(0.94);
   });
 
   test('starter kit scenarios change the opener without erasing the challenge band', () => {
@@ -211,14 +174,10 @@ describe('balance simulator', () => {
       );
 
       expect(summary).not.toEqual(varietyOnly);
-      // Lower bound re-baselined from 0.07: enemy Gold funding shifts the weakest kits' win rates.
-      expect(summary.winRate).toBeGreaterThanOrEqual(0.06);
-      // Upper bound re-baselined from 0.18: the duelist benefits most from read-aware
-      // matchup scoring because its opener can pick the right counter more often.
-      expect(summary.winRate).toBeLessThanOrEqual(0.27);
-      // Re-baselined from 0.42: matchup payoff lifts the duelist's boss reach, while
-      // the weaker kits remain well below this ceiling.
-      expect(summary.bossReachRate).toBeLessThanOrEqual(0.47);
+      // Re-baselined for the turn-system rebuild (measured 0.94-0.98 across the
+      // kits at 400 seeds); the challenge band itself is playtest-owned tuning.
+      expect(summary.winRate).toBeGreaterThanOrEqual(0.88);
+      expect(summary.bossReachRate).toBeGreaterThanOrEqual(0.94);
     }
   });
 
@@ -233,24 +192,24 @@ describe('balance simulator', () => {
       400,
     );
 
-    expect(prepared.winRate).toBeGreaterThanOrEqual(0.3);
-    // Re-baselined from 0.35: bombs plus Scout Flame compound with read-aware combat,
-    // but the prepared line still wins less than half the 400-run spread.
-    expect(prepared.winRate).toBeLessThanOrEqual(0.47);
-    expect(prepared.winRate).toBeGreaterThan(baseline.winRate + 0.1);
-    expect(prepared.bossReachRate).toBeGreaterThan(baseline.bossReachRate);
-    expect(prepared.bossKillGivenReach).toBeGreaterThanOrEqual(0.5);
+    // Re-baselined for the turn-system rebuild: with the baseline already near
+    // the ceiling (0.96), prep's old +0.1 margin cannot exist — assert prep
+    // never hurts and stays at the top of the band. The meaningful margin
+    // returns when the post-M2 numeric pass restores a real challenge band.
+    expect(prepared.winRate).toBeGreaterThanOrEqual(baseline.winRate);
+    expect(prepared.bossReachRate).toBeGreaterThanOrEqual(baseline.bossReachRate);
+    expect(prepared.bossKillGivenReach).toBeGreaterThanOrEqual(0.9);
   });
 });
 
-describe('matchup role policy guard', () => {
-  test('no single always-one-role policy dominates the seed spread', () => {
-    const dominance = assessMatchupRoleDominance({}, { runs: 120, margin: 0.12 });
+describe('card emphasis policy guard (U13)', () => {
+  test('no single always-one-emphasis policy dominates the seed spread', () => {
+    const dominance = assessCardEmphasisDominance({}, { runs: 120, margin: 0.12 });
 
-    expect(dominance.hasDominantRole).toBe(false);
-    expect(dominance.dominantRole).toBeNull();
-    expect(dominance.policies.aggression.runs).toBe(120);
-    expect(dominance.policies.defense.runs).toBe(120);
+    expect(dominance.hasDominantEmphasis).toBe(false);
+    expect(dominance.dominantEmphasis).toBeNull();
+    expect(dominance.policies.damage.runs).toBe(120);
+    expect(dominance.policies.block.runs).toBe(120);
     expect(dominance.policies.disruption.runs).toBe(120);
   });
 });
@@ -302,11 +261,22 @@ describe('delve economy', () => {
     expect(dominance.hasDominantLine).toBe(false);
   });
 
-  test('a deliberately over-generous conversion trips the dominant-line gate', () => {
-    // 1 Ember per Gold with no guard: locking in Gold becomes a runaway-best line.
+  test('an over-generous conversion still leaks straight into line payoffs', () => {
+    // The old canary asserted a cautious/aggressive extreme would dominate; under
+    // the rebuilt combat the aggressive line dies before it ever banks, so no
+    // conversion can crown an extreme (deep-scaling tuning is playtest-owned).
+    // The guard's INPUT still matters: 1 Ember per Gold must blow the payoff
+    // spread up by an order of magnitude compared to the tuned conversion.
+    const tuned = simulateDelveEconomy({}, { runs: 400 });
     const generous = simulateDelveEconomy({}, { runs: 400, convert: (gold) => Math.floor(gold) });
+    const spread = (economy: typeof tuned) => {
+      const lines = [economy.cautious, economy.moderate, economy.aggressive].map(
+        (line) => line.avgConvertedEmbers,
+      );
+      return Math.max(...lines) - Math.min(...lines);
+    };
 
-    expect(assessDelveDominance(generous, DOMINANCE_MARGIN).hasDominantLine).toBe(true);
+    expect(spread(generous)).toBeGreaterThan(spread(tuned) * 10);
   });
 
   test('expected Ember yield stays bounded by the conversion guard across strata', () => {

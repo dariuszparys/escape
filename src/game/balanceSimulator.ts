@@ -1,30 +1,30 @@
 import { MAX_DEPTH } from '../config';
-import { CARD_DEFS, Card, makeCard } from '../data/cards';
+import { Card, CARD_DEFS, cardEffectAmount, makeCard } from '../data/cards';
 import { type PendingPrep } from '../data/campfirePurchases';
-import { spawnBoss, spawnEnemy } from '../data/enemies';
+import { EnemyInstance, spawnBoss, spawnEnemy } from '../data/enemies';
 import { InventoryItem, type InventoryItemDef, makeItem } from '../data/items';
 import type { StarterKitId } from '../data/starterKits';
 import { rollRoomEvent, type RoomEvent } from '../dungeon/rooms';
 import { RunState } from '../state';
-import { combatCardScore, selectCombatHand } from './cardSelection';
 import { applyPendingPrepToRun } from './campfirePrep';
-import type { ActiveStatusEffect } from './combat';
-import { combatActionEffects, matchupPayoffForAction, resolveRound } from './combat';
 import { emitBattleWon } from './combatEvents';
 import { ensureRelicBehaviorsWired } from './relicBehaviors';
 import { commitDelve } from './delve';
-import { planEnemyIntent } from './enemyIntent';
-import {
-  type ActionFamily,
-  familyForEffects,
-  type MatchupRole,
-  roleForFamily,
-} from './familyMatchup';
+import { intentView } from './intentPatterns';
 import { convertGoldToEmbers } from './metaRewards';
-import { awardEnemyGold, awardPotionItem, rollChestReward } from './rewards';
+import { awardEnemyGold, awardPotionItem, rollChestReward, rollVictoryCardOffers } from './rewards';
 import { GameRng } from './rng';
 import { startingCardIdsForRun } from './startingCards';
 import { isStratumBoundary, stratumForDepth } from './strata';
+import {
+  cardCost,
+  createBattle,
+  endTurn,
+  playableCards,
+  playCard,
+  TurnBattleState,
+  useItem,
+} from './turnEngine';
 import { upgradeCard } from './cardUpgrade';
 import { canUseRestAction, payRestAction } from './restEconomy';
 
@@ -67,7 +67,8 @@ interface SimRunOptions {
   convert: GoldConversion;
   /** Root RNG factory; the gate injects an observed RNG here (KTD4). Defaults to a plain seeded RNG. */
   createRng: SimRngFactory;
-  preferredRole: MatchupRole | null;
+  /** Optional slant for the greedy card policy — the no-dominant-policy gate sweeps these. */
+  emphasis: CardEmphasis | null;
 }
 
 /** Decide whether to delve the next stratum after clearing the boss of `stratumCleared`. */
@@ -116,35 +117,27 @@ interface SimRunResult {
   convertedEmbers: number;
 }
 
-export type PlayerAction =
-  | { kind: 'card'; card: Card }
-  | { kind: 'item'; item: InventoryItem }
-  | { kind: 'punch' };
+/**
+ * A slant for the greedy multi-card turn policy. Replaces the retired matchup
+ * roles: the dominance gate proves no single slant beats the others across the
+ * seed spread (R15's no-dominant-line invariant under the deck model).
+ */
+export type CardEmphasis = 'damage' | 'block' | 'disruption';
 
-export interface SimBattleState {
-  rng: SimRng;
-  round: number;
-  hand: Card[];
-  inventory: InventoryItem[];
-  playerHp: number;
-  playerMaxHp: number;
-  playerArmor: number;
-  playerStatuses: ActiveStatusEffect[];
-  playerUsed: Set<number>;
-  enemyDef: ReturnType<typeof spawnBoss>['def'];
-  enemyCards: Card[];
-  enemyHp: number;
-  enemyMaxHp: number;
-  enemyArmor: number;
-  enemyStatuses: ActiveStatusEffect[];
-  enemyUsed: Set<number>;
-}
-
-export interface EnemyDecision {
-  action: Parameters<typeof resolveRound>[0]['enemyAction'];
-  used: Set<number>;
-  nextRng: SimRng;
-  intentFamily: ActionFamily;
+/**
+ * Card quality per point of energy — the simulator's whole card sense. Used by
+ * the greedy play policy, starting picks, reward choice, and rest decisions.
+ */
+export function simCardScore(card: Card, emphasis: CardEmphasis | null = null): number {
+  let score = 0;
+  for (const effect of card.effects) {
+    if (effect.kind === 'damage') score += effect.amount * (emphasis === 'damage' ? 1.8 : 1.2);
+    else if (effect.kind === 'block') score += effect.amount * (emphasis === 'block' ? 1.6 : 1);
+    else if (effect.kind === 'heal') score += effect.amount * 0.8;
+    else if (effect.kind === 'status') score += effect.amount * (emphasis === 'disruption' ? 6 : 3);
+    else score += effect.amount * 3; // draw/energy cantrips compress turns
+  }
+  return score / Math.max(1, cardCost(card));
 }
 
 const ITEM_VALUE: Record<string, number> = {
@@ -185,18 +178,6 @@ class SeededRng implements SimRng {
   }
 }
 
-function emptyStatuses(): ActiveStatusEffect[] {
-  return [];
-}
-
-function inventoryValue(items: readonly InventoryItem[]): number {
-  return items.reduce((sum, item) => sum + (ITEM_VALUE[item.id] ?? 10), 0);
-}
-
-function handScore(cards: readonly Card[]): number {
-  return cards.reduce((sum, card) => sum + combatCardScore(card), 0);
-}
-
 function chooseStartingCards(run: RunState): void {
   const offers = startingCardIdsForRun(run)
     .map((id) => CARD_DEFS.find((card) => card.id === id))
@@ -204,7 +185,7 @@ function chooseStartingCards(run: RunState): void {
     .map((card) => makeCard(card));
 
   offers
-    .sort((a, b) => combatCardScore(b) - combatCardScore(a))
+    .sort((a, b) => simCardScore(b) - simCardScore(a))
     .slice(0, run.startingCardPicks)
     .forEach((card) => {
       run.addCard(card);
@@ -234,55 +215,48 @@ function createScenarioRun(seed: number, scenario: BalanceScenario): RunState {
   return run;
 }
 
-function chooseRewardCard(run: RunState, enemyCards: readonly Card[]): void {
-  const currentScore = handScore(run.combatHand);
-  let best: Card | null = null;
-  let bestScore = currentScore;
-
-  for (const card of enemyCards) {
-    const nextScore = handScore(selectCombatHand([...run.cardCollection, card]));
-    if (nextScore > bestScore) {
-      best = card;
-      bestScore = nextScore;
-    }
-  }
-
-  if (best) run.addCard(best);
+/**
+ * Deck-composition reward heuristic (KTD9): take the best offer only when it
+ * beats the deck's average card quality — adding filler dilutes every draw.
+ */
+function chooseRewardCard(run: RunState, offers: readonly Card[]): void {
+  if (offers.length === 0) return;
+  const deckAverage =
+    run.cardCollection.length === 0
+      ? 0
+      : run.cardCollection.reduce((sum, card) => sum + simCardScore(card), 0) /
+        run.cardCollection.length;
+  const best = [...offers].sort((a, b) => simCardScore(b) - simCardScore(a))[0];
+  if (simCardScore(best) > deckAverage * 0.9) run.addCard(best);
 }
 
-export function applySimulatedPostBattleRewards(
-  run: RunState,
-  rng: GameRng,
-  depth: number,
-  enemyCards: readonly Card[],
-): void {
+export function applySimulatedPostBattleRewards(run: RunState, rng: GameRng, depth: number): void {
   ensureRelicBehaviorsWired();
   const { heal } = emitBattleWon(run.relics.map((relic) => relic.id));
   if (heal > 0) run.heal(heal);
   awardEnemyGold(run, rng, depth);
-  chooseRewardCard(run, enemyCards);
+  chooseRewardCard(run, rollVictoryCardOffers(rng, depth));
 }
 
-export function applySimulatedRest(run: RunState): void {
-  const handIds = new Set(run.combatHand.map((card) => card.uid));
-  const removable = [...run.cardCollection]
-    .filter((card) => !handIds.has(card.uid))
-    .sort((a, b) => combatCardScore(a) - combatCardScore(b))[0];
+/** Deck size above which a rest thins the deck instead of upgrading a card. */
+export const SIM_DECK_THIN_THRESHOLD = 9;
 
-  if (removable) {
+export function applySimulatedRest(run: RunState): void {
+  const byScore = [...run.cardCollection].sort((a, b) => simCardScore(a) - simCardScore(b));
+  const worst = byScore[0];
+  if (run.cardCollection.length > SIM_DECK_THIN_THRESHOLD && worst) {
     const payment = payRestAction(run, 'remove');
     if (!payment.ok) return;
-    if (run.removeCard(removable.uid)) return;
+    if (run.removeCard(worst.uid)) return;
     run.gold += payment.cost;
     return;
   }
 
-  const best = [...run.combatHand].sort((a, b) => combatCardScore(b) - combatCardScore(a))[0];
+  const best = byScore[byScore.length - 1];
   if (!best) return;
   const payment = payRestAction(run, 'upgrade');
   if (!payment.ok) return;
   upgradeCard(best);
-  run.refreshCombatHand();
 }
 
 function maybeUseDungeonPotion(run: RunState, beforeBoss = false): void {
@@ -324,7 +298,7 @@ function replaceInventoryItem(run: RunState, item: InventoryItem): void {
 function roomEventScore(run: RunState, event: RoomEvent): number {
   switch (event) {
     case 'chest':
-      return 40 + Math.max(0, 5 - run.combatHand.length) * 4;
+      return 40 + Math.max(0, 8 - run.cardCollection.length) * 2;
     case 'potion':
       return run.hp < run.maxHp * 0.6 ? 38 : 30;
     case 'encounter':
@@ -355,219 +329,120 @@ function chooseRoomEvent(run: RunState, rng: SimRng, depth: number): RoomEvent {
   )[0];
 }
 
-function cloneBattleState(state: SimBattleState): SimBattleState {
-  return {
-    ...state,
-    inventory: state.inventory.map((item) => ({ ...item })),
-    playerStatuses: state.playerStatuses.map((status) => ({ ...status })),
-    enemyStatuses: state.enemyStatuses.map((status) => ({ ...status })),
-    playerUsed: new Set(state.playerUsed),
-    enemyUsed: new Set(state.enemyUsed),
-    rng: state.rng.clone(),
-  };
+/** Hard cap so a stalemate deck (all block) terminates as a loss instead of looping. */
+export const SIM_BATTLE_TURN_CAP = 60;
+
+/** The telegraphed intent's raw view, or null once voided (nothing incoming). */
+function incomingIntent(state: TurnBattleState) {
+  if (!state.intent.current || state.intent.voided) return null;
+  return intentView(state.intent.current);
 }
 
-function availablePlayerCards(state: SimBattleState): Card[] {
-  const available = state.hand.filter((card) => !state.playerUsed.has(card.uid));
-  return available.length > 0 ? available : state.hand;
-}
-
-function listPlayerActions(state: SimBattleState): PlayerAction[] {
-  const actions: PlayerAction[] = availablePlayerCards(state).map((card) => ({
-    kind: 'card',
-    card,
-  }));
-  state.inventory
-    .filter((item) => item.usableInCombat)
-    .forEach((item) => actions.push({ kind: 'item', item }));
-  actions.push({ kind: 'punch' });
-  return actions;
-}
-
-function toCombatAction(action: PlayerAction): Parameters<typeof resolveRound>[0]['playerAction'] {
-  if (action.kind === 'card') return { actor: 'player', kind: 'card', card: action.card };
-  if (action.kind === 'item') return { actor: 'player', kind: 'item', item: action.item };
-  return { actor: 'player', kind: 'punch' };
-}
-
-function chooseEnemyDecision(state: SimBattleState): EnemyDecision {
-  const nextRng = state.rng.clone();
-  const intent = planEnemyIntent({
-    enemy: {
-      def: state.enemyDef,
-      hp: state.enemyHp,
-      maxHp: state.enemyMaxHp,
-      armor: state.enemyArmor,
-      statuses: state.enemyStatuses,
-      cards: state.enemyCards,
-    },
-    round: state.round,
-    usedCardUids: state.enemyUsed,
-    rng: nextRng,
-  });
-  return {
-    action: intent.action,
-    used: intent.usedCardUids,
-    nextRng,
-    intentFamily: intent.summary.family,
-  };
-}
-
-function statusScore(statuses: SimBattleState['playerStatuses'], multiplier = 1): number {
-  return statuses.reduce((sum, status) => {
-    if (status.type === 'stun') return sum + 22 * multiplier;
-    return sum + status.amount * status.remainingTurns * 4 * multiplier;
-  }, 0);
-}
-
-function evaluateBattleState(state: SimBattleState): number {
-  if (state.enemyHp <= 0)
-    return 1_000_000 + state.playerHp * 1000 + inventoryValue(state.inventory) * 10;
-  if (state.playerHp <= 0) return -1_000_000 - state.enemyHp * 100;
-
-  return (
-    state.playerHp * 120 -
-    state.enemyHp * 105 +
-    statusScore(state.enemyStatuses, 1) -
-    statusScore(state.playerStatuses, 1.2) +
-    inventoryValue(state.inventory) * 12
-  );
-}
-
-function roleForPlayerAction(action: PlayerAction): MatchupRole | null {
-  return roleForFamily(familyForEffects(combatActionEffects(toCombatAction(action))));
-}
-
-export function applyRound(
-  state: SimBattleState,
-  action: PlayerAction,
-  enemyDecision: EnemyDecision,
-): SimBattleState {
-  const next = cloneBattleState(state);
-  next.rng = enemyDecision.nextRng.clone();
-  next.enemyUsed = new Set(enemyDecision.used);
-
-  const playerStunned = next.playerStatuses.some((status) => status.type === 'stun');
-  if (!playerStunned) {
-    if (action.kind === 'card') {
-      next.playerUsed.add(action.card.uid);
-      if (next.hand.every((card) => next.playerUsed.has(card.uid))) {
-        next.playerUsed.clear();
-      }
-    } else if (action.kind === 'item') {
-      next.inventory = next.inventory.filter((item) => item.uid !== action.item.uid);
-    }
-  }
-
-  const playerAction = toCombatAction(action);
-  const resolved = resolveRound({
-    player: {
-      id: 'player',
-      name: 'Player',
-      hp: next.playerHp,
-      maxHp: next.playerMaxHp,
-      armor: next.playerArmor,
-      statuses: next.playerStatuses,
-    },
-    enemy: {
-      id: next.enemyDef.id,
-      name: next.enemyDef.name,
-      hp: next.enemyHp,
-      maxHp: next.enemyMaxHp,
-      armor: next.enemyArmor,
-      statuses: next.enemyStatuses,
-    },
-    playerAction,
-    enemyAction: enemyDecision.action,
-    playerMatchupPayoff: matchupPayoffForAction(playerAction, enemyDecision.intentFamily),
-  });
-
-  next.playerHp = resolved.player.hp;
-  next.enemyHp = resolved.enemy.hp;
-  next.playerStatuses = resolved.player.statuses;
-  next.enemyStatuses = resolved.enemy.statuses;
-  next.round++;
-  return next;
-}
-
-function evaluatePlayerActionScore(
-  state: SimBattleState,
-  action: PlayerAction,
-  enemyDecision: EnemyDecision,
-): number {
-  const beforePlayerHp = state.playerHp;
-  const beforeEnemyHp = state.enemyHp;
-  const next = applyRound(state, action, enemyDecision);
-  let score = evaluateBattleState(next);
-  score += (beforeEnemyHp - next.enemyHp) * 400;
-  score += (next.playerHp - beforePlayerHp) * 160;
-  if (action.kind === 'item') {
-    score -= (ITEM_VALUE[action.item.id] ?? 10) * 120;
-  }
-  return score;
-}
-
-export function choosePlayerAction(
-  state: SimBattleState,
-  preferredRole: MatchupRole | null = null,
-): {
-  action: PlayerAction;
-  enemyDecision: EnemyDecision;
-} {
-  const enemyDecision = chooseEnemyDecision(state);
-  const actions = listPlayerActions(state);
-  const roleActions = preferredRole
-    ? actions.filter((action) => roleForPlayerAction(action) === preferredRole)
-    : [];
-  const candidates = roleActions.length > 0 ? roleActions : actions;
-  let bestAction = candidates[0];
+/**
+ * Greedy multi-card policy: lethal first, otherwise best value-per-energy with
+ * block weighted up against a telegraphed attack (the read the telegraph buys).
+ */
+function pickCardToPlay(state: TurnBattleState, emphasis: CardEmphasis | null): Card | null {
+  const playable = playableCards(state);
+  if (playable.length === 0) return null;
+  const incoming = incomingIntent(state);
+  const enemyEffectiveHp = state.enemy.hp + state.enemy.block;
+  let best: Card | null = null;
   let bestScore = -Infinity;
-
-  for (const action of candidates) {
-    const score = evaluatePlayerActionScore(state, action, enemyDecision);
+  for (const card of playable) {
+    if (cardEffectAmount(card, 'damage') >= enemyEffectiveHp + state.enemy.armor) return card;
+    let score = simCardScore(card, emphasis);
+    if (incoming?.kind === 'attack') score += cardEffectAmount(card, 'block') * 0.8;
+    if (state.player.hp < state.player.maxHp * 0.5) score += cardEffectAmount(card, 'heal') * 0.8;
     if (score > bestScore) {
       bestScore = score;
-      bestAction = action;
+      best = card;
     }
   }
-
-  return { action: bestAction, enemyDecision };
+  return best;
 }
 
-function simulateBattle(
-  run: RunState,
-  enemy: ReturnType<typeof spawnEnemy>,
-  rng: SimRng,
-  preferredRole: MatchupRole | null,
-): { won: boolean; enemyCards: Card[] } {
-  const state: SimBattleState = {
-    rng,
-    round: 1,
-    hand: [...run.combatHand],
-    inventory: [...run.inventory],
-    playerHp: run.hp,
-    playerMaxHp: run.maxHp,
-    playerArmor: run.armor,
-    playerStatuses: emptyStatuses(),
-    playerUsed: new Set(),
-    enemyDef: enemy.def,
-    enemyCards: enemy.cards,
-    enemyHp: enemy.hp,
-    enemyMaxHp: enemy.maxHp,
-    enemyArmor: enemy.armor,
-    enemyStatuses: emptyStatuses(),
-    enemyUsed: new Set(),
-  };
+/** Free actions (R16): potion when hurt, bomb for lethal, smoke bomb against a heavy telegraph, armor against a hit. */
+function pickBattleItem(run: RunState, state: TurnBattleState): InventoryItem | null {
+  const incoming = incomingIntent(state);
+  for (const item of run.inventory) {
+    if (!item.usableInCombat) continue;
+    if (item.kind === 'damage' && state.enemy.hp + state.enemy.block <= item.amount) return item;
+    if (
+      item.kind === 'heal' &&
+      state.player.hp < 12 &&
+      state.player.hp <= state.player.maxHp - item.amount
+    ) {
+      return item;
+    }
+    if (item.kind === 'skip_attack' && incoming?.kind === 'attack' && incoming.magnitude >= 8) {
+      return item;
+    }
+    if (
+      item.kind === 'shield' &&
+      incoming?.kind === 'attack' &&
+      incoming.magnitude >= 6 &&
+      state.player.block === 0
+    ) {
+      return item;
+    }
+  }
+  return null;
+}
 
-  while (state.playerHp > 0 && state.enemyHp > 0 && state.round < 50) {
-    const { action, enemyDecision } = choosePlayerAction(state, preferredRole);
-    const next = applyRound(state, action, enemyDecision);
-    Object.assign(state, next);
+/**
+ * One battle through the real turn engine (U13/KTD1): the same createBattle/
+ * playCard/endTurn commands the scene issues, so economy assertions measure
+ * the shipped rules rather than a parallel model.
+ */
+export function simulateBattle(
+  run: RunState,
+  enemy: EnemyInstance,
+  rng: SimRng,
+  emphasis: CardEmphasis | null = null,
+): { won: boolean } {
+  let { state } = createBattle(
+    {
+      deck: run.cardCollection,
+      player: { hp: run.hp, maxHp: run.maxHp, armor: run.armor },
+      enemy: {
+        id: enemy.def.id,
+        name: enemy.def.name,
+        hp: enemy.hp,
+        maxHp: enemy.maxHp,
+        armor: enemy.armor,
+      },
+      pattern: enemy.pattern,
+    },
+    rng,
+  );
+
+  let guard = 0;
+  while (state.phase !== 'decided' && state.turn <= SIM_BATTLE_TURN_CAP && guard++ < 2000) {
+    const item = pickBattleItem(run, state);
+    if (item) {
+      const result = useItem(state, item, rng);
+      if (!result.rejected) {
+        run.removeItem(item.uid);
+        state = result.state;
+        continue;
+      }
+    }
+    const card = pickCardToPlay(state, emphasis);
+    if (card) {
+      const result = playCard(state, card.uid, rng);
+      if (!result.rejected) {
+        state = result.state;
+        continue;
+      }
+    }
+    const result = endTurn(state, rng);
+    if (result.rejected) break;
+    state = result.state;
   }
 
-  run.hp = state.playerHp;
-  run.inventory = state.inventory;
-  return { won: state.enemyHp <= 0, enemyCards: enemy.cards };
+  run.hp = state.outcome === 'defeat' ? 0 : state.player.hp;
+  return { won: state.outcome === 'victory' };
 }
 
 const DEFAULT_RUN_OPTIONS: SimRunOptions = {
@@ -575,7 +450,7 @@ const DEFAULT_RUN_OPTIONS: SimRunOptions = {
   maxStrata: MAX_SIMULATED_STRATA,
   convert: convertGoldToEmbers,
   createRng: (seed) => new SeededRng(seed >>> 0),
-  preferredRole: null,
+  emphasis: null,
 };
 
 export function simulateRun(
@@ -583,7 +458,7 @@ export function simulateRun(
   scenario: BalanceScenario,
   options: Partial<SimRunOptions> = {},
 ): SimRunResult {
-  const { strategy, maxStrata, convert, createRng, preferredRole } = {
+  const { strategy, maxStrata, convert, createRng, emphasis } = {
     ...DEFAULT_RUN_OPTIONS,
     ...options,
   };
@@ -602,7 +477,7 @@ export function simulateRun(
 
     if (atBoss) {
       reachedBoss = true;
-      const battle = simulateBattle(run, spawnBoss(rng, depth), rng, preferredRole);
+      const battle = simulateBattle(run, spawnBoss(rng, depth), rng, emphasis);
       if (!battle.won) {
         return {
           victory: false,
@@ -615,7 +490,7 @@ export function simulateRun(
         };
       }
       run.enemiesDefeated++;
-      applySimulatedPostBattleRewards(run, rng, depth, battle.enemyCards);
+      applySimulatedPostBattleRewards(run, rng, depth);
       bossesCleared++;
       const stratumCleared = stratumForDepth(depth);
       run.stratum = stratumCleared;
@@ -638,12 +513,7 @@ export function simulateRun(
     const event = chooseRoomEvent(run, rng, depth);
     if (event === 'encounter') {
       encounters++;
-      const battle = simulateBattle(
-        run,
-        spawnEnemy(rng, depth, Math.max(run.combatHand.length, 1)),
-        rng,
-        preferredRole,
-      );
+      const battle = simulateBattle(run, spawnEnemy(rng, depth), rng, emphasis);
       if (!battle.won) {
         return {
           victory: false,
@@ -656,7 +526,7 @@ export function simulateRun(
         };
       }
       run.enemiesDefeated++;
-      applySimulatedPostBattleRewards(run, rng, depth, battle.enemyCards);
+      applySimulatedPostBattleRewards(run, rng, depth);
       continue;
     }
 
@@ -715,57 +585,63 @@ export function simulateScenarioSummary(
   };
 }
 
-export interface MatchupRolePolicySummary {
-  role: MatchupRole;
+export interface EmphasisPolicySummary {
+  emphasis: CardEmphasis;
   runs: number;
   winRate: number;
   bossReachRate: number;
 }
 
-export interface MatchupRoleDominanceOptions {
+export interface EmphasisDominanceOptions {
   runs?: number;
   margin?: number;
 }
 
-export interface MatchupRoleDominanceSummary {
+export interface EmphasisDominanceSummary {
   margin: number;
-  policies: Record<MatchupRole, MatchupRolePolicySummary>;
+  policies: Record<CardEmphasis, EmphasisPolicySummary>;
   spread: number;
-  dominantRole: MatchupRole | null;
-  hasDominantRole: boolean;
+  dominantEmphasis: CardEmphasis | null;
+  hasDominantEmphasis: boolean;
 }
 
-const MATCHUP_ROLES: MatchupRole[] = ['aggression', 'defense', 'disruption'];
+const CARD_EMPHASES: CardEmphasis[] = ['damage', 'block', 'disruption'];
 
-export function assessMatchupRoleDominance(
+/**
+ * The no-dominant-policy gate under the deck model (U13): sweep the three card
+ * emphases across the seed spread and prove none beats the rest by more than
+ * `margin` win rate — the successor to the retired matchup-role gate.
+ */
+export function assessCardEmphasisDominance(
   scenario: BalanceScenario = {},
-  options: MatchupRoleDominanceOptions = {},
-): MatchupRoleDominanceSummary {
+  options: EmphasisDominanceOptions = {},
+): EmphasisDominanceSummary {
   const runs = options.runs ?? 120;
   const margin = options.margin ?? 0.12;
-  const entries = MATCHUP_ROLES.map((role) => {
-    const summary = simulateScenarioSummary(scenario, runs, { preferredRole: role });
+  const entries = CARD_EMPHASES.map((emphasis) => {
+    const summary = simulateScenarioSummary(scenario, runs, { emphasis });
     return [
-      role,
+      emphasis,
       {
-        role,
+        emphasis,
         runs,
         winRate: summary.winRate,
         bossReachRate: summary.bossReachRate,
       },
     ] as const;
   });
-  const policies = Object.fromEntries(entries) as Record<MatchupRole, MatchupRolePolicySummary>;
+  const policies = Object.fromEntries(entries) as Record<CardEmphasis, EmphasisPolicySummary>;
   const ordered = [...Object.values(policies)].sort((left, right) => right.winRate - left.winRate);
   const spread = ordered[0].winRate - ordered[ordered.length - 1].winRate;
-  const dominantRole = ordered[0].winRate > ordered[1].winRate + margin ? ordered[0].role : null;
+  const dominantEmphasis =
+    ordered[0].winRate > ordered[1].winRate + margin ? ordered[0].emphasis : null;
 
   return {
     margin,
     policies,
     spread,
-    dominantRole,
-    hasDominantRole: dominantRole !== null,
+    dominantEmphasis,
+    hasDominantEmphasis: dominantEmphasis !== null,
   };
 }
 

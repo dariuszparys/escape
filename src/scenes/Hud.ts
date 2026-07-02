@@ -1,6 +1,5 @@
 import Phaser from 'phaser';
 import { GAME_W, ROOM_H, HUD_H, MAX_INVENTORY, STRATUM_SIZE } from '../config';
-import { primaryCardValue } from '../data/cards';
 import { depthWithinStratum, isStratumBoundary, stratumForDepth } from '../game/strata';
 import { getRun } from '../state';
 
@@ -59,50 +58,42 @@ export class HudScene extends Phaser.Scene {
       }),
     );
 
-    // cards
+    // deck summary (R14/U12): the whole collection IS the battle deck now.
     const cardX0 = 200;
     this.dynamic.add(
-      this.add.text(
-        cardX0,
-        y0 + 10,
-        `HAND ${run.combatHand.length}/${run.handLimit}  DECK ${run.cardCollection.length}`,
-        {
-          fontFamily: 'monospace',
-          fontSize: '12px',
-          color: '#b8b0c8',
-        },
-      ),
+      this.add.text(cardX0, y0 + 10, `DECK ${run.cardCollection.length} cards`, {
+        fontFamily: 'monospace',
+        fontSize: '12px',
+        fontStyle: 'bold',
+        color: '#f5edd8',
+      }),
     );
-    for (const [i, card] of run.combatHand.entries()) {
+    const typeCounts = new Map<string, number>();
+    for (const card of run.cardCollection) {
+      typeCounts.set(card.type, (typeCounts.get(card.type) ?? 0) + 1);
+    }
+    const types = [...typeCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+    for (const [i, [type, count]] of types.entries()) {
       const x = cardX0 + i * 62;
       const g = this.add.graphics();
       g.fillStyle(0x1c1826, 1);
-      g.fillRoundedRect(x, y0 + 30, 56, 64, 5);
-      g.lineStyle(1, card.color, 1);
-      g.strokeRoundedRect(x, y0 + 30, 56, 64, 5);
+      g.fillRoundedRect(x, y0 + 30, 56, 52, 5);
+      g.lineStyle(1, Phaser.Display.Color.HexStringToColor(TYPE_COLOR[type] ?? '#b8b0c8').color, 1);
+      g.strokeRoundedRect(x, y0 + 30, 56, 52, 5);
       this.dynamic.add(g);
       this.dynamic.add(
         this.add
-          .text(x + 28, y0 + 44, card.name.split(' ')[0], {
-            fontFamily: 'monospace',
-            fontSize: '9px',
-            color: '#f5edd8',
-          })
-          .setOrigin(0.5),
-      );
-      this.dynamic.add(
-        this.add
-          .text(x + 28, y0 + 66, String(primaryCardValue(card)), {
+          .text(x + 28, y0 + 48, String(count), {
             fontFamily: 'monospace',
             fontSize: '20px',
             fontStyle: 'bold',
-            color: TYPE_COLOR[card.type],
+            color: TYPE_COLOR[type] ?? '#b8b0c8',
           })
           .setOrigin(0.5),
       );
       this.dynamic.add(
         this.add
-          .text(x + 28, y0 + 84, card.type.toUpperCase(), {
+          .text(x + 28, y0 + 70, type.toUpperCase(), {
             fontFamily: 'monospace',
             fontSize: '8px',
             color: '#b8b0c8',
@@ -110,6 +101,13 @@ export class HudScene extends Phaser.Scene {
           .setOrigin(0.5),
       );
     }
+    this.dynamic.add(
+      this.add.text(cardX0, y0 + 90, 'Every card fights — [C] view deck', {
+        fontFamily: 'monospace',
+        fontSize: '9px',
+        color: '#6a6478',
+      }),
+    );
 
     // inventory + depth
     const invX = 545;

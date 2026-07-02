@@ -100,8 +100,20 @@ describe('applyPendingPrepToRun', () => {
     );
 
     expect(run.starterKitId).toBe('duelist');
-    expect(run.cardCollection.map((card) => card.id)).toEqual(['riposte']);
-    expect(run.combatHand.map((card) => card.id)).toEqual(['riposte']);
+    expect(run.cardCollection.map((card) => card.id)).toEqual([
+      'strike',
+      'strike',
+      'guard',
+      'guard',
+      'riposte',
+    ]);
+    expect(run.cardCollection.map((card) => card.id)).toEqual([
+      'strike',
+      'strike',
+      'guard',
+      'guard',
+      'riposte',
+    ]);
     expect(run.startingCardsTaken).toBe(0);
     expect(run.startingCardChoices).toBe(4);
     expect(run.startingCardPicks).toBe(2);
@@ -127,7 +139,13 @@ describe('applyPendingPrepToRun', () => {
     );
 
     expect(run.starterKitId).toBeNull();
-    expect(run.cardCollection).toEqual([]);
+    // R15 pad: every run opens with the basics, kit or not.
+    expect(run.cardCollection.map((card) => card.id)).toEqual([
+      'strike',
+      'strike',
+      'guard',
+      'guard',
+    ]);
     expect(run.startingCardsTaken).toBe(0);
   });
 
@@ -151,7 +169,13 @@ describe('applyPendingPrepToRun', () => {
     );
 
     expect(run.starterKitId).toBeNull();
-    expect(run.cardCollection).toEqual([]);
+    // R15 pad: every run opens with the basics, kit or not.
+    expect(run.cardCollection.map((card) => card.id)).toEqual([
+      'strike',
+      'strike',
+      'guard',
+      'guard',
+    ]);
   });
 
   test('applies Blood Oath to max HP and current HP for the next run', () => {

@@ -8,14 +8,17 @@ export type CardEffect =
   | { kind: 'damage'; amount: number }
   | { kind: 'block'; amount: number }
   | { kind: 'heal'; amount: number }
-  | { kind: 'status'; status: StatusEffectType; amount: number; duration: number };
+  | { kind: 'status'; status: StatusEffectType; amount: number; duration: number }
+  | { kind: 'draw'; amount: number }
+  | { kind: 'energy'; amount: number };
 
 export interface CardDef {
   id: string;
   name: string;
   type: CardType;
   tier: 1 | 2 | 3;
-  speed: number;
+  /** Energy cost in the turn battle (R2). Authored on every def (U8). */
+  cost: number;
   color: number;
   description: string;
   effects: CardEffect[];
@@ -34,7 +37,7 @@ export const CARD_DEFS: CardDef[] = [
     name: 'Strike',
     type: 'attack',
     tier: 1,
-    speed: 5,
+    cost: 1,
     color: 0xc0392b,
     description: 'Deal 5 damage',
     effects: [{ kind: 'damage', amount: 5 }],
@@ -44,7 +47,7 @@ export const CARD_DEFS: CardDef[] = [
     name: 'Slash',
     type: 'attack',
     tier: 1,
-    speed: 5,
+    cost: 1,
     color: 0xc0392b,
     description: 'Deal 6 damage',
     effects: [{ kind: 'damage', amount: 6 }],
@@ -54,7 +57,7 @@ export const CARD_DEFS: CardDef[] = [
     name: 'Guard',
     type: 'block',
     tier: 1,
-    speed: 6,
+    cost: 1,
     color: 0x2980b9,
     description: 'Gain 7 block',
     effects: [{ kind: 'block', amount: 7 }],
@@ -64,9 +67,9 @@ export const CARD_DEFS: CardDef[] = [
     name: 'Quick Jab',
     type: 'attack',
     tier: 1,
-    speed: 8,
+    cost: 0,
     color: 0xe67e22,
-    description: 'Deal 4 damage first',
+    description: 'Deal 4 damage',
     effects: [{ kind: 'damage', amount: 4 }],
   },
   {
@@ -74,7 +77,7 @@ export const CARD_DEFS: CardDef[] = [
     name: 'Minor Heal',
     type: 'heal',
     tier: 1,
-    speed: 4,
+    cost: 1,
     color: 0x27ae60,
     description: 'Restore 5 HP',
     effects: [{ kind: 'heal', amount: 5 }],
@@ -84,7 +87,7 @@ export const CARD_DEFS: CardDef[] = [
     name: 'Riposte',
     type: 'utility',
     tier: 1,
-    speed: 6,
+    cost: 1,
     color: 0xe67e22,
     description: 'Deal 5, gain 2 block',
     starterKitOnly: true,
@@ -98,7 +101,7 @@ export const CARD_DEFS: CardDef[] = [
     name: 'Field Dressing',
     type: 'heal',
     tier: 1,
-    speed: 3,
+    cost: 1,
     color: 0x27ae60,
     description: 'Gain 5 block, restore 2 HP',
     starterKitOnly: true,
@@ -112,7 +115,7 @@ export const CARD_DEFS: CardDef[] = [
     name: 'Cinder Hex',
     type: 'status',
     tier: 1,
-    speed: 5,
+    cost: 1,
     color: 0xd35400,
     description: 'Deal 2, burn 2 for 2 turns',
     starterKitOnly: true,
@@ -126,9 +129,9 @@ export const CARD_DEFS: CardDef[] = [
     name: 'Heavy Strike',
     type: 'attack',
     tier: 2,
-    speed: 1,
+    cost: 2,
     color: 0xc0392b,
-    description: 'Deal 10 damage, slower',
+    description: 'Deal 10 damage',
     effects: [{ kind: 'damage', amount: 10 }],
   },
   {
@@ -136,7 +139,7 @@ export const CARD_DEFS: CardDef[] = [
     name: 'Poison Dagger',
     type: 'status',
     tier: 2,
-    speed: 6,
+    cost: 1,
     color: 0x8e44ad,
     description: 'Deal 3 and poison',
     effects: [
@@ -149,7 +152,7 @@ export const CARD_DEFS: CardDef[] = [
     name: 'Fire Spark',
     type: 'status',
     tier: 2,
-    speed: 5,
+    cost: 2,
     color: 0xd35400,
     description: 'Deal 4 and burn',
     effects: [
@@ -162,7 +165,7 @@ export const CARD_DEFS: CardDef[] = [
     name: 'Shield Bash',
     type: 'utility',
     tier: 2,
-    speed: 5,
+    cost: 1,
     color: 0x3498db,
     description: 'Deal 3, gain 4 block',
     effects: [
@@ -175,7 +178,7 @@ export const CARD_DEFS: CardDef[] = [
     name: 'Iron Wall',
     type: 'block',
     tier: 2,
-    speed: 6,
+    cost: 2,
     color: 0x2980b9,
     description: 'Gain 10 block',
     effects: [{ kind: 'block', amount: 10 }],
@@ -185,7 +188,7 @@ export const CARD_DEFS: CardDef[] = [
     name: 'Thunder',
     type: 'attack',
     tier: 3,
-    speed: 6,
+    cost: 2,
     color: 0xf39c12,
     description: 'Deal 12 damage',
     effects: [{ kind: 'damage', amount: 12 }],
@@ -195,7 +198,7 @@ export const CARD_DEFS: CardDef[] = [
     name: 'Aegis',
     type: 'block',
     tier: 3,
-    speed: 7,
+    cost: 2,
     color: 0x3498db,
     description: 'Gain 14 block',
     effects: [{ kind: 'block', amount: 14 }],
@@ -205,7 +208,7 @@ export const CARD_DEFS: CardDef[] = [
     name: 'Stunning Blow',
     type: 'status',
     tier: 3,
-    speed: 4,
+    cost: 2,
     color: 0xf1c40f,
     description: 'Deal 6 and stun',
     effects: [

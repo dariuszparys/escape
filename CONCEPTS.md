@@ -14,26 +14,23 @@ threats can be escaped without fight rewards; boss threats remain mandatory.
 
 ### Card Battle
 
-The turn-based combat phase that resolves enemy fights through simultaneous
-card choices after a dungeon encounter commits the player to fight.
-
-### Card Battle Planning Board
-
-A Card Battle readability layer that surfaces battle-side enemy intent, speed
-order, and status consequences before the player chooses a card. It belongs
-after combat starts; Room Threat System remains the dungeon-side pre-battle
-intent layer.
+The Slay-the-Spire-style combat phase entered when a dungeon encounter commits
+the player to fight. Each player turn: statuses tick, energy resets, a hand
+draws from the Draw Pile, the player plays any number of cards within energy
+and ends the turn, then the enemy executes its telegraphed intent as one fast
+beat. Rules resolve instantly; visuals replay as a causally ordered queue and
+input is never locked.
 
 ### Reward Impact Preview
 
-A player-facing label that explains whether taking, upgrading, or removing a
-card changes the next combat hand. It describes outcomes such as entering hand,
-replacing a role, improving an in-hand card, or staying collection-only without
-showing raw hand-selection scores.
+A player-facing label that explains what taking, upgrading, or removing a card
+does to the deck's composition: the deck-size change and a rough opening-hand
+likelihood. Under the full-collection deck every card fights, so the preview
+speaks deck vocabulary, never hand membership.
 
 ### Combat Effect Handler Registry
 
-The open resolution seam for combat effects. `resolveRound` dispatches each
+The open resolution seam for combat effects. The Turn Engine dispatches each
 effect to a string-keyed handler rather than a closed if/else, so a new effect
 kind resolves by registering a handler — no edit to the dispatch body. Authored
 content stays typed as the closed `CardEffect` union; the resolver operates on
@@ -41,27 +38,57 @@ the broader `ResolvableEffect` shape. An unregistered kind throws (fail-fast).
 
 ### Combat Event Bus
 
-A deterministic, RNG-free subscriber surface for battle-lifecycle moments. It
-carries exactly four events: `roundStart`, `damageDealt`, and `statusApplied`
-(emitted from inside `resolveRound`) and `battleWon` (emitted by the battle
-drivers). Subscribers fire in registration order and the dispatch threads no
-RNG, so it never reorders the deterministic-run draws. `vampiric_blade`'s
-post-victory heal is the first real subscriber, shared by both drivers.
+A deterministic, RNG-free subscriber surface for battle-lifecycle moments.
+`damageDealt` and `statusApplied` fire live from the effect handlers; the
+turn-lifecycle events (turn start, draws, reshuffles, telegraphs, block, battle
+end) are mirrored by the Turn Engine; `battleWon` is emitted by the battle
+drivers after victory. Subscribers fire in registration order and the dispatch
+threads no RNG, so it never reorders the deterministic-run draws.
+`vampiric_blade`'s post-victory heal is the first real subscriber.
 
-### Family Matchup
+### Energy
 
-A Card Battle read-payoff layer where the player's committed action family can
-counter the enemy's true intent family. It is player-only: the enemy applies
-pressure through scripts and card strength, while the player's reward for a
-correct read is a bounded combat bonus surfaced by the Card Battle Planning
-Board.
+The per-turn resource budget in Card Battle's turn-based model. Each player turn
+starts with a full budget (baseline 3); playing a card spends its cost, and
+unspent energy is forfeit at end of turn and at battle end.
+
+### Draw Pile
+
+The face-down stack a battle hand is drawn from, built by shuffling the entire
+card collection at battle start. Its count is always visible; its contents are
+inspectable in sorted order only, never in true draw order.
+
+### Discard Pile
+
+Where played and end-of-turn cards go. When a draw is required and the Draw
+Pile is empty, the Discard Pile shuffles back into it; if both piles are empty,
+drawing simply stops.
+
+### Enemy Intent
+
+The enemy's telegraphed next action — type and raw magnitude, unadjusted for
+the player's block or armor — shown before the player commits any card. Intents
+come from authored per-enemy patterns; a voided intent (for example by stun)
+updates the telegraph immediately so it never lies.
+
+### Turn Engine
+
+The pure, headless module owning all combat rules in the turn-based model:
+state in, new state plus an ordered presentation-event list out, RNG injected.
+Scene code renders and forwards input but never makes rule decisions.
+
+### Presentation Queue
+
+The scheduling layer that replays the Turn Engine's ordered events as visuals
+at presentation pace. It supports accelerate and skip, and never gates input —
+rules are already resolved by the time it plays.
 
 ## Progression Loop
 
 ### Run
 
-A single dungeon attempt with temporary state such as health, hand, inventory,
-Gold, room progress, and escape outcome.
+A single dungeon attempt with temporary state such as health, card collection
+(the battle deck), inventory, Gold, room progress, and escape outcome.
 
 ### Normal Run
 

@@ -23,6 +23,7 @@ import {
   updateRoomThreatState,
   type RoomThreatIntent,
   type RoomThreatState,
+  battleStartModifier,
 } from '../dungeon/roomThreat';
 import { makeCardView } from '../gfx/cardview';
 import { createDeckPanel } from '../gfx/deckPanel';
@@ -32,7 +33,6 @@ import { playSfx } from '../audio/sfx';
 import { awardPotionItem, rollChestReward } from '../game/rewards';
 import { previewRewardImpact } from '../game/rewardImpact';
 import { startingCardIdsForRun } from '../game/startingCards';
-import { orderedDeckEntries } from '../game/deckOrdering';
 import { upgradeCard } from '../game/cardUpgrade';
 import {
   canUseRestAction,
@@ -269,11 +269,10 @@ export class DungeonScene extends Phaser.Scene {
     const run = getRun();
     this.deckOverlay = createDeckPanel(
       this,
-      'Deck order',
+      'Your deck',
       this.origin.x + ROOM_W / 2,
       this.origin.y + GAME_H / 2 - 12,
       run.cardCollection,
-      run.combatHand,
     );
   }
 
@@ -502,7 +501,7 @@ export class DungeonScene extends Phaser.Scene {
         break;
       }
       case 'encounter': {
-        built.enemy = spawnEnemy(this.gameRng, room.depth, Math.max(getRun().combatHand.length, 1));
+        built.enemy = spawnEnemy(this.gameRng, room.depth);
         this.createThreatActor(built, room, origin, built.enemy);
         break;
       }
@@ -838,7 +837,15 @@ export class DungeonScene extends Phaser.Scene {
     this.closeItemSwapPrompt();
     this.battleActive = true;
     this.player.setVelocity(0, 0);
-    this.scene.launch('Battle', { enemy: this.built.enemy, rng: this.gameRng });
+    // The threat's disposition at contact reaches into the battle's start (R17/KTD7).
+    const threat = this.built.threat;
+    const modifier = threat ? battleStartModifier(threat.state) : null;
+    this.scene.launch('TurnBattle', {
+      mode: 'run',
+      enemy: this.built.enemy,
+      rng: this.gameRng,
+      modifier,
+    });
     this.scene.pause();
   }
 
@@ -1248,7 +1255,10 @@ export class DungeonScene extends Phaser.Scene {
     const run = getRun();
 
     this.closeRestActionPanel();
-    const entries = orderedDeckEntries(run.cardCollection, run.combatHand);
+    // Deck model (U12): every card fights, so list the collection reading-sorted.
+    const entries = [...run.cardCollection].sort(
+      (a, b) => b.tier - a.tier || a.name.localeCompare(b.name) || a.uid - b.uid,
+    );
     const cx = this.origin.x + ROOM_W / 2;
     const cy = this.origin.y + ROOM_H / 2;
     const w = 520;
@@ -1286,27 +1296,21 @@ export class DungeonScene extends Phaser.Scene {
     );
 
     const visibleEntries = entries.slice(0, 7);
-    for (const [index, entry] of visibleEntries.entries()) {
+    for (const [index, card] of visibleEntries.entries()) {
       const y = -h / 2 + 82 + index * 38;
-      const badge = entry.inHand ? 'HAND' : 'RES ';
-      const row = `${String(index + 1).padStart(2, ' ')}. ${badge} ${entry.card.name.padEnd(
-        16,
-        ' ',
-      )}`;
+      const row = `${String(index + 1).padStart(2, ' ')}. T${card.tier} ${card.name.padEnd(16, ' ')}`;
       const impact = previewRewardImpact({
         collection: run.cardCollection,
-        combatHand: run.combatHand,
-        handLimit: run.handLimit,
         change:
           mode === 'upgrade'
-            ? { kind: 'upgrade', cardUid: entry.card.uid }
-            : { kind: 'remove', cardUid: entry.card.uid },
+            ? { kind: 'upgrade', cardUid: card.uid }
+            : { kind: 'remove', cardUid: card.uid },
       });
       const button = this.add
         .text(-w / 2 + 18, y, row, {
           fontFamily: 'monospace',
           fontSize: '12px',
-          color: entry.inHand ? '#f5edd8' : '#8e889a',
+          color: '#f5edd8',
           padding: { x: 6, y: 4 },
           fixedWidth: 464,
         })
@@ -1314,8 +1318,8 @@ export class DungeonScene extends Phaser.Scene {
         .setInteractive({ useHandCursor: true });
 
       button.on('pointerover', () => button.setColor('#ffe48a'));
-      button.on('pointerout', () => button.setColor(entry.inHand ? '#f5edd8' : '#8e889a'));
-      button.on('pointerdown', () => this.applyRestCardChoice(mode, entry.card));
+      button.on('pointerout', () => button.setColor('#f5edd8'));
+      button.on('pointerdown', () => this.applyRestCardChoice(mode, card));
       panel.add(button);
       panel.add(
         createRewardImpactText(this, -w / 2 + 42, y + 11, impact.label, 430, {
@@ -1370,7 +1374,6 @@ export class DungeonScene extends Phaser.Scene {
     if (mode === 'upgrade') {
       const name = card.name.endsWith('+') ? card.name : `${card.name}+`;
       upgradeCard(card);
-      run.refreshCombatHand();
       this.floatText(this.player.x, this.player.y - 42, `${name} upgraded`, '#5fe07a');
     } else {
       const ok = run.removeCard(card.uid);
