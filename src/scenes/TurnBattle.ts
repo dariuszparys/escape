@@ -12,7 +12,13 @@ import { IntentPattern } from '../game/intentPatterns';
 import { PresentationQueue, PresentationStep } from '../game/presentationQueue';
 import { ensureRelicBehaviorsWired } from '../game/relicBehaviors';
 import { previewRewardImpact } from '../game/rewardImpact';
-import { awardEnemyGold, rollVictoryCardOffers } from '../game/rewards';
+import {
+  awardEliteBonusGold,
+  awardEnemyGold,
+  ELITE_CARD_OFFER_COUNT,
+  ELITE_TIER_BIAS_DEPTH,
+  rollVictoryCardOffers,
+} from '../game/rewards';
 import { GameRng, PhaserGameRng } from '../game/rng';
 import {
   buildSliceDeck,
@@ -133,9 +139,8 @@ export class TurnBattleScene extends Phaser.Scene {
   private mode: 'slice' | 'run' = 'slice';
   /**
    * Set from RunBattleSceneData in 'run' mode (U7); stays 'normal' for 'slice' mode.
-   * Not `private`: nothing in this unit reads it yet (U8/U10 will, in runVictory and
-   * music selection), and `noUnusedLocals` flags write-only `private` class members —
-   * so it's a plain instance field until a same-class reader lands.
+   * Not `private`: read in `runVictory` (U8) for elite reward bias; U10 will also
+   * read it for music selection.
    */
   encounterKind: 'normal' | 'elite' | 'boss' = 'normal';
   private baseSeed = '';
@@ -1275,6 +1280,8 @@ export class TurnBattleScene extends Phaser.Scene {
     }
     playSfx(this, 'victory');
     const gold = awardEnemyGold(run, this.rng, run.depth);
+    const eliteBonus = this.encounterKind === 'elite' ? awardEliteBonusGold(run, gold) : 0;
+    const totalGold = gold + eliteBonus;
 
     const overlay = this.add.container(0, 0).setDepth(400);
     const g = this.add.graphics();
@@ -1293,7 +1300,7 @@ export class TurnBattleScene extends Phaser.Scene {
     );
     overlay.add(
       this.add
-        .text(GAME_W / 2, 132, `+${gold} gold. Add one card to your deck:`, {
+        .text(GAME_W / 2, 132, `+${totalGold} gold. Add one card to your deck:`, {
           fontFamily: MONO,
           fontSize: '17px',
           color: '#d8d2e4',
@@ -1301,7 +1308,10 @@ export class TurnBattleScene extends Phaser.Scene {
         .setOrigin(0.5),
     );
 
-    const offers = rollVictoryCardOffers(this.rng, run.depth);
+    const offers =
+      this.encounterKind === 'elite'
+        ? rollVictoryCardOffers(this.rng, run.depth, ELITE_CARD_OFFER_COUNT, ELITE_TIER_BIAS_DEPTH)
+        : rollVictoryCardOffers(this.rng, run.depth);
     const spacing = Math.min(CARD_W + 24, (GAME_W - 80) / Math.max(offers.length, 1));
     const startX = GAME_W / 2 - ((offers.length - 1) * spacing) / 2;
     for (const [index, card] of offers.entries()) {

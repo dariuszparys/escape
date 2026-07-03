@@ -12,7 +12,15 @@ import { ensureRelicBehaviorsWired } from './relicBehaviors';
 import { commitDelve } from './delve';
 import { intentView } from './intentPatterns';
 import { convertGoldToEmbers } from './metaRewards';
-import { awardEnemyGold, awardPotionItem, rollChestReward, rollVictoryCardOffers } from './rewards';
+import {
+  awardEliteBonusGold,
+  awardEnemyGold,
+  awardPotionItem,
+  ELITE_CARD_OFFER_COUNT,
+  ELITE_TIER_BIAS_DEPTH,
+  rollChestReward,
+  rollVictoryCardOffers,
+} from './rewards';
 import { GameRng } from './rng';
 import { startingCardIdsForRun } from './startingCards';
 import { isStratumBoundary, stratumForDepth } from './strata';
@@ -230,12 +238,21 @@ function chooseRewardCard(run: RunState, offers: readonly Card[]): void {
   if (simCardScore(best) > deckAverage * 0.9) run.addCard(best);
 }
 
-export function applySimulatedPostBattleRewards(run: RunState, rng: GameRng, depth: number): void {
+export function applySimulatedPostBattleRewards(
+  run: RunState,
+  rng: GameRng,
+  depth: number,
+  isElite = false,
+): void {
   ensureRelicBehaviorsWired();
   const { heal } = emitBattleWon(run.relics.map((relic) => relic.id));
   if (heal > 0) run.heal(heal);
-  awardEnemyGold(run, rng, depth);
-  chooseRewardCard(run, rollVictoryCardOffers(rng, depth));
+  const gold = awardEnemyGold(run, rng, depth);
+  if (isElite) awardEliteBonusGold(run, gold);
+  const offers = isElite
+    ? rollVictoryCardOffers(rng, depth, ELITE_CARD_OFFER_COUNT, ELITE_TIER_BIAS_DEPTH)
+    : rollVictoryCardOffers(rng, depth);
+  chooseRewardCard(run, offers);
 }
 
 /** Deck size above which a rest thins the deck instead of upgrading a card. */
