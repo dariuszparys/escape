@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest';
+import type { Card } from '../data/cards';
 import type { MutableCombatant } from './combat';
 import {
   type EffectContext,
@@ -20,7 +21,13 @@ function combatant(overrides: Partial<MutableCombatant> = {}): MutableCombatant 
   };
 }
 
-function context(overrides: { actor?: MutableCombatant; target?: MutableCombatant } = {}): {
+function context(
+  overrides: {
+    actor?: MutableCombatant;
+    target?: MutableCombatant;
+    shuffleIntoDrawPile?: EffectContext['shuffleIntoDrawPile'];
+  } = {},
+): {
   ctx: EffectContext;
 } {
   return {
@@ -28,6 +35,7 @@ function context(overrides: { actor?: MutableCombatant; target?: MutableCombatan
       actor: overrides.actor ?? combatant({ id: 'actor', name: 'Actor' }),
       target: overrides.target ?? combatant({ id: 'target', name: 'Target' }),
       log: [],
+      shuffleIntoDrawPile: overrides.shuffleIntoDrawPile,
     },
   };
 }
@@ -70,6 +78,51 @@ describe('built-in effect handlers', () => {
     dispatchEffect({ kind: 'status', status: 'poison', amount: 2, duration: 2 }, ctx);
     dispatchEffect({ kind: 'status', status: 'poison', amount: 3, duration: 1 }, ctx);
     expect(ctx.target.statuses).toEqual([{ type: 'poison', amount: 3, remainingTurns: 2 }]);
+  });
+});
+
+describe('shuffleCurse (U5, hexer elite plumbing)', () => {
+  test('shuffles a curse card into the pile via the hook, once per amount', () => {
+    const shuffled: Card[] = [];
+    const { ctx } = context({ shuffleIntoDrawPile: (card) => shuffled.push(card) });
+    dispatchEffect({ kind: 'shuffleCurse', amount: 1 }, ctx);
+    expect(shuffled).toHaveLength(1);
+    expect(shuffled[0].name).toBe('Festering Curse');
+    expect(shuffled[0].uid).toBeGreaterThan(0);
+    expect(ctx.log).toContain('Target feels a curse slip into their deck');
+  });
+
+  test('a fresh Card is minted per shuffled curse (distinct uids for amount > 1)', () => {
+    const shuffled: Card[] = [];
+    const { ctx } = context({ shuffleIntoDrawPile: (card) => shuffled.push(card) });
+    dispatchEffect({ kind: 'shuffleCurse', amount: 2 }, ctx);
+    expect(shuffled).toHaveLength(2);
+    expect(shuffled[0].uid).not.toBe(shuffled[1].uid);
+  });
+
+  test('no-ops gracefully when the hook is absent (round-based resolver has no piles)', () => {
+    const { ctx } = context();
+    expect(() => dispatchEffect({ kind: 'shuffleCurse', amount: 1 }, ctx)).not.toThrow();
+    expect(ctx.log).toHaveLength(0);
+  });
+
+  test('no-ops when amount is zero or missing, even with the hook present', () => {
+    const shuffled: Card[] = [];
+    const { ctx } = context({ shuffleIntoDrawPile: (card) => shuffled.push(card) });
+    dispatchEffect({ kind: 'shuffleCurse', amount: 0 }, ctx);
+    dispatchEffect({ kind: 'shuffleCurse' }, ctx);
+    expect(shuffled).toHaveLength(0);
+  });
+});
+
+describe('effect registry regression: unregistered kinds still throw (U5 sanity check)', () => {
+  test('shuffleCurse is registered by default (built-in, not test-registered)', () => {
+    expect(hasEffectHandler('shuffleCurse')).toBe(true);
+  });
+
+  test('an unrelated unregistered kind still throws', () => {
+    const { ctx } = context();
+    expect(() => dispatchEffect({ kind: 'still_unregistered' }, ctx)).toThrow(/no effect handler/);
   });
 });
 

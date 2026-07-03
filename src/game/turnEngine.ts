@@ -191,6 +191,13 @@ function gainEnergy(rt: EngineRuntime, amount: number): void {
   rt.events.push({ type: 'energyChanged', energy: rt.state.energy, max: rt.state.energyPerTurn });
 }
 
+/** Shuffle a card into a random position in the Draw Pile (hexer elite's curse-shuffle, U5). */
+function shuffleCardIntoDrawPile(rt: EngineRuntime, card: Card): void {
+  const state = rt.state;
+  const index = state.drawPile.length === 0 ? 0 : rt.rng.between(0, state.drawPile.length);
+  state.drawPile.splice(index, 0, card);
+}
+
 function toMutable(combatant: TurnCombatant): MutableCombatant {
   return {
     id: combatant.id,
@@ -240,6 +247,7 @@ function applyEffect(
     log: rt.log,
     drawCards: (count) => drawCards(rt, count),
     gainEnergy: (amount) => gainEnergy(rt, amount),
+    shuffleIntoDrawPile: (card) => shuffleCardIntoDrawPile(rt, card),
   });
 
   if (effect.kind === 'damage') {

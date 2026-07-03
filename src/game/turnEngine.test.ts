@@ -593,6 +593,19 @@ describe('full-deck cycling (R1/R3)', () => {
     }
   });
 
+  test('shuffleCurse (U5 hexer plumbing) inserts a card into the Draw Pile via the engine hook', () => {
+    const hex = card('Curse Weaving', [{ kind: 'shuffleCurse', amount: 1 } as CardEffect], 1);
+    const state = makeState({
+      hand: [hex],
+      drawPile: [strike(), strike(), strike()],
+    });
+    const before = state.drawPile.length;
+    const result = playCard(state, hex.uid, new SequenceRng([], [1]));
+    expect(result.state.drawPile).toHaveLength(before + 1);
+    expect(result.state.drawPile.some((c) => c.name === 'Festering Curse')).toBe(true);
+    expect(result.log.some((line) => line.includes('curse slip into their deck'))).toBe(true);
+  });
+
   test('effect handlers see the turn model through custom registrations', () => {
     const dispose = registerEffectHandler('lifesteal_test', (effect, ctx) => {
       const amount = effect.amount ?? 0;

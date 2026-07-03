@@ -10,7 +10,8 @@ export type CardEffect =
   | { kind: 'heal'; amount: number }
   | { kind: 'status'; status: StatusEffectType; amount: number; duration: number }
   | { kind: 'draw'; amount: number }
-  | { kind: 'energy'; amount: number };
+  | { kind: 'energy'; amount: number }
+  | { kind: 'shuffleCurse'; amount: number };
 
 export interface CardDef {
   id: string;

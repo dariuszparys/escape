@@ -1,10 +1,14 @@
 import { describe, expect, test } from 'vitest';
 import {
   BOSSES,
+  ELITES,
   ENEMIES,
+  eliteHpForDepth,
+  enemyHpForDepth,
   getEnemyTierForDepth,
   intentBonusForDepth,
   spawnBoss,
+  spawnElite,
   spawnEnemy,
 } from './enemies';
 import { SequenceRng } from '../game/test-rng';
@@ -60,6 +64,55 @@ describe('enemy generation', () => {
   });
 });
 
+describe('elite encounter class (U5/R2)', () => {
+  test('spawnElite returns only elite-tier defs', () => {
+    for (let i = 0; i < 20; i++) {
+      const elite = spawnElite(new SequenceRng([i / 20]), 5);
+      expect(elite.def.tier).toBe('elite');
+      expect(ELITES.some((def) => def.id === elite.def.id)).toBe(true);
+    }
+  });
+
+  test('spawnEnemy never returns an elite def (tier-ladder isolation)', () => {
+    const eliteIds = new Set(ELITES.map((def) => def.id));
+    for (let depth = 1; depth <= 12; depth++) {
+      const enemy = spawnEnemy(new SequenceRng([0]), depth);
+      expect(eliteIds.has(enemy.def.id)).toBe(false);
+    }
+    // Also true of the raw roster: ENEMIES and ELITES are disjoint arrays.
+    for (const def of ENEMIES) {
+      expect(def.tier).not.toBe('elite');
+    }
+  });
+
+  test('3-5 elites are authored, each with a distinct id', () => {
+    expect(ELITES.length).toBeGreaterThanOrEqual(3);
+    expect(ELITES.length).toBeLessThanOrEqual(5);
+    expect(new Set(ELITES.map((def) => def.id)).size).toBe(ELITES.length);
+  });
+
+  test('every elite carries HP clearly above strong-tier baseHp (23-27)', () => {
+    for (const def of ELITES) {
+      expect(def.baseHp, `${def.id} baseHp`).toBeGreaterThan(27);
+    }
+  });
+
+  test('elite HP scaling is steeper than normal-tier scaling at the same depth (slope, not just base)', () => {
+    // Compare the per-depth DELTA each formula adds, holding baseHp fixed, so the
+    // assertion is about the scaling slope rather than the (trivially higher) base.
+    const baseHp = 25;
+    const normalDelta = enemyHpForDepth(baseHp, 8) - enemyHpForDepth(baseHp, 2);
+    const eliteDelta = eliteHpForDepth(baseHp, 8) - eliteHpForDepth(baseHp, 2);
+    expect(eliteDelta).toBeGreaterThan(normalDelta);
+  });
+
+  test('elite HP increases monotonically with depth across strata', () => {
+    const hpAt = (depth: number) => spawnElite(new SequenceRng([0]), depth).hp;
+    expect(hpAt(8)).toBeLessThan(hpAt(18));
+    expect(hpAt(18)).toBeLessThan(hpAt(28));
+  });
+});
+
 describe('intent patterns (U9, R5/R6)', () => {
   const RESOLVABLE_KINDS = ['damage', 'block', 'heal', 'status'];
   const all = [...ENEMIES, ...BOSSES];
@@ -108,6 +161,86 @@ describe('intent patterns (U9, R5/R6)', () => {
     expect(kindsOf('ogre')).toContain('block');
     expect(kindsOf('bandit')).toContain('damage');
     expect(kindsOf('knight')).toContain('damage');
+  });
+});
+
+describe('elite intent patterns (U5, R2)', () => {
+  // Deliberately NOT folded into the ENEMIES/BOSSES `all` array above: `shuffleCurse`
+  // is legal here but must stay absent from that block's allowlist, since it is an
+  // engine-routed rider consumed by turnEngine's shuffleIntoDrawPile hook, not a
+  // per-target combat resolution kind like damage/block/heal/status.
+  const RESOLVABLE_KINDS = ['damage', 'block', 'heal', 'status', 'shuffleCurse'];
+
+  test('every elite carries a non-empty intent cycle', () => {
+    for (const def of ELITES) {
+      expect(def.pattern.cycle.length, `${def.id} needs cycle entries`).toBeGreaterThan(0);
+    }
+  });
+
+  test('every elite intent entry telegraphs and resolves only engine-legal effects', () => {
+    for (const def of ELITES) {
+      const entries = [
+        ...def.pattern.cycle,
+        ...(def.pattern.special ? [def.pattern.special.entry] : []),
+      ];
+      for (const entry of entries) {
+        expect(entry.telegraph.length, `${def.id}/${entry.name} telegraph`).toBeGreaterThan(0);
+        expect(entry.effects.length, `${def.id}/${entry.name} effects`).toBeGreaterThan(0);
+        for (const effect of entry.effects) {
+          expect(RESOLVABLE_KINDS, `${def.id}/${entry.name} kind ${effect.kind}`).toContain(
+            effect.kind,
+          );
+        }
+      }
+    }
+  });
+
+  test('each concept elite is present with its signature mechanic', () => {
+    const byId = (id: string) => ELITES.find((def) => def.id === id)!;
+
+    // Bruiser: a scaling special heavier than every cycle hit (race check).
+    const bruiser = byId('elite_berserker');
+    expect(bruiser.pattern.special).toBeDefined();
+    const bruiserCycleMax = Math.max(
+      ...bruiser.pattern.cycle.flatMap((e) =>
+        e.effects.filter((eff) => eff.kind === 'damage').map((eff) => eff.amount),
+      ),
+    );
+    const bruiserSpecialDamage = bruiser.pattern
+      .special!.entry.effects.filter((eff) => eff.kind === 'damage')
+      .reduce((sum, eff) => sum + eff.amount, 0);
+    expect(bruiserSpecialDamage).toBeGreaterThan(bruiserCycleMax);
+
+    // Lurker: dormancy (block, no damage) turns plus one high-damage burst turn.
+    const lurker = byId('elite_stalker');
+    const lurkerKinds = lurker.pattern.cycle.map((e) => e.effects.map((eff) => eff.kind));
+    expect(lurkerKinds.filter((kinds) => kinds.includes('block')).length).toBeGreaterThanOrEqual(2);
+    expect(lurkerKinds.some((kinds) => kinds.includes('damage'))).toBe(true);
+
+    // Hexer: a shuffleCurse rider alongside an honest status telegraph, in the same entry.
+    const hexer = byId('elite_hexweaver');
+    const curseEntry = hexer.pattern.cycle.find((e) =>
+      e.effects.some((eff) => eff.kind === 'shuffleCurse'),
+    )!;
+    expect(curseEntry).toBeDefined();
+    expect(curseEntry.effects.some((eff) => eff.kind === 'status')).toBe(true);
+    expect(intentView(curseEntry).kind).toBe('status'); // honest telegraph, shuffleCurse doesn't hijack it
+
+    // Leech: heal effects riding alongside damage (self-targeted heal-on-hit).
+    const leech = byId('elite_bloodleech');
+    const leechKinds = leech.pattern.cycle.flatMap((e) => e.effects.map((eff) => eff.kind));
+    expect(leechKinds).toContain('heal');
+    expect(leechKinds).toContain('damage');
+
+    // Duelist (optional 5th): every entry mixes block-and-strike.
+    const duelist = ELITES.find((def) => def.id === 'elite_duelist');
+    if (duelist) {
+      for (const entry of duelist.pattern.cycle) {
+        const kinds = entry.effects.map((eff) => eff.kind);
+        expect(kinds, `${entry.name} should mix block+damage`).toContain('block');
+        expect(kinds).toContain('damage');
+      }
+    }
   });
 });
 

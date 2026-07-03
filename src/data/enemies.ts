@@ -3,7 +3,7 @@ import { GameRng } from '../game/rng';
 import type { ActiveStatusEffect } from '../game/combat';
 import { empowerPattern, type IntentPattern } from '../game/intentPatterns';
 
-export type EnemyTier = 'weak' | 'medium' | 'strong';
+export type EnemyTier = 'weak' | 'medium' | 'strong' | 'elite';
 
 export interface EnemyDef {
   id: string;
@@ -500,6 +500,205 @@ export const BOSSES: EnemyDef[] = [
 ];
 
 /**
+ * Elite encounter class (U5/R2): a dedicated roster, not a rung on the normal
+ * weak/medium/strong depth-tier ladder. Room-triggered (U7 wires the room type) —
+ * `spawnElite` picks from this array directly, never through `getEnemyTierForDepth`.
+ * Each elite carries exactly ONE signature mechanic teaching a specific counterplay
+ * lesson; HP is elite-grade (clearly above strong-tier's 23-27 baseHp) and scales
+ * with a steeper-than-normal depth slope (see `eliteHpForDepth`). Numbers here are
+ * structural placeholders — U12 rebaselines every coupled constant from simulator
+ * measurement, not hand-tuning done here.
+ */
+export const ELITES: EnemyDef[] = [
+  {
+    id: 'elite_berserker',
+    name: 'The Berserker',
+    texture: 'skeleton',
+    baseHp: 34,
+    tier: 'elite',
+    boss: false,
+    // Bruiser: Frenzy is a scaling special that dwarfs the cycle's normal hits every
+    // 3rd turn. A race check — the longer the player turtles through the cycle, the
+    // more Frenzy beats they eat, so slow/defensive play is directly punished.
+    pattern: {
+      cycle: [
+        {
+          name: 'Reckless Swing',
+          telegraph: 'hefts its axe with wild abandon...',
+          effects: [{ kind: 'damage', amount: 9 }],
+        },
+        {
+          name: 'Bloodrage Guard',
+          telegraph: 'thumps its chest, blood boiling...',
+          effects: [
+            { kind: 'block', amount: 6 },
+            { kind: 'damage', amount: 5 },
+          ],
+        },
+        {
+          name: 'Cleave',
+          telegraph: 'swings low in a wide arc...',
+          effects: [{ kind: 'damage', amount: 11 }],
+        },
+      ],
+      special: {
+        interval: 3,
+        entry: {
+          name: 'Frenzy',
+          telegraph: 'its rage builds to a boiling crescendo...',
+          effects: [{ kind: 'damage', amount: 18 }],
+        },
+      },
+    },
+  },
+  {
+    id: 'elite_stalker',
+    name: 'The Stalker',
+    texture: 'slime',
+    baseHp: 30,
+    tier: 'elite',
+    boss: false,
+    // Lurker: two guarded-dormancy turns (block, near-no-op) followed by one huge
+    // burst. Enemy block only expires at ITS next beat, so the Stalker still carries
+    // its dormancy block through the player's following turn — it is only truly
+    // undefended the player turn right after Ambush resolves. Rewards reading the
+    // pattern and saving burst damage for that vulnerable window instead of trading
+    // chip damage into a guarded target.
+    pattern: {
+      cycle: [
+        {
+          name: 'Coil',
+          telegraph: 'coils low, patient and still...',
+          effects: [{ kind: 'block', amount: 10 }],
+        },
+        {
+          name: 'Feign Stillness',
+          telegraph: 'holds its breath, unmoving...',
+          effects: [{ kind: 'block', amount: 3 }],
+        },
+        {
+          name: 'Ambush',
+          telegraph: 'erupts from hiding in a single devastating strike...',
+          effects: [{ kind: 'damage', amount: 24 }],
+        },
+      ],
+    },
+  },
+  {
+    id: 'elite_hexweaver',
+    name: 'The Hexweaver',
+    texture: 'bat',
+    baseHp: 32,
+    tier: 'elite',
+    boss: false,
+    // Hexer: fights the deck itself. Curse Weaving pairs an honestly-telegraphed
+    // poison hit (so the intent still reads truthfully as a status move) with a
+    // shuffleCurse rider that slips a dead Festering Curse card into the Draw Pile —
+    // the one elite that needs the new engine-routed effect kind (U5 plumbing).
+    pattern: {
+      cycle: [
+        {
+          name: 'Withering Glare',
+          telegraph: 'fixes you with a withering glare, poison gathering...',
+          effects: [{ kind: 'status', status: 'poison', amount: 3, duration: 3 }],
+        },
+        {
+          name: 'Bone Dart',
+          telegraph: 'flings a shard of jagged bone...',
+          effects: [{ kind: 'damage', amount: 8 }],
+        },
+        {
+          name: 'Curse Weaving',
+          telegraph:
+            'weaves a curse that festers into your very deck, alongside a sickly poison...',
+          effects: [
+            { kind: 'status', status: 'poison', amount: 2, duration: 2 },
+            { kind: 'shuffleCurse', amount: 1 },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    id: 'elite_bloodleech',
+    name: 'The Bloodleech',
+    texture: 'slime',
+    baseHp: 33,
+    tier: 'elite',
+    boss: false,
+    // Leech: heals itself on hit (reusing the existing `heal` effect, self-targeted —
+    // the enemy is the actor, so `heal` routes to it exactly like the boss Bone
+    // Oracle's Siphon). Punishes chip damage/turtling: sustained small hits lose the
+    // race against its self-heal, rewarding burst that outpaces the regen.
+    pattern: {
+      cycle: [
+        {
+          name: 'Puncture',
+          telegraph: 'jabs with a hollow proboscis...',
+          effects: [{ kind: 'damage', amount: 7 }],
+        },
+        {
+          name: 'Siphon Strike',
+          telegraph: 'sinks fangs deep, drawing your blood into itself...',
+          effects: [
+            { kind: 'damage', amount: 6 },
+            { kind: 'heal', amount: 5 },
+          ],
+        },
+        {
+          name: 'Gorge',
+          telegraph: 'gorges greedily, growing fat on stolen vitality...',
+          effects: [
+            { kind: 'damage', amount: 4 },
+            { kind: 'heal', amount: 8 },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    id: 'elite_duelist',
+    name: 'The Duelist',
+    texture: 'skeleton',
+    baseHp: 29,
+    tier: 'elite',
+    boss: false,
+    // Duelist: every entry mixes block-and-strike in the same beat, so the Duelist
+    // is never undefended — chip damage keeps bouncing off a fresh guard. Rewards
+    // block-piercing bursts (a single big hit that clears the guard and still lands)
+    // and energy management to afford that burst on the turn it counts.
+    pattern: {
+      cycle: [
+        {
+          name: 'Parry Riposte',
+          telegraph: 'settles into a guarded stance, blade ready to counter...',
+          effects: [
+            { kind: 'block', amount: 5 },
+            { kind: 'damage', amount: 6 },
+          ],
+        },
+        {
+          name: 'Feinting Slash',
+          telegraph: 'feints low then slashes across...',
+          effects: [
+            { kind: 'block', amount: 4 },
+            { kind: 'damage', amount: 7 },
+          ],
+        },
+        {
+          name: 'Flourish Strike',
+          telegraph: 'spins into a flourish, blade singing...',
+          effects: [
+            { kind: 'block', amount: 3 },
+            { kind: 'damage', amount: 9 },
+          ],
+        },
+      ],
+    },
+  },
+];
+
+/**
  * Slice-only enemies for the turn-battle playground (U3/U7). Authored intent
  * cycles replace preference-matrix scripts; the run-loop enemies migrate to
  * this shape in Milestone 2 (U9). Not referenced by the live game path.
@@ -634,6 +833,37 @@ export function spawnBoss(rng: GameRng, depth: number = MAX_DEPTH): EnemyInstanc
   const def = rng.pick(BOSSES);
   // Anchored at MAX_DEPTH so the stratum-1 boss is unchanged; deeper strata add HP.
   const hp = def.baseHp + Math.max(0, depth - MAX_DEPTH) * BOSS_HP_PER_DEPTH_BEYOND_FIRST;
+  const pattern = empowerPattern(def.pattern, intentBonusForDepth(depth));
+  return { def, hp, maxHp: hp, armor: 0, statuses: [], pattern };
+}
+
+/**
+ * Per-depth HP slope for elites (U5): steeper than `enemyHpForDepth`'s normal-tier
+ * shape at every stage, so elites read as clearly above-curve regardless of depth —
+ * directional per the tuning-discipline note (R2); U12 rebaselines the exact numbers.
+ */
+const ELITE_HP_SLOPE = 1.5;
+const ELITE_DEEP_HP_SLOPE = 0.5;
+
+/** Elite HP for a depth: steeper linear term through stratum 1, steeper-than-normal gentling past it. */
+export function eliteHpForDepth(baseHp: number, depth: number): number {
+  if (depth <= MAX_DEPTH) return baseHp + Math.round(depth * ELITE_HP_SLOPE);
+  return (
+    baseHp +
+    Math.round(MAX_DEPTH * ELITE_HP_SLOPE) +
+    Math.round((depth - MAX_DEPTH) * ELITE_DEEP_HP_SLOPE)
+  );
+}
+
+/**
+ * Elites are a dedicated roster (R2), not a rung on the weak/medium/strong depth-tier
+ * ladder — spawn shape mirrors `spawnBoss` exactly (pick/scale/empower/return), just
+ * against `ELITES` and the steeper `eliteHpForDepth` slope. Room-triggered by a later
+ * unit (U7); this unit only makes elites spawnable.
+ */
+export function spawnElite(rng: GameRng, depth: number): EnemyInstance {
+  const def = rng.pick(ELITES);
+  const hp = eliteHpForDepth(def.baseHp, depth);
   const pattern = empowerPattern(def.pattern, intentBonusForDepth(depth));
   return { def, hp, maxHp: hp, armor: 0, statuses: [], pattern };
 }
