@@ -62,7 +62,7 @@ const STEP_MS: Record<CombatEvent['type'], number> = {
   blockGained: 190,
   healed: 210,
   cardDiscarded: 140,
-  cardExhausted: 140,
+  cardExhausted: 200,
   handDiscarded: 180,
   itemUsed: 200,
   enemyBeatStarted: 300,
@@ -520,6 +520,9 @@ export class TurnBattleScene extends Phaser.Scene {
         this.travelToDiscard(event.card);
         this.updatePileBadges();
         break;
+      case 'cardExhausted':
+        this.burnCardInPlace(event.card);
+        break;
       case 'handDiscarded':
         this.shown.discard = event.discardCount;
         this.sweepHandToDiscard();
@@ -787,6 +790,45 @@ export class TurnBattleScene extends Phaser.Scene {
       alpha: 0.6,
       duration: 160,
       ease: 'Cubic.easeIn',
+      onComplete: () => view.container.destroy(),
+    });
+  }
+
+  /**
+   * Exhausted cards leave play like a discard but never travel to the discard
+   * badge — there's no main-HUD exhaust pile, only the [C] inspector (R8). The
+   * card instead burns out where it stands: a brief orange scorch flash under
+   * it while it shrinks, rotates, and fades to nothing, reading as "gone for
+   * the battle" rather than "filed into a pile".
+   */
+  private burnCardInPlace(card: Card): void {
+    const view = this.handViews.get(card.uid);
+    if (!view) return;
+    this.handViews.delete(card.uid);
+    this.committedUids.delete(card.uid);
+    this.shownHand = this.shownHand.filter((candidate) => candidate.uid !== card.uid);
+    this.tweens.killTweensOf(view.container);
+
+    const scorch = this.add.graphics();
+    scorch.fillStyle(0xff5522, 1);
+    scorch.fillRoundedRect(-CARD_W / 2, -CARD_H / 2, CARD_W, CARD_H, 8);
+    scorch.setAlpha(0);
+    view.container.add(scorch);
+    this.tweens.add({
+      targets: scorch,
+      alpha: 0.55,
+      duration: 90,
+      yoyo: true,
+      ease: 'Cubic.easeOut',
+    });
+
+    this.tweens.add({
+      targets: view.container,
+      alpha: 0,
+      scale: 0.15,
+      angle: 24,
+      duration: 260,
+      ease: 'Quad.easeIn',
       onComplete: () => view.container.destroy(),
     });
   }
@@ -1181,6 +1223,7 @@ export class TurnBattleScene extends Phaser.Scene {
       this,
       this.engineState.drawPile,
       this.engineState.discardPile,
+      this.engineState.exhaustPile,
     );
   }
 
