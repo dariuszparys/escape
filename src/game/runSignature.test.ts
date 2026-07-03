@@ -9,11 +9,11 @@ import { RngDrawDigest, runSignature } from './runSignature';
  */
 const GOLDEN_SEED = 7;
 const GOLDEN_SIGNATURE =
-  // Re-goldened for the turn-system rebuild (U13): the simulator's battle kernel
-  // now runs the real turn engine (multi-card turns, piles, intents), replacing
-  // the round-model resolution entirely — an intentional determinism change.
-  // This seed now banks a win where the round model died at the boss.
-  'v=1|boss=1|gate=1|death=-|stratum=1|enc=3|embers=3|draws=142|hash=f9880739';
+  // Re-goldened for the roguelike-difficulty rework (U6): the standard room weight
+  // table shifted toward encounters and away from potion/rest (R6), so this seed's
+  // fixed path now hits more encounters and draws more RNG before the same bank
+  // outcome — an intentional determinism change, not a regression.
+  'v=1|boss=1|gate=1|death=-|stratum=1|enc=3|embers=3|draws=182|hash=bd5e51f4';
 
 describe('RngDrawDigest', () => {
   test('samples draw order and count, not just the value set (the load-bearing property)', () => {
