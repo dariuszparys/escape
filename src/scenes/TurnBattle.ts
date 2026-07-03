@@ -93,6 +93,8 @@ export interface RunBattleSceneData {
   mode: 'run';
   enemy: EnemyInstance;
   rng: GameRng;
+  /** Which room type spawned this battle (U7); read by later units for rewards/music (U8/U10). */
+  encounterKind: 'normal' | 'elite' | 'boss';
 }
 
 type TurnBattleSceneData = SliceSceneData | RunBattleSceneData;
@@ -129,6 +131,13 @@ const MONO = 'monospace';
  */
 export class TurnBattleScene extends Phaser.Scene {
   private mode: 'slice' | 'run' = 'slice';
+  /**
+   * Set from RunBattleSceneData in 'run' mode (U7); stays 'normal' for 'slice' mode.
+   * Not `private`: nothing in this unit reads it yet (U8/U10 will, in runVictory and
+   * music selection), and `noUnusedLocals` flags write-only `private` class members —
+   * so it's a plain instance field until a same-class reader lands.
+   */
+  encounterKind: 'normal' | 'elite' | 'boss' = 'normal';
   private baseSeed = '';
   private restartCount = 0;
   private display!: EnemyDisplay;
@@ -199,6 +208,7 @@ export class TurnBattleScene extends Phaser.Scene {
       this.baseSeed = '';
       this.restartCount = 0;
       this.rng = data.rng;
+      this.encounterKind = data.encounterKind;
       const def = data.enemy.def;
       this.display = {
         id: def.id,

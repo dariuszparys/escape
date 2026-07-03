@@ -313,6 +313,14 @@ function roomEventScore(run: RunState, event: RoomEvent): number {
       return 0;
     case 'start':
       return 0;
+    case 'elite':
+      // Placeholder only (KTD9 exhaustiveness fix, not U9's real modeling): 'elite'
+      // is currently unreachable here — chooseRoomEvent's rollRoomEvent(rng, depth)
+      // call never produces it (only makeNextRoom's forceElite placement does), so
+      // this case never actually executes yet. U9 wires real elite spawning and a
+      // tuned score + engagement floor into this switch and the room-handling loop
+      // below.
+      return 0;
   }
 }
 
