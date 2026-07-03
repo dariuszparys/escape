@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { RunState, newRun } from '../state';
-import { commitDelve, isAtGate, resolveBank, resolveDeath } from './delve';
+import { commitDelve, isAtGate, resolveBank, resolveDeath, STRATUM_CLEAR_HEAL } from './delve';
 
 describe('isAtGate', () => {
   test('is true at every stratum boundary and false elsewhere', () => {
@@ -32,12 +32,12 @@ describe('commitDelve', () => {
     expect(run.stratum).toBe(3);
   });
 
-  test('grants a full-HP gate-clear breather heal', () => {
+  test('grants a gate-clear breather heal, capped at max HP', () => {
     const run = new RunState('seed');
     run.hp = 5;
 
     commitDelve(run);
-    expect(run.hp).toBe(run.maxHp);
+    expect(run.hp).toBe(Math.min(run.maxHp, 5 + STRATUM_CLEAR_HEAL));
 
     // A full-HP run is unchanged by the heal.
     const healthy = new RunState('seed');
