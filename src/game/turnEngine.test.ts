@@ -18,7 +18,13 @@ import {
 
 let nextUid = 1000;
 
-function card(name: string, effects: CardEffect[], cost?: number, tier: 1 | 2 | 3 = 1): Card {
+function card(
+  name: string,
+  effects: CardEffect[],
+  cost?: number,
+  tier: 1 | 2 | 3 = 1,
+  exhaust?: boolean,
+): Card {
   return {
     id: name.toLowerCase().replace(/ /g, '_'),
     name,
@@ -28,12 +34,14 @@ function card(name: string, effects: CardEffect[], cost?: number, tier: 1 | 2 | 
     color: 0,
     description: name,
     effects,
+    exhaust,
     uid: nextUid++,
   };
 }
 
 const strike = () => card('Strike', [{ kind: 'damage', amount: 5 }], 1);
 const guard = () => card('Guard', [{ kind: 'block', amount: 7 }], 1);
+const exhaustBomb = () => card('Volatile Bomb', [{ kind: 'damage', amount: 5 }], 1, 1, true);
 
 function attackPattern(amount = 6): IntentPattern {
   return {
@@ -60,6 +68,7 @@ function makeState(partial: Partial<TurnBattleState>, pattern = attackPattern())
     drawPile: [],
     hand: [],
     discardPile: [],
+    exhaustPile: [],
     player: { id: 'player', name: 'You', hp: 30, maxHp: 30, armor: 0, block: 0, statuses: [] },
     enemy: { id: 'foe', name: 'Foe', hp: 20, maxHp: 20, armor: 0, block: 0, statuses: [] },
     intent,
@@ -158,6 +167,8 @@ describe('playCard (U1)', () => {
     expect(result.state.discardPile.map((c) => c.uid)).toEqual([hit.uid]);
     expect(types(result.events)).toEqual(['cardPlayed', 'damageResolved', 'cardDiscarded']);
     expect(eventOf(result.events, 'damageResolved').hpAfter).toBe(15);
+    // Regression: a non-exhaust card never touches the exhaust pile.
+    expect(result.state.exhaustPile).toHaveLength(0);
   });
 
   test('rejects an unaffordable card with no state change (AE1 rules side)', () => {
@@ -209,6 +220,78 @@ describe('playCard (U1)', () => {
     bogus.effects = [{ kind: 'warp', amount: 1 } as unknown as CardEffect];
     const state = makeState({ hand: [bogus] });
     expect(() => playCard(state, bogus.uid, new SequenceRng())).toThrow(/no effect handler/);
+  });
+});
+
+describe('exhaust (U1 / KTD1)', () => {
+  test('AE1: playing an exhaust card routes it to the exhaust pile, not the discard pile', () => {
+    const bomb = exhaustBomb();
+    const state = makeState({ hand: [bomb, guard()] });
+    const result = playCard(state, bomb.uid, new SequenceRng());
+    expect(result.rejected).toBeUndefined();
+    expect(result.state.exhaustPile.map((c) => c.uid)).toEqual([bomb.uid]);
+    expect(result.state.discardPile).toHaveLength(0);
+    expect(result.state.drawPile.some((c) => c.uid === bomb.uid)).toBe(false);
+    expect(types(result.events)).toEqual(['cardPlayed', 'damageResolved', 'cardExhausted']);
+    expect(types(result.events)).not.toContain('cardDiscarded');
+    expect(eventOf(result.events, 'cardExhausted').exhaustCount).toBe(1);
+  });
+
+  test('AE1: a fresh createBattle from the same collection includes a previously exhausted card', () => {
+    const bomb = exhaustBomb();
+    const collection = [bomb, strike(), strike(), strike(), strike(), strike()];
+
+    // Simulate the tail of a prior battle where the bomb was exhausted: it sits in that
+    // battle's exhaustPile and never touches the Draw or Discard Piles for the rest of it.
+    const priorBattleState = makeState({ hand: [bomb], exhaustPile: [] });
+    const afterPlay = playCard(priorBattleState, bomb.uid, new SequenceRng());
+    expect(afterPlay.state.exhaustPile.map((c) => c.uid)).toEqual([bomb.uid]);
+    expect(afterPlay.state.discardPile).toHaveLength(0);
+
+    // exhaustPile lives only on that battle's TurnBattleState — the source collection
+    // (config.deck) is untouched, so a brand-new createBattle from it reshuffles the bomb
+    // straight back into the Draw Pile / hand.
+    const battle2 = createBattle(baseConfig({ deck: collection }), new SequenceRng());
+    const allCards = [...battle2.state.drawPile, ...battle2.state.hand];
+    expect(allCards.some((c) => c.uid === bomb.uid)).toBe(true);
+  });
+
+  test('AE2: with draw and discard piles empty, a draw effect draws nothing even with cards sitting in the exhaust pile', () => {
+    const scavenge = card('Scavenge', [{ kind: 'draw', amount: 2 }], 0);
+    const state = makeState({
+      hand: [scavenge],
+      drawPile: [],
+      discardPile: [],
+      exhaustPile: [strike(), strike()],
+    });
+    const result = playCard(state, scavenge.uid, new SequenceRng());
+    // scavenge itself was played and discarded, leaving an empty hand; the draw
+    // effect then finds both piles empty and draws nothing further.
+    expect(result.state.hand).toHaveLength(0);
+    expect(types(result.events)).not.toContain('cardDrawn');
+    expect(types(result.events)).not.toContain('reshuffled');
+    expect(result.state.exhaustPile).toHaveLength(2);
+  });
+
+  test('an unplayed exhaust card in hand is discarded normally at end of turn (exhaust fires only on play)', () => {
+    const bomb = exhaustBomb();
+    const state = makeState(
+      { hand: [bomb], drawPile: Array.from({ length: 5 }, strike) },
+      blockPattern(),
+    );
+    const result = endTurn(state, new SequenceRng());
+    expect(result.state.discardPile.map((c) => c.uid)).toContain(bomb.uid);
+    expect(result.state.exhaustPile).toHaveLength(0);
+    expect(types(result.events)).not.toContain('cardExhausted');
+  });
+
+  test('playing an exhaust card does not mutate the input state', () => {
+    const bomb = exhaustBomb();
+    const state = makeState({ hand: [bomb] });
+    playCard(state, bomb.uid, new SequenceRng());
+    expect(state.hand).toHaveLength(1);
+    expect(state.exhaustPile).toHaveLength(0);
+    expect(state.discardPile).toHaveLength(0);
   });
 });
 
@@ -508,6 +591,19 @@ describe('full-deck cycling (R1/R3)', () => {
       expect(total()).toBe(7);
       expect(state.hand.length).toBe(5);
     }
+  });
+
+  test('shuffleCurse (U5 hexer plumbing) inserts a card into the Draw Pile via the engine hook', () => {
+    const hex = card('Curse Weaving', [{ kind: 'shuffleCurse', amount: 1 } as CardEffect], 1);
+    const state = makeState({
+      hand: [hex],
+      drawPile: [strike(), strike(), strike()],
+    });
+    const before = state.drawPile.length;
+    const result = playCard(state, hex.uid, new SequenceRng([], [1]));
+    expect(result.state.drawPile).toHaveLength(before + 1);
+    expect(result.state.drawPile.some((c) => c.name === 'Festering Curse')).toBe(true);
+    expect(result.log.some((line) => line.includes('curse slip into their deck'))).toBe(true);
   });
 
   test('effect handlers see the turn model through custom registrations', () => {

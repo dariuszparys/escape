@@ -1,4 +1,5 @@
-import type { StatusEffectType } from '../data/cards';
+import type { Card, CardDef, StatusEffectType } from '../data/cards';
+import { makeCard } from '../data/cards';
 import type { ActiveStatusEffect, MutableCombatant } from './combat';
 import { emitCombatEvent, hasCombatEventSubscribers } from './combatEvents';
 
@@ -27,6 +28,7 @@ export interface EffectContext {
   log: string[];
   drawCards?: (count: number) => void;
   gainEnergy?: (amount: number) => void;
+  shuffleIntoDrawPile?: (card: Card) => void;
 }
 
 export type EffectHandler = (effect: ResolvableEffect, ctx: EffectContext) => void;
@@ -120,6 +122,31 @@ registerEffectHandler('energy', (effect, { actor, log, gainEnergy }) => {
   if (!gainEnergy || amount <= 0) return;
   gainEnergy(amount);
   log.push(`${actor.name} gains ${amount} energy`);
+});
+
+/**
+ * A dead/punishment card the hexer elite (U5) shuffles into the player's Draw Pile.
+ * Deliberately NOT added to `CARD_DEFS` in `cards.ts` — it must never appear in reward
+ * pools, only as a curse riding alongside the hexer's honestly-telegraphed status hit.
+ */
+const CURSE_CARD_DEF: CardDef = {
+  id: 'festering_curse',
+  name: 'Festering Curse',
+  type: 'status',
+  tier: 1,
+  cost: 1,
+  color: 0x6c3483,
+  description: 'A cursed card. Costs a play and does nothing.',
+  effects: [],
+};
+
+registerEffectHandler('shuffleCurse', (effect, { target, log, shuffleIntoDrawPile }) => {
+  const amount = effect.amount ?? 0;
+  if (!shuffleIntoDrawPile || amount <= 0) return;
+  for (let i = 0; i < amount; i++) {
+    shuffleIntoDrawPile(makeCard(CURSE_CARD_DEF));
+  }
+  log.push(`${target.name} feels a curse slip into their deck`);
 });
 
 registerEffectHandler('status', (effect, { target, log }) => {

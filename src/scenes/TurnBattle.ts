@@ -1,9 +1,12 @@
 import Phaser from 'phaser';
-import { playSfx } from '../audio/sfx';
+import { playSfx, startAmbience, stopAmbience } from '../audio/sfx';
+import { playMusic, stopAllMusic, trackForEncounterKind } from '../audio/music';
 import { GAME_H, GAME_W } from '../config';
 import { Card, StatusEffectType } from '../data/cards';
 import { EnemyInstance } from '../data/enemies';
 import { InventoryItem } from '../data/items';
+import { cardRulesLines } from '../data/keywords';
+import { createCardTooltip, estimateTooltipHeight } from '../gfx/cardTooltip';
 import { CARD_H, CARD_W, makeCardView } from '../gfx/cardview';
 import { createPileInspector } from '../gfx/pileView';
 import { compactRewardImpactLabel, createRewardImpactText } from '../gfx/rewardImpactView';
@@ -12,7 +15,13 @@ import { IntentPattern } from '../game/intentPatterns';
 import { PresentationQueue, PresentationStep } from '../game/presentationQueue';
 import { ensureRelicBehaviorsWired } from '../game/relicBehaviors';
 import { previewRewardImpact } from '../game/rewardImpact';
-import { awardEnemyGold, rollVictoryCardOffers } from '../game/rewards';
+import {
+  awardEliteBonusGold,
+  awardEnemyGold,
+  ELITE_CARD_OFFER_COUNT,
+  ELITE_TIER_BIAS_DEPTH,
+  rollVictoryCardOffers,
+} from '../game/rewards';
 import { GameRng, PhaserGameRng } from '../game/rng';
 import {
   buildSliceDeck,
@@ -22,6 +31,7 @@ import {
   slicePlayer,
 } from '../game/sliceBattle';
 import { getRun } from '../state';
+import { computeTooltipPlacement, TOOLTIP_WIDTH } from '../game/tooltipLayout';
 import {
   getTurnBattleLayout,
   HAND_CARD_SCALE,
@@ -62,6 +72,7 @@ const STEP_MS: Record<CombatEvent['type'], number> = {
   blockGained: 190,
   healed: 210,
   cardDiscarded: 140,
+  cardExhausted: 200,
   handDiscarded: 180,
   itemUsed: 200,
   enemyBeatStarted: 300,
@@ -92,6 +103,8 @@ export interface RunBattleSceneData {
   mode: 'run';
   enemy: EnemyInstance;
   rng: GameRng;
+  /** Which room type spawned this battle (U7); read by later units for rewards/music (U8/U10). */
+  encounterKind: 'normal' | 'elite' | 'boss';
 }
 
 type TurnBattleSceneData = SliceSceneData | RunBattleSceneData;
@@ -128,6 +141,12 @@ const MONO = 'monospace';
  */
 export class TurnBattleScene extends Phaser.Scene {
   private mode: 'slice' | 'run' = 'slice';
+  /**
+   * Set from RunBattleSceneData in 'run' mode (U7); stays 'normal' for 'slice' mode.
+   * Not `private`: read in `runVictory` (U8) for elite reward bias; U10 will also
+   * read it for music selection.
+   */
+  encounterKind: 'normal' | 'elite' | 'boss' = 'normal';
   private baseSeed = '';
   private restartCount = 0;
   private display!: EnemyDisplay;
@@ -184,6 +203,8 @@ export class TurnBattleScene extends Phaser.Scene {
   private logLines: string[] = [];
   private itemButtons: Phaser.GameObjects.Text[] = [];
   private pilePanel: Phaser.GameObjects.Container | null = null;
+  /** The rules-text tooltip for whichever card is currently hovered (hand or reward), if any (U11). */
+  private activeTooltip: Phaser.GameObjects.Container | null = null;
   private outcomeShown = false;
   private keyC!: Phaser.Input.Keyboard.Key;
   private keyE!: Phaser.Input.Keyboard.Key;
@@ -198,6 +219,7 @@ export class TurnBattleScene extends Phaser.Scene {
       this.baseSeed = '';
       this.restartCount = 0;
       this.rng = data.rng;
+      this.encounterKind = data.encounterKind;
       const def = data.enemy.def;
       this.display = {
         id: def.id,
@@ -237,6 +259,7 @@ export class TurnBattleScene extends Phaser.Scene {
     this.logLines = [];
     this.itemButtons = [];
     this.pilePanel = null;
+    this.activeTooltip = null;
     this.endTurnPulse = null;
     this.outcomeShown = false;
     this.layout = getTurnBattleLayout();
@@ -246,6 +269,9 @@ export class TurnBattleScene extends Phaser.Scene {
     this.scene.sleep('Hud');
     this.keyC = this.input.keyboard!.addKey('C');
     this.keyE = this.input.keyboard!.addKey('E');
+
+    stopAmbience(this.game);
+    playMusic(this, trackForEncounterKind(this.encounterKind));
 
     this.drawStaticChrome();
     this.createEnemyZone();
@@ -306,7 +332,12 @@ export class TurnBattleScene extends Phaser.Scene {
     this.refreshAllBars();
 
     this.exposeDebugHandle();
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.closePilePanel());
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.closePilePanel();
+      this.hideCardTooltip();
+      stopAllMusic(this.game);
+      startAmbience(this.game);
+    });
   }
 
   update(): void {
@@ -509,6 +540,9 @@ export class TurnBattleScene extends Phaser.Scene {
         this.travelToDiscard(event.card);
         this.updatePileBadges();
         break;
+      case 'cardExhausted':
+        this.burnCardInPlace(event.card);
+        break;
       case 'handDiscarded':
         this.shown.discard = event.discardCount;
         this.sweepHandToDiscard();
@@ -699,11 +733,13 @@ export class TurnBattleScene extends Phaser.Scene {
       if (!this.committedUids.has(card.uid) && !this.beatActive) {
         container.setDepth(15);
         container.setY(this.handY() - 16);
+        this.showCardTooltip(card, container);
       }
     });
     container.on('pointerout', () => {
       container.setDepth(10);
       container.setY(this.handY());
+      this.hideCardTooltip();
     });
     container.on('pointerdown', () => this.pressCard(card.uid));
     container.setDepth(10);
@@ -712,6 +748,35 @@ export class TurnBattleScene extends Phaser.Scene {
 
   private handY(): number {
     return this.layout.handArea.y + this.layout.handArea.h / 2;
+  }
+
+  // -------------------------------------------------------------- tooltip
+
+  /**
+   * Show the rules-text tooltip for `card`, anchored to `anchor`'s CURRENT
+   * on-screen rect (read at call time, not baked in earlier — a card's exact
+   * position/scale can shift between when its view was built and when it's
+   * hovered). Shared by hand cards (`makeHandCardView`) and victory reward
+   * cards (`runVictory`) — both call sites pass whatever container they're
+   * hovering; this method makes no hand-specific assumptions (U11 / KTD7).
+   */
+  private showCardTooltip(card: Card, anchor: Phaser.GameObjects.Container): void {
+    this.hideCardTooltip();
+    const anchorRect: TurnBattleRect = {
+      x: anchor.x - (CARD_W * anchor.scale) / 2,
+      y: anchor.y - (CARD_H * anchor.scale) / 2,
+      w: CARD_W * anchor.scale,
+      h: CARD_H * anchor.scale,
+    };
+    const lineCount = cardRulesLines(card).length;
+    const tooltipSize = { w: TOOLTIP_WIDTH, h: estimateTooltipHeight(lineCount) };
+    const placement = computeTooltipPlacement(anchorRect, tooltipSize);
+    this.activeTooltip = createCardTooltip(this, card, placement);
+  }
+
+  private hideCardTooltip(): void {
+    this.activeTooltip?.destroy();
+    this.activeTooltip = null;
   }
 
   private spawnDrawnCard(card: Card): void {
@@ -776,6 +841,45 @@ export class TurnBattleScene extends Phaser.Scene {
       alpha: 0.6,
       duration: 160,
       ease: 'Cubic.easeIn',
+      onComplete: () => view.container.destroy(),
+    });
+  }
+
+  /**
+   * Exhausted cards leave play like a discard but never travel to the discard
+   * badge — there's no main-HUD exhaust pile, only the [C] inspector (R8). The
+   * card instead burns out where it stands: a brief orange scorch flash under
+   * it while it shrinks, rotates, and fades to nothing, reading as "gone for
+   * the battle" rather than "filed into a pile".
+   */
+  private burnCardInPlace(card: Card): void {
+    const view = this.handViews.get(card.uid);
+    if (!view) return;
+    this.handViews.delete(card.uid);
+    this.committedUids.delete(card.uid);
+    this.shownHand = this.shownHand.filter((candidate) => candidate.uid !== card.uid);
+    this.tweens.killTweensOf(view.container);
+
+    const scorch = this.add.graphics();
+    scorch.fillStyle(0xff5522, 1);
+    scorch.fillRoundedRect(-CARD_W / 2, -CARD_H / 2, CARD_W, CARD_H, 8);
+    scorch.setAlpha(0);
+    view.container.add(scorch);
+    this.tweens.add({
+      targets: scorch,
+      alpha: 0.55,
+      duration: 90,
+      yoyo: true,
+      ease: 'Cubic.easeOut',
+    });
+
+    this.tweens.add({
+      targets: view.container,
+      alpha: 0,
+      scale: 0.15,
+      angle: 24,
+      duration: 260,
+      ease: 'Quad.easeIn',
       onComplete: () => view.container.destroy(),
     });
   }
@@ -1170,6 +1274,7 @@ export class TurnBattleScene extends Phaser.Scene {
       this,
       this.engineState.drawPile,
       this.engineState.discardPile,
+      this.engineState.exhaustPile,
     );
   }
 
@@ -1221,6 +1326,8 @@ export class TurnBattleScene extends Phaser.Scene {
     }
     playSfx(this, 'victory');
     const gold = awardEnemyGold(run, this.rng, run.depth);
+    const eliteBonus = this.encounterKind === 'elite' ? awardEliteBonusGold(run, gold) : 0;
+    const totalGold = gold + eliteBonus;
 
     const overlay = this.add.container(0, 0).setDepth(400);
     const g = this.add.graphics();
@@ -1239,7 +1346,7 @@ export class TurnBattleScene extends Phaser.Scene {
     );
     overlay.add(
       this.add
-        .text(GAME_W / 2, 132, `+${gold} gold. Add one card to your deck:`, {
+        .text(GAME_W / 2, 132, `+${totalGold} gold. Add one card to your deck:`, {
           fontFamily: MONO,
           fontSize: '17px',
           color: '#d8d2e4',
@@ -1247,15 +1354,24 @@ export class TurnBattleScene extends Phaser.Scene {
         .setOrigin(0.5),
     );
 
-    const offers = rollVictoryCardOffers(this.rng, run.depth);
+    const offers =
+      this.encounterKind === 'elite'
+        ? rollVictoryCardOffers(this.rng, run.depth, ELITE_CARD_OFFER_COUNT, ELITE_TIER_BIAS_DEPTH)
+        : rollVictoryCardOffers(this.rng, run.depth);
     const spacing = Math.min(CARD_W + 24, (GAME_W - 80) / Math.max(offers.length, 1));
     const startX = GAME_W / 2 - ((offers.length - 1) * spacing) / 2;
     for (const [index, card] of offers.entries()) {
       const view = makeCardView(this, card, startX + index * spacing, 258, 0.92);
       view.setDepth(401);
       view.setInteractive({ useHandCursor: true });
-      view.on('pointerover', () => view.setScale(1.0));
-      view.on('pointerout', () => view.setScale(0.92));
+      view.on('pointerover', () => {
+        view.setScale(1.0);
+        this.showCardTooltip(card, view);
+      });
+      view.on('pointerout', () => {
+        view.setScale(0.92);
+        this.hideCardTooltip();
+      });
       view.on('pointerdown', () => {
         run.addCard(card);
         this.game.events.emit('hud-update');

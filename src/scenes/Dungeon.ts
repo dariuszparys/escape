@@ -13,7 +13,7 @@ import {
   VISION_RADIUS,
 } from '../config';
 import { Card, makeCard, CARD_DEFS } from '../data/cards';
-import { EnemyInstance, spawnBoss, spawnEnemy } from '../data/enemies';
+import { EnemyInstance, spawnBoss, spawnElite, spawnEnemy } from '../data/enemies';
 import { InventoryItem, makeItem, randomItemIdForDepth } from '../data/items';
 import { STARTER_KITS } from '../data/starterKits';
 import { makeStartRoom, makeNextRoom, RoomData, type RoomEvent } from '../dungeon/rooms';
@@ -36,6 +36,7 @@ import { commitDelve, resolveBank } from '../game/delve';
 import { calculateEmberReward } from '../game/metaRewards';
 import { stratumForDepth } from '../game/strata';
 import { getRun } from '../state';
+import type { RunBattleSceneData } from './TurnBattle';
 
 const DOOR_CELL: Record<Dir, { col: number; row: number }> = {
   N: { col: 7, row: 0 },
@@ -60,6 +61,7 @@ const ROOM_EVENT_LABEL: Record<RoomEvent, string> = {
   rest: 'rest',
   trap: 'trap',
   boss: 'boss',
+  elite: 'elite',
 };
 
 interface CardPickup {
@@ -487,13 +489,22 @@ export class DungeonScene extends Phaser.Scene {
       }
       case 'encounter': {
         built.enemy = spawnEnemy(this.gameRng, room.depth);
-        this.createEnemyActor(built, origin, false, built.enemy);
+        this.createEnemyActor(built, origin, 'normal', built.enemy);
+        break;
+      }
+      case 'elite': {
+        built.enemy = spawnElite(this.gameRng, room.depth);
+        this.createEnemyActor(built, origin, 'elite', built.enemy);
         break;
       }
       case 'boss': {
         built.enemy = spawnBoss(this.gameRng, room.depth);
-        this.createEnemyActor(built, origin, true, built.enemy);
+        this.createEnemyActor(built, origin, 'boss', built.enemy);
         break;
+      }
+      default: {
+        const _exhaustive: never = room.event;
+        throw new Error(`buildRoom: unhandled room event ${_exhaustive}`);
       }
     }
 
@@ -501,23 +512,24 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   /**
-   * The enemy in an uncleared encounter/boss room is a static sprite (KTD3): the
-   * entry-cue anchor and the victory fade-out target. Boss centered, normal at the
-   * same central cell; the old intent marker, contact ring, and per-frame position
-   * sync are gone with the threat phase.
+   * The enemy in an uncleared encounter/elite/boss room is a static sprite (KTD3):
+   * the entry-cue anchor and the victory fade-out target. Boss centered, normal at
+   * the same central cell; the old intent marker, contact ring, and per-frame
+   * position sync are gone with the threat phase. Elites reuse normal-tier textures
+   * (see `ELITES` in `data/enemies.ts`), so scale alone can't distinguish an elite
+   * from a same-texture normal enemy — a gold/amber tint carries that read instead.
    */
   private createEnemyActor(
     built: BuiltRoom,
     origin: { x: number; y: number },
-    isBoss: boolean,
+    kind: 'normal' | 'elite' | 'boss',
     enemy: EnemyInstance,
   ): void {
     const x = origin.x + 7 * TILE + TILE / 2;
     const y = origin.y + 5 * TILE + TILE / 2;
-    const sprite = this.add
-      .image(x, y, enemy.def.texture)
-      .setScale(isBoss ? 4.5 : 4)
-      .setDepth(5);
+    const scale = kind === 'boss' ? 4.5 : kind === 'elite' ? 4.2 : 4;
+    const sprite = this.add.image(x, y, enemy.def.texture).setScale(scale).setDepth(5);
+    if (kind === 'elite') sprite.setTint(0xd4af37);
     built.objs.push(sprite);
     built.enemySprite = sprite;
   }
@@ -752,7 +764,7 @@ export class DungeonScene extends Phaser.Scene {
     const { room, built } = this;
     playSfx(this, 'step');
     if (
-      (room.event === 'encounter' || room.event === 'boss') &&
+      (room.event === 'encounter' || room.event === 'boss' || room.event === 'elite') &&
       !room.cleared &&
       built.enemySprite
     ) {
@@ -791,11 +803,16 @@ export class DungeonScene extends Phaser.Scene {
     this.closeItemSwapPrompt();
     this.battleActive = true;
     this.player.setVelocity(0, 0);
-    this.scene.launch('TurnBattle', {
+    // Only 'encounter' | 'elite' | 'boss' rooms ever reach startBattle — onRoomEntered's
+    // fight-trigger condition gates it — so this narrowing is exhaustive in practice.
+    const data: RunBattleSceneData = {
       mode: 'run',
       enemy: this.built.enemy,
       rng: this.gameRng,
-    });
+      encounterKind:
+        this.room.event === 'boss' ? 'boss' : this.room.event === 'elite' ? 'elite' : 'normal',
+    };
+    this.scene.launch('TurnBattle', data);
     this.scene.pause();
   }
 
@@ -824,6 +841,9 @@ export class DungeonScene extends Phaser.Scene {
       this.exitHatch = { x: c.x, y: c.y, img };
       this.floatText(c.x, c.y - 60, 'The way out opens!', '#f1c40f');
     } else {
+      // A cleared 'elite' room falls here too (it's not 'boss'), so it clears exactly
+      // like a normal encounter — no exit hatch, just the post-victory scout reveal.
+      // Elite-specific rewards are U8's concern (TurnBattle.ts's runVictory), not this.
       this.tryRevealScoutOptions();
     }
     this.hud();

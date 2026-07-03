@@ -1,10 +1,16 @@
 import { MAX_DEPTH } from '../config';
 import { Card, CARD_DEFS, cardEffectAmount, makeCard } from '../data/cards';
 import { type PendingPrep } from '../data/campfirePurchases';
-import { EnemyInstance, spawnBoss, spawnEnemy } from '../data/enemies';
+import {
+  EnemyInstance,
+  getEnemyTierForDepth,
+  spawnBoss,
+  spawnElite,
+  spawnEnemy,
+} from '../data/enemies';
 import { InventoryItem, type InventoryItemDef, makeItem } from '../data/items';
 import type { StarterKitId } from '../data/starterKits';
-import { rollRoomEvent, type RoomEvent } from '../dungeon/rooms';
+import { isEliteEligibleDepth, rollRoomEvent, type RoomEvent } from '../dungeon/rooms';
 import { RunState } from '../state';
 import { applyPendingPrepToRun } from './campfirePrep';
 import { emitBattleWon } from './combatEvents';
@@ -12,7 +18,15 @@ import { ensureRelicBehaviorsWired } from './relicBehaviors';
 import { commitDelve } from './delve';
 import { intentView } from './intentPatterns';
 import { convertGoldToEmbers } from './metaRewards';
-import { awardEnemyGold, awardPotionItem, rollChestReward, rollVictoryCardOffers } from './rewards';
+import {
+  awardEliteBonusGold,
+  awardEnemyGold,
+  awardPotionItem,
+  ELITE_CARD_OFFER_COUNT,
+  ELITE_TIER_BIAS_DEPTH,
+  rollChestReward,
+  rollVictoryCardOffers,
+} from './rewards';
 import { GameRng } from './rng';
 import { startingCardIdsForRun } from './startingCards';
 import { isStratumBoundary, stratumForDepth } from './strata';
@@ -94,6 +108,20 @@ export interface EncounterBucketSummary {
   bossReached: number;
 }
 
+export interface EliteBucketSummary {
+  offered: number;
+  engaged: number;
+  wins: number;
+}
+
+/** Depth-tier band, excluding elite/boss (tracked separately). */
+type StandardTier = 'weak' | 'medium' | 'strong';
+
+export interface TierBucketSummary {
+  total: number;
+  wins: number;
+}
+
 export interface BalanceSimulationSummary {
   runs: number;
   winRate: number;
@@ -101,6 +129,15 @@ export interface BalanceSimulationSummary {
   bossKillGivenReach: number;
   avgDeathDepth: number;
   byEncounter: Record<string, EncounterBucketSummary>;
+  eliteBucket: EliteBucketSummary;
+  /** engaged / offered — 0 if never offered across the sample. */
+  eliteEngagementRate: number;
+  /** wins / engaged — 0 if never engaged across the sample. */
+  eliteWinRate: number;
+  /** Individual 'encounter'-room battle outcomes (U12), bucketed by `getEnemyTierForDepth`. */
+  byTier: Record<StandardTier, TierBucketSummary>;
+  /** wins / total for weak-tier fights specifically — fresh-deck winnability (U12 tier-1 floor). 0 if none fought. */
+  weakTierWinRate: number;
 }
 
 interface SimRunResult {
@@ -113,8 +150,22 @@ interface SimRunResult {
   /** Deepest stratum reached, whether banked or died. */
   stratumReached: number;
   encounters: number;
-  /** Embers minted from Gold at the bank (0 on death). */
+  /** How many times the per-stratum elite guarantee fired this run (KTD3 parity), regardless of whether it was fought. */
+  eliteEligible: number;
+  /** How many elite fights this run actually engaged. */
+  eliteEncounters: number;
+  eliteWins: number;
   convertedEmbers: number;
+  /** Individual 'encounter'-room battle outcomes this run, bucketed by tier (U12). */
+  tierFights: Record<StandardTier, TierBucketSummary>;
+}
+
+function emptyTierFights(): Record<StandardTier, TierBucketSummary> {
+  return {
+    weak: { total: 0, wins: 0 },
+    medium: { total: 0, wins: 0 },
+    strong: { total: 0, wins: 0 },
+  };
 }
 
 /**
@@ -230,12 +281,21 @@ function chooseRewardCard(run: RunState, offers: readonly Card[]): void {
   if (simCardScore(best) > deckAverage * 0.9) run.addCard(best);
 }
 
-export function applySimulatedPostBattleRewards(run: RunState, rng: GameRng, depth: number): void {
+export function applySimulatedPostBattleRewards(
+  run: RunState,
+  rng: GameRng,
+  depth: number,
+  isElite = false,
+): void {
   ensureRelicBehaviorsWired();
   const { heal } = emitBattleWon(run.relics.map((relic) => relic.id));
   if (heal > 0) run.heal(heal);
-  awardEnemyGold(run, rng, depth);
-  chooseRewardCard(run, rollVictoryCardOffers(rng, depth));
+  const gold = awardEnemyGold(run, rng, depth);
+  if (isElite) awardEliteBonusGold(run, gold);
+  const offers = isElite
+    ? rollVictoryCardOffers(rng, depth, ELITE_CARD_OFFER_COUNT, ELITE_TIER_BIAS_DEPTH)
+    : rollVictoryCardOffers(rng, depth);
+  chooseRewardCard(run, offers);
 }
 
 /** Deck size above which a rest thins the deck instead of upgrading a card. */
@@ -313,20 +373,77 @@ function roomEventScore(run: RunState, event: RoomEvent): number {
       return 0;
     case 'start':
       return 0;
+    case 'elite':
+      // Reviewed under the U12 numeric rebaseline and left unchanged: scored
+      // above trap, comparable to a fresh-HP encounter, so a scouted player
+      // sometimes routes toward it for the richer reward and sometimes away
+      // for safety — the target band and elite engagement rate were reached
+      // without needing to move this heuristic.
+      return run.hp >= run.maxHp * 0.6 ? 18 : 4;
   }
 }
 
-function chooseRoomEvent(run: RunState, rng: SimRng, depth: number): RoomEvent {
+/**
+ * Engagement floor (KTD8) for an *unscouted* player who reaches the elite's
+ * eligible window: the real game offers the guarantee through a specific door
+ * among several (KTD3), so an unscouted player doesn't automatically walk
+ * straight into it just because it's somewhere in the stratum — they still
+ * only take one door per room. This is the simulator's stand-in for "which
+ * door did they happen to take," expressed as a flat per-stratum probability
+ * since the simulator has no branching doors to sample from directly. The
+ * guarantee is *spent* the moment it's due regardless of the roll's outcome
+ * (see chooseRoomEvent below) — exactly one flip per stratum, never retried
+ * across the rest of the window — so the measured engagement rate tracks this
+ * constant directly rather than compounding across every eligible depth.
+ * Reviewed under the U12 numeric rebaseline and left unchanged (measured
+ * eliteEngagementRate ~0.505 — comfortably non-degenerate, KTD8).
+ */
+export const ELITE_ENGAGEMENT_FLOOR = 0.5;
+
+/**
+ * KTD3 parity for the simulator: it has no doors/branching, so it replicates
+ * "one elite offered per stratum, in the mid-stratum window" directly here,
+ * reusing the same run.eliteOfferedForStratum field the real game's Dungeon
+ * scene uses. `eliteOffered` tells the caller whether this call's guarantee
+ * fired this stratum (regardless of whether the elite was actually chosen —
+ * KTD3's guarantee is "was reachable", not "was fought").
+ */
+function chooseRoomEvent(
+  run: RunState,
+  rng: SimRng,
+  depth: number,
+): { event: RoomEvent; eliteOffered: boolean } {
+  const stratum = stratumForDepth(depth);
+  const eliteDue = isEliteEligibleDepth(depth) && run.eliteOfferedForStratum !== stratum;
+
   if (run.scoutCharges <= 0) {
-    return rollRoomEvent(rng, depth);
+    // No scouting means no foreknowledge to strategically route around it, but
+    // an unscouted player still only walks through one door per room — the
+    // guarantee being "due" doesn't guarantee THIS is the door behind it. Spend
+    // the guarantee now either way (one flip per stratum, KTD8's engagement
+    // floor) so the rest of the window doesn't get repeated chances to convert
+    // an "offered" into an "engaged".
+    if (eliteDue) {
+      run.eliteOfferedForStratum = stratum;
+      if (rng.frac() < ELITE_ENGAGEMENT_FLOOR) {
+        return { event: 'elite', eliteOffered: true };
+      }
+      return { event: rollRoomEvent(rng, depth), eliteOffered: true };
+    }
+    return { event: rollRoomEvent(rng, depth), eliteOffered: false };
   }
 
-  const options = Array.from({ length: 3 }, () => rollRoomEvent(rng, depth));
+  const options: RoomEvent[] = Array.from({ length: 3 }, () => rollRoomEvent(rng, depth));
+  if (eliteDue) {
+    options[0] = 'elite'; // one of the three scouted doors is the forced elite (KTD3)
+    run.eliteOfferedForStratum = stratum;
+  }
   run.scoutCharges--;
 
-  return [...options].sort(
+  const chosen = [...options].sort(
     (left, right) => roomEventScore(run, right) - roomEventScore(run, left),
   )[0];
+  return { event: chosen, eliteOffered: eliteDue };
 }
 
 /** Hard cap so a stalemate deck (all block) terminates as a loss instead of looping. */
@@ -467,6 +584,10 @@ export function simulateRun(
   let encounters = 0;
   let reachedBoss = false;
   let bossesCleared = 0;
+  let eliteEligible = 0;
+  let eliteEncounters = 0;
+  let eliteWins = 0;
+  const tierFights = emptyTierFights();
 
   // Depth climbs forever; a boss sits at every stratum boundary and the loop only
   // exits on a bank or a death. The maxStrata guard caps the boundary count.
@@ -486,7 +607,11 @@ export function simulateRun(
           deathDepth: depth,
           stratumReached: stratumForDepth(depth),
           encounters,
+          eliteEligible,
+          eliteEncounters,
+          eliteWins,
           convertedEmbers: 0,
+          tierFights,
         };
       }
       run.enemiesDefeated++;
@@ -503,16 +628,48 @@ export function simulateRun(
           deathDepth: null,
           stratumReached: stratumCleared,
           encounters,
+          eliteEligible,
+          eliteEncounters,
+          eliteWins,
           convertedEmbers: convert(run.gold),
+          tierFights,
         };
       }
       commitDelve(run); // advance stratum + gate-clear breather, then keep descending
       continue;
     }
 
-    const event = chooseRoomEvent(run, rng, depth);
+    const { event, eliteOffered } = chooseRoomEvent(run, rng, depth);
+    if (eliteOffered) eliteEligible++;
+
+    if (event === 'elite') {
+      eliteEncounters++;
+      const battle = simulateBattle(run, spawnElite(rng, depth), rng, emphasis);
+      if (!battle.won) {
+        return {
+          victory: false,
+          reachedBoss,
+          clearedFirstGate: bossesCleared >= 1,
+          deathDepth: depth,
+          stratumReached: stratumForDepth(depth),
+          encounters,
+          eliteEligible,
+          eliteEncounters,
+          eliteWins,
+          convertedEmbers: 0,
+          tierFights,
+        };
+      }
+      eliteWins++;
+      run.enemiesDefeated++;
+      applySimulatedPostBattleRewards(run, rng, depth, true);
+      continue;
+    }
+
     if (event === 'encounter') {
       encounters++;
+      const tier = getEnemyTierForDepth(depth) as StandardTier;
+      tierFights[tier].total++;
       const battle = simulateBattle(run, spawnEnemy(rng, depth), rng, emphasis);
       if (!battle.won) {
         return {
@@ -522,9 +679,14 @@ export function simulateRun(
           deathDepth: depth,
           stratumReached: stratumForDepth(depth),
           encounters,
+          eliteEligible,
+          eliteEncounters,
+          eliteWins,
           convertedEmbers: 0,
+          tierFights,
         };
       }
+      tierFights[tier].wins++;
       run.enemiesDefeated++;
       applySimulatedPostBattleRewards(run, rng, depth);
       continue;
@@ -558,6 +720,10 @@ export function simulateScenarioSummary(
   let deaths = 0;
   let deathDepthTotal = 0;
   const byEncounter: Record<string, EncounterBucketSummary> = {};
+  let eliteOfferedTotal = 0;
+  let eliteEngagedTotal = 0;
+  let eliteWinsTotal = 0;
+  const byTier: Record<StandardTier, TierBucketSummary> = emptyTierFights();
 
   for (let seed = 1; seed <= runs; seed++) {
     const result = simulateRun(seed, scenario, options);
@@ -573,6 +739,15 @@ export function simulateScenarioSummary(
     byEncounter[key].total++;
     if (result.victory) byEncounter[key].wins++;
     if (result.reachedBoss) byEncounter[key].bossReached++;
+
+    eliteOfferedTotal += result.eliteEligible;
+    eliteEngagedTotal += result.eliteEncounters;
+    eliteWinsTotal += result.eliteWins;
+
+    for (const tier of ['weak', 'medium', 'strong'] as const) {
+      byTier[tier].total += result.tierFights[tier].total;
+      byTier[tier].wins += result.tierFights[tier].wins;
+    }
   }
 
   return {
@@ -582,6 +757,15 @@ export function simulateScenarioSummary(
     bossKillGivenReach: bossReached === 0 ? 0 : wins / bossReached,
     avgDeathDepth: deaths === 0 ? MAX_DEPTH : deathDepthTotal / deaths,
     byEncounter,
+    eliteBucket: {
+      offered: eliteOfferedTotal,
+      engaged: eliteEngagedTotal,
+      wins: eliteWinsTotal,
+    },
+    eliteEngagementRate: eliteOfferedTotal === 0 ? 0 : eliteEngagedTotal / eliteOfferedTotal,
+    eliteWinRate: eliteEngagedTotal === 0 ? 0 : eliteWinsTotal / eliteEngagedTotal,
+    byTier,
+    weakTierWinRate: byTier.weak.total === 0 ? 0 : byTier.weak.wins / byTier.weak.total,
   };
 }
 

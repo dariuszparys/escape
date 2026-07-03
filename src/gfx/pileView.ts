@@ -80,14 +80,17 @@ function addColumn(
 
 /**
  * The R4 pile inspector: draw pile in SORTED order (tier, then name — never the
- * true draw order), discard pile in TRUE order with the newest discard on top.
+ * true draw order), discard pile in TRUE order with the newest discard on top,
+ * exhaust pile (R8) in whatever order cards left play — exhausted cards never
+ * reshuffle or reorder mid-battle, so accumulation order is already informative.
  */
 export function createPileInspector(
   scene: Phaser.Scene,
   drawPile: readonly Card[],
   discardPile: readonly Card[],
+  exhaustPile: readonly Card[],
 ): Phaser.GameObjects.Container {
-  const width = 560;
+  const width = 660;
   const height = 400;
   const panel = scene.add.container(GAME_W / 2, GAME_H / 2 - 24).setDepth(300);
 
@@ -97,7 +100,8 @@ export function createPileInspector(
   bg.lineStyle(2, 0xcab98a, 0.85);
   bg.strokeRoundedRect(-width / 2, -height / 2, width, height, 8);
   bg.lineStyle(1, 0x3a3544, 1);
-  bg.lineBetween(0, -height / 2 + 16, 0, height / 2 - 34);
+  bg.lineBetween(-width / 6, -height / 2 + 16, -width / 6, height / 2 - 34);
+  bg.lineBetween(width / 6, -height / 2 + 16, width / 6, height / 2 - 34);
   panel.add(bg);
 
   const sortedDraw = [...drawPile].sort(
@@ -108,7 +112,7 @@ export function createPileInspector(
   addColumn(
     scene,
     panel,
-    -width / 4,
+    -width / 3,
     `Draw pile (${drawPile.length})`,
     'sorted — not draw order',
     sortedDraw,
@@ -117,10 +121,19 @@ export function createPileInspector(
   addColumn(
     scene,
     panel,
-    width / 4,
+    0,
     `Discard (${discardPile.length})`,
     'true order — newest first',
     newestFirstDiscard,
+    -height / 2 + 22,
+  );
+  addColumn(
+    scene,
+    panel,
+    width / 3,
+    `Exhausted (${exhaustPile.length})`,
+    'gone for this battle',
+    exhaustPile,
     -height / 2 + 22,
   );
 

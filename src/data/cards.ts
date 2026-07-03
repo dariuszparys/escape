@@ -10,7 +10,8 @@ export type CardEffect =
   | { kind: 'heal'; amount: number }
   | { kind: 'status'; status: StatusEffectType; amount: number; duration: number }
   | { kind: 'draw'; amount: number }
-  | { kind: 'energy'; amount: number };
+  | { kind: 'energy'; amount: number }
+  | { kind: 'shuffleCurse'; amount: number };
 
 export interface CardDef {
   id: string;
@@ -23,6 +24,8 @@ export interface CardDef {
   description: string;
   effects: CardEffect[];
   starterKitOnly?: boolean;
+  /** Engine-routed pile flag (KTD1): a played exhaust card joins `exhaustPile` instead of the Discard Pile for the rest of the battle. Pure routing — no per-target resolution semantics. */
+  exhaust?: boolean;
 }
 
 export interface Card extends CardDef {
@@ -125,6 +128,32 @@ export const CARD_DEFS: CardDef[] = [
     ],
   },
   {
+    id: 'scavenge',
+    name: 'Scavenge',
+    type: 'utility',
+    tier: 1,
+    cost: 0,
+    color: 0x16a085,
+    description: 'Draw 1, gain 2 block',
+    effects: [
+      { kind: 'draw', amount: 1 },
+      { kind: 'block', amount: 2 },
+    ],
+  },
+  {
+    id: 'battle_focus',
+    name: 'Battle Focus',
+    type: 'utility',
+    tier: 1,
+    cost: 1,
+    color: 0xf39c12,
+    description: 'Gain 1 energy, gain 3 block',
+    effects: [
+      { kind: 'energy', amount: 1 },
+      { kind: 'block', amount: 3 },
+    ],
+  },
+  {
     id: 'heavy_strike',
     name: 'Heavy Strike',
     type: 'attack',
@@ -184,6 +213,54 @@ export const CARD_DEFS: CardDef[] = [
     effects: [{ kind: 'block', amount: 10 }],
   },
   {
+    id: 'ransack',
+    name: 'Ransack',
+    type: 'utility',
+    tier: 2,
+    cost: 1,
+    color: 0x16a085,
+    description: 'Draw 2 cards, exhaust',
+    exhaust: true,
+    effects: [{ kind: 'draw', amount: 2 }],
+  },
+  {
+    id: 'overcharge',
+    name: 'Overcharge',
+    type: 'utility',
+    tier: 2,
+    cost: 1,
+    color: 0xf39c12,
+    description: 'Gain 2 energy, exhaust',
+    exhaust: true,
+    effects: [{ kind: 'energy', amount: 2 }],
+  },
+  {
+    id: 'rally_strike',
+    name: 'Rally Strike',
+    type: 'utility',
+    tier: 2,
+    cost: 1,
+    color: 0xc0392b,
+    description: 'Deal 4, gain 1 energy',
+    effects: [
+      { kind: 'damage', amount: 4 },
+      { kind: 'energy', amount: 1 },
+    ],
+  },
+  {
+    id: 'riving_cut',
+    name: 'Riving Cut',
+    type: 'utility',
+    tier: 2,
+    cost: 2,
+    color: 0xc0392b,
+    description: 'Deal 7, draw 1',
+    effects: [
+      { kind: 'damage', amount: 7 },
+      { kind: 'draw', amount: 1 },
+    ],
+  },
+  {
     id: 'thunder',
     name: 'Thunder',
     type: 'attack',
@@ -214,6 +291,30 @@ export const CARD_DEFS: CardDef[] = [
     effects: [
       { kind: 'damage', amount: 6 },
       { kind: 'status', status: 'stun', amount: 1, duration: 1 },
+    ],
+  },
+  {
+    id: 'last_stand',
+    name: 'Last Stand',
+    type: 'block',
+    tier: 3,
+    cost: 2,
+    color: 0x2980b9,
+    description: 'Gain 20 block, exhaust',
+    exhaust: true,
+    effects: [{ kind: 'block', amount: 20 }],
+  },
+  {
+    id: 'second_wind',
+    name: 'Second Wind',
+    type: 'utility',
+    tier: 3,
+    cost: 2,
+    color: 0x16a085,
+    description: 'Draw 2, restore 3 HP',
+    effects: [
+      { kind: 'draw', amount: 2 },
+      { kind: 'heal', amount: 3 },
     ],
   },
 ];

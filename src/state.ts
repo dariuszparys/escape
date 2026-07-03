@@ -35,6 +35,8 @@ export class RunState {
   bossDefeated = false;
   /** Current stratum of the endless descent. Starts at 1, advances at each gate via commitDelve. */
   stratum = 1;
+  /** The stratum index (see `stratum`) an elite room has already been offered for (KTD3), or null if none yet this run. Comparing against the current `stratum` is the reset — no explicit boundary reset needed. */
+  eliteOfferedForStratum: number | null = null;
   /** Run terminus: true once the player banks and escapes, false on death. Single source of truth. */
   escaped = false;
   isDaily = false;

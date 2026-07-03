@@ -77,15 +77,42 @@ export function awardEnemyGold(run: RunState, rng: GameRng, depth: number): numb
 }
 
 /**
+ * Elite reward bias (R5/KTD5). Reviewed under the U12 numeric rebaseline and left
+ * unchanged — the target win-rate band and elite engagement/win rates were reached
+ * through enemy and room-weight tuning alone, without needing a reward-side lever.
+ */
+export const ELITE_CARD_OFFER_COUNT = 4;
+export const ELITE_TIER_BIAS_DEPTH = 5; // added to `depth` only for elite offer rolls, biasing randomCard's tier odds up without touching randomCard itself
+export const ELITE_GOLD_MULTIPLIER = 2;
+
+/**
+ * Extra gold on top of a normal award, bringing the total to roughly
+ * `ELITE_GOLD_MULTIPLIER`x (R5). Deliberately NOT a change to `awardEnemyGold`
+ * itself — that shared depth-scaled function stays untouched (see the plan's
+ * Constraints) — this just adds more gold at the call site after the normal
+ * award already landed.
+ */
+export function awardEliteBonusGold(run: RunState, baseGold: number): number {
+  const bonus = Math.floor(baseGold * (ELITE_GOLD_MULTIPLIER - 1));
+  run.addGold(bonus);
+  return bonus;
+}
+
+/**
  * R25: the victory reward — up to `count` depth-appropriate random cards,
  * deduplicated by def so the choice is always a real choice. The pool can
  * collapse below `count` only if a tier's def list is tiny; offers then shrink
  * rather than repeat.
  */
-export function rollVictoryCardOffers(rng: GameRng, depth: number, count = 3): Card[] {
+export function rollVictoryCardOffers(
+  rng: GameRng,
+  depth: number,
+  count = 3,
+  tierBiasDepth = 0,
+): Card[] {
   const offers: Card[] = [];
   for (let attempts = 0; offers.length < count && attempts < 24; attempts++) {
-    const card = randomCard(rng, depth);
+    const card = randomCard(rng, depth + tierBiasDepth);
     if (offers.some((offer) => offer.id === card.id)) continue;
     offers.push(card);
   }

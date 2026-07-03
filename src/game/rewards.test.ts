@@ -3,7 +3,16 @@ import { makeCard } from '../data/cards';
 import { makeItem } from '../data/items';
 import { makeRelic } from '../data/relics';
 import { RunState } from '../state';
-import { awardEnemyGold, awardPotionItem, rollChestReward } from './rewards';
+import { applySimulatedPostBattleRewards, createSimRng } from './balanceSimulator';
+import {
+  awardEliteBonusGold,
+  awardEnemyGold,
+  awardPotionItem,
+  ELITE_CARD_OFFER_COUNT,
+  ELITE_TIER_BIAS_DEPTH,
+  rollChestReward,
+  rollVictoryCardOffers,
+} from './rewards';
 import { SequenceRng } from './test-rng';
 
 describe('rewards', () => {
@@ -139,5 +148,80 @@ describe('rewards', () => {
 
     expect(gold).toBe(15);
     expect(run.gold).toBe(15);
+  });
+
+  test('elite victory offers 4 distinct cards; a normal call still offers 3 (regression, R5/KTD5)', () => {
+    const eliteOffers = rollVictoryCardOffers(
+      createSimRng(1),
+      5,
+      ELITE_CARD_OFFER_COUNT,
+      ELITE_TIER_BIAS_DEPTH,
+    );
+    expect(eliteOffers).toHaveLength(4);
+    expect(new Set(eliteOffers.map((card) => card.id)).size).toBe(4);
+
+    const normalOffers = rollVictoryCardOffers(createSimRng(2), 5);
+    expect(normalOffers).toHaveLength(3);
+  });
+
+  test('elite tier bias skews offers toward higher tiers at a low depth (R5/KTD5)', () => {
+    const depth = 2; // depth <= 3 unbiased tier weights are [8, 2, 0] — heavily tier 1
+    const rolls = 200;
+    let biasedHighTierCount = 0;
+    let unbiasedHighTierCount = 0;
+
+    for (let seed = 1; seed <= rolls; seed++) {
+      const biased = rollVictoryCardOffers(
+        createSimRng(seed),
+        depth,
+        ELITE_CARD_OFFER_COUNT,
+        ELITE_TIER_BIAS_DEPTH,
+      );
+      const unbiased = rollVictoryCardOffers(
+        createSimRng(seed + 100_000),
+        depth,
+        ELITE_CARD_OFFER_COUNT,
+        0,
+      );
+      biasedHighTierCount += biased.filter((card) => card.tier >= 2).length;
+      unbiasedHighTierCount += unbiased.filter((card) => card.tier >= 2).length;
+    }
+
+    expect(biasedHighTierCount).toBeGreaterThan(unbiasedHighTierCount);
+  });
+
+  test('awardEliteBonusGold roughly doubles a given base gold amount', () => {
+    const run = new RunState('seed');
+    const baseGold = 20;
+
+    const bonus = awardEliteBonusGold(run, baseGold);
+
+    expect(bonus).toBe(20);
+    expect(run.gold).toBe(20);
+    expect(baseGold + bonus).toBe(baseGold * 2);
+  });
+
+  test('simulator elite rewards mirror the scene path: gold roughly doubles and offers draw from a 4-card pool (R5/KTD5)', () => {
+    const normalRun = new RunState('seed-normal');
+    applySimulatedPostBattleRewards(normalRun, createSimRng(7), 5, false);
+
+    const eliteRun = new RunState('seed-elite');
+    applySimulatedPostBattleRewards(eliteRun, createSimRng(7), 5, true);
+
+    // Both runs draw the same first rng value for the base gold award (same seed,
+    // no relics), so with no rounding in play here the elite total is exactly 2x.
+    expect(normalRun.gold).toBeGreaterThan(0);
+    expect(eliteRun.gold).toBe(normalRun.gold * 2);
+
+    // applySimulatedPostBattleRewards returns void, so the 4-offer/bias-depth pool
+    // it draws from for isElite=true is asserted directly against the same
+    // underlying call it makes internally.
+    const eliteOffers = rollVictoryCardOffers(
+      createSimRng(1),
+      5,
+      ELITE_CARD_OFFER_COUNT,
+      ELITE_TIER_BIAS_DEPTH,
+    );
+    expect(eliteOffers).toHaveLength(4);
   });
 });

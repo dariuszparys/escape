@@ -1,29 +1,31 @@
 import { describe, expect, test } from 'vitest';
-import { makeNextRoom, rollRoomEvent } from './rooms';
+import { isEliteEligibleDepth, makeNextRoom, rollRoomEvent } from './rooms';
 import { SequenceRng } from '../game/test-rng';
 import { ROOM_COLS, ROOM_ROWS } from '../config';
 
 describe('room generation', () => {
-  test('rooms 2 through 8 use the MVP event thresholds without empty rooms', () => {
-    expect(rollRoomEvent(new SequenceRng([0.31]), 5)).toBe('encounter');
-    expect(rollRoomEvent(new SequenceRng([0.32]), 5)).toBe('chest');
-    expect(rollRoomEvent(new SequenceRng([0.58]), 5)).toBe('chest');
-    expect(rollRoomEvent(new SequenceRng([0.59]), 5)).toBe('potion');
-    expect(rollRoomEvent(new SequenceRng([0.79]), 5)).toBe('potion');
-    expect(rollRoomEvent(new SequenceRng([0.8]), 5)).toBe('rest');
-    expect(rollRoomEvent(new SequenceRng([0.93]), 5)).toBe('rest');
-    expect(rollRoomEvent(new SequenceRng([0.94]), 5)).toBe('trap');
+  test('rooms 2 through 8 use the roguelike-hard event thresholds without empty rooms', () => {
+    // Stratum-1 table (U12): encounter 50, chest 24, potion 10, rest 8, trap 8.
+    expect(rollRoomEvent(new SequenceRng([0.49]), 5)).toBe('encounter');
+    expect(rollRoomEvent(new SequenceRng([0.5]), 5)).toBe('chest');
+    expect(rollRoomEvent(new SequenceRng([0.73]), 5)).toBe('chest');
+    expect(rollRoomEvent(new SequenceRng([0.74]), 5)).toBe('potion');
+    expect(rollRoomEvent(new SequenceRng([0.83]), 5)).toBe('potion');
+    expect(rollRoomEvent(new SequenceRng([0.84]), 5)).toBe('rest');
+    expect(rollRoomEvent(new SequenceRng([0.91]), 5)).toBe('rest');
+    expect(rollRoomEvent(new SequenceRng([0.92]), 5)).toBe('trap');
   });
 
   test('room 9 is biased toward rewards before the boss', () => {
-    expect(rollRoomEvent(new SequenceRng([0.21]), 9)).toBe('encounter');
-    expect(rollRoomEvent(new SequenceRng([0.22]), 9)).toBe('chest');
-    expect(rollRoomEvent(new SequenceRng([0.59]), 9)).toBe('chest');
-    expect(rollRoomEvent(new SequenceRng([0.6]), 9)).toBe('potion');
-    expect(rollRoomEvent(new SequenceRng([0.85]), 9)).toBe('potion');
-    expect(rollRoomEvent(new SequenceRng([0.86]), 9)).toBe('rest');
-    expect(rollRoomEvent(new SequenceRng([0.93]), 9)).toBe('rest');
-    expect(rollRoomEvent(new SequenceRng([0.94]), 9)).toBe('trap');
+    // Stratum-1 pre-boss table (U12): encounter 30, chest 34, potion 18, rest 6, trap 12.
+    expect(rollRoomEvent(new SequenceRng([0.29]), 9)).toBe('encounter');
+    expect(rollRoomEvent(new SequenceRng([0.3]), 9)).toBe('chest');
+    expect(rollRoomEvent(new SequenceRng([0.63]), 9)).toBe('chest');
+    expect(rollRoomEvent(new SequenceRng([0.64]), 9)).toBe('potion');
+    expect(rollRoomEvent(new SequenceRng([0.81]), 9)).toBe('potion');
+    expect(rollRoomEvent(new SequenceRng([0.82]), 9)).toBe('rest');
+    expect(rollRoomEvent(new SequenceRng([0.87]), 9)).toBe('rest');
+    expect(rollRoomEvent(new SequenceRng([0.88]), 9)).toBe('trap');
   });
 
   test('room 10 always becomes the boss room', () => {
@@ -50,12 +52,61 @@ describe('room generation', () => {
     }
   });
 
-  test('the pre-boss reward table repeats each stratum (depth 19 == depth 9)', () => {
-    // chest threshold: encounter 22, then chest fires at 0.22 in the pre-boss table.
-    expect(rollRoomEvent(new SequenceRng([0.22]), 19)).toBe('chest');
-    expect(rollRoomEvent(new SequenceRng([0.22]), 9)).toBe('chest');
-    // In the normal table chest does not start until 0.32, so depth 11 mirrors depth 1.
-    expect(rollRoomEvent(new SequenceRng([0.22]), 11)).toBe('encounter');
+  test('the deep pre-boss table repeats every stratum past the first (depth 19 == depth 29), and is easier than stratum 1s (U12)', () => {
+    // Deep pre-boss table (past MAX_DEPTH): encounter 14, chest 28, potion 26, rest 24, trap 8 —
+    // softer than stratum 1's own pre-boss table, so a second stratum's gauntlet doesn't stack
+    // stratum 1's difficulty on top of itself (R14: kept "bank at gate 1" from dominating).
+    expect(rollRoomEvent(new SequenceRng([0.13]), 19)).toBe('encounter');
+    expect(rollRoomEvent(new SequenceRng([0.13]), 29)).toBe('encounter');
+    expect(rollRoomEvent(new SequenceRng([0.15]), 19)).toBe('chest');
+    expect(rollRoomEvent(new SequenceRng([0.15]), 29)).toBe('chest');
+    // Stratum 1's own pre-boss table (depth 9) is not deep — chest doesn't start until 0.30.
+    expect(rollRoomEvent(new SequenceRng([0.15]), 9)).toBe('encounter');
+  });
+});
+
+describe('elite room placement (KTD3)', () => {
+  test("isEliteEligibleDepth excludes each stratum's start room, the pre-boss room, and the boss depth", () => {
+    expect(isEliteEligibleDepth(1)).toBe(false); // stratum 1 start
+    expect(isEliteEligibleDepth(2)).toBe(true);
+    expect(isEliteEligibleDepth(8)).toBe(true);
+    expect(isEliteEligibleDepth(9)).toBe(false); // pre-boss
+    expect(isEliteEligibleDepth(10)).toBe(false); // boss
+    expect(isEliteEligibleDepth(11)).toBe(false); // stratum 2 start
+    expect(isEliteEligibleDepth(18)).toBe(true);
+    expect(isEliteEligibleDepth(19)).toBe(false); // stratum 2 pre-boss
+  });
+
+  test('forceElite places an elite room inside the eligible window, regardless of the roll', () => {
+    for (const depth of [2, 5, 8]) {
+      const room = makeNextRoom(new SequenceRng([0]), depth, 'N', true);
+      expect(room.event).toBe('elite');
+      expect(room.spikes).toEqual([]);
+    }
+  });
+
+  test('forceElite is ignored outside the eligible window — never in the start, pre-boss, or boss slot', () => {
+    // Stratum start: falls back to the normal roll (r=0 -> encounter in the standard table).
+    expect(makeNextRoom(new SequenceRng([0]), 11, 'N', true).event).toBe('encounter');
+    // Pre-boss: falls back to the pre-boss table (r=0 -> encounter there too).
+    expect(makeNextRoom(new SequenceRng([0]), 9, 'N', true).event).toBe('encounter');
+    // Boss depth short-circuits before forceElite is even consulted.
+    expect(makeNextRoom(new SequenceRng([0]), 10, 'N', true).event).toBe('boss');
+  });
+
+  test('without forceElite, the weighted roll never produces elite on its own', () => {
+    for (let i = 0; i < 100; i++) {
+      expect(rollRoomEvent(new SequenceRng([i / 100]), 5)).not.toBe('elite');
+      expect(rollRoomEvent(new SequenceRng([i / 100]), 9)).not.toBe('elite');
+    }
+  });
+
+  test('same seed and path produce identical room sequences (Daily Descent determinism)', () => {
+    const buildPath = () => {
+      const rng = new SequenceRng([0.1, 0.4, 0.7, 0.2, 0.9]);
+      return [2, 3, 4, 5, 6].map((depth) => makeNextRoom(rng, depth, 'N').event);
+    };
+    expect(buildPath()).toEqual(buildPath());
   });
 });
 

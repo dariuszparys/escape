@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { render, RenderSpec, SAMPLE_RATE } from './renderSpec';
 
 export type SfxKey =
   | 'step'
@@ -21,19 +22,6 @@ export type SfxKey =
   | 'ambience';
 
 const SFX_PREFIX = 'sfx_';
-const SAMPLE_RATE = 44100;
-
-interface RenderSpec {
-  duration: number;
-  build: (ctx: OfflineAudioContext, destination: AudioNode) => void;
-}
-
-function render(spec: RenderSpec): Promise<AudioBuffer> {
-  const length = Math.max(1, Math.ceil(spec.duration * SAMPLE_RATE));
-  const ctx = new OfflineAudioContext(1, length, SAMPLE_RATE);
-  spec.build(ctx, ctx.destination);
-  return ctx.startRendering();
-}
 
 function envelope(gain: GainNode, peak: number, duration: number): void {
   gain.gain.setValueAtTime(peak, 0);
@@ -283,9 +271,24 @@ export function startAmbience(game: Phaser.Game, volume = 0.18): void {
   const manager = game.sound as Phaser.Sound.BaseSoundManager & {
     sounds?: Phaser.Sound.BaseSound[];
   };
-  const alreadyPlaying = (manager.sounds ?? []).some(
-    (sound) => sound.key === cacheKey && sound.isPlaying,
-  );
+  const sounds = manager.sounds ?? [];
+  const alreadyPlaying = sounds.some((sound) => sound.key === cacheKey && sound.isPlaying);
   if (alreadyPlaying) return;
+  // main.ts calls this unconditionally on every pointerdown/keydown and on
+  // unmute, which also fire during battles (card plays, key bindings). Battle
+  // music (music_-prefixed, see music.ts) owns the audio bed for the battle
+  // scene's lifetime per KTD6, so never let ambience restart over it.
+  const musicPlaying = sounds.some((sound) => sound.key.startsWith('music_') && sound.isPlaying);
+  if (musicPlaying) return;
   game.sound.play(cacheKey, { volume, loop: true });
+}
+
+/** The "ambience pauses at battle start" half of KTD6; startAmbience is the resume half. */
+export function stopAmbience(game: Phaser.Game): void {
+  const cacheKey = SFX_PREFIX + 'ambience';
+  const manager = game.sound as Phaser.Sound.BaseSoundManager & {
+    sounds?: Phaser.Sound.BaseSound[];
+  };
+  const playing = (manager.sounds ?? []).find((sound) => sound.key === cacheKey && sound.isPlaying);
+  playing?.stop();
 }

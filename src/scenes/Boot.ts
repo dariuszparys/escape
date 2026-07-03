@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { createAllSfx } from '../audio/sfx';
+import { createAllMusic } from '../audio/music';
 import { loadAudioSettings } from '../audio/settings';
 import { createAllTextures } from '../gfx/sprites';
 
@@ -11,7 +12,7 @@ export class BootScene extends Phaser.Scene {
   async create(): Promise<void> {
     createAllTextures(this);
     this.game.sound.mute = loadAudioSettings().muted;
-    await createAllSfx(this);
+    await Promise.all([createAllSfx(this), createAllMusic(this)]);
 
     const walk = (key: string, a: string, b: string) =>
       this.anims.create({
