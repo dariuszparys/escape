@@ -22,6 +22,16 @@ rooms behind the current room's open doors. The reveal fires at most once per
 room and its text persists until the player moves on; Scout Charges are the
 informed-routing tool for choosing which rooms to commit to.
 
+### Elite
+
+A hand-authored spike encounter placed before a Stratum's boss. Elite rooms
+are their own room type — Scout Charge reveals them distinctly, so fighting
+one is an informed opt-in for rewards clearly better than a normal
+encounter's. Each elite carries a signature mechanic that teaches a specific
+counterplay lesson. Each Stratum offers exactly one Elite room; the offer is
+satisfied when the room is generated and reachable — routing around it does
+not re-offer one later in the Stratum.
+
 ### Card Battle
 
 The Slay-the-Spire-style combat phase entered when a dungeon encounter commits
@@ -73,6 +83,13 @@ inspectable in sorted order only, never in true draw order.
 Where played and end-of-turn cards go. When a draw is required and the Draw
 Pile is empty, the Discard Pile shuffles back into it; if both piles are empty,
 drawing simply stops.
+
+### Exhaust
+
+A card keyword: when played, an exhaust card leaves play for the rest of the
+current battle, joining neither the Draw Pile nor the Discard Pile. It returns
+with the full collection at the next battle start. Exhaust is battle-scoped,
+never permanent deck removal.
 
 ### Enemy Intent
 
