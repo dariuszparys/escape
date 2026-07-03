@@ -115,7 +115,7 @@ export const ENEMIES: EnemyDef[] = [
     id: 'bandit',
     name: 'Bandit',
     texture: 'skeleton',
-    baseHp: 16,
+    baseHp: 23,
     tier: 'medium',
     boss: false,
     // Fast/bursty: Twin Strike splits its damage into two hits so half-invested
@@ -126,28 +126,28 @@ export const ENEMIES: EnemyDef[] = [
         {
           name: 'Quick Slash',
           telegraph: 'a knife flashes...',
-          effects: [{ kind: 'damage', amount: 6 }],
+          effects: [{ kind: 'damage', amount: 8 }],
         },
         {
           name: 'Twin Strike',
           telegraph: 'twin blades flicker in, one after the other...',
           effects: [
-            { kind: 'damage', amount: 3 },
             { kind: 'damage', amount: 4 },
+            { kind: 'damage', amount: 5 },
           ],
         },
         {
           name: 'Feint',
           telegraph: 'circles behind a raised cloak...',
           effects: [
-            { kind: 'damage', amount: 4 },
-            { kind: 'block', amount: 3 },
+            { kind: 'damage', amount: 5 },
+            { kind: 'block', amount: 4 },
           ],
         },
         {
           name: 'Lunge',
           telegraph: 'coils for a deep lunge...',
-          effects: [{ kind: 'damage', amount: 8 }],
+          effects: [{ kind: 'damage', amount: 11 }],
         },
       ],
     },
@@ -156,7 +156,7 @@ export const ENEMIES: EnemyDef[] = [
     id: 'cultist',
     name: 'Cultist',
     texture: 'bat',
-    baseHp: 17,
+    baseHp: 24,
     tier: 'medium',
     boss: false,
     // Status-heavy: Blood Sigil stacks two DoTs in one turn with no direct damage,
@@ -166,27 +166,27 @@ export const ENEMIES: EnemyDef[] = [
         {
           name: 'Ember Curse',
           telegraph: 'chants a smoldering curse...',
-          effects: [{ kind: 'status', status: 'burn', amount: 2, duration: 2 }],
+          effects: [{ kind: 'status', status: 'burn', amount: 3, duration: 2 }],
         },
         {
           name: 'Talon Rake',
           telegraph: 'circles with bared talons...',
-          effects: [{ kind: 'damage', amount: 5 }],
+          effects: [{ kind: 'damage', amount: 7 }],
         },
         {
           name: 'Venom Spit',
           telegraph: 'gathers a mouthful of venom...',
           effects: [
-            { kind: 'damage', amount: 3 },
-            { kind: 'status', status: 'poison', amount: 2, duration: 2 },
+            { kind: 'damage', amount: 4 },
+            { kind: 'status', status: 'poison', amount: 3, duration: 2 },
           ],
         },
         {
           name: 'Blood Sigil',
           telegraph: 'carves a sigil that festers with rot and creeping flame...',
           effects: [
-            { kind: 'status', status: 'poison', amount: 2, duration: 3 },
-            { kind: 'status', status: 'burn', amount: 2, duration: 2 },
+            { kind: 'status', status: 'poison', amount: 3, duration: 3 },
+            { kind: 'status', status: 'burn', amount: 3, duration: 2 },
           ],
         },
       ],
@@ -196,7 +196,7 @@ export const ENEMIES: EnemyDef[] = [
     id: 'armored_goblin',
     name: 'Armored Goblin',
     texture: 'slime',
-    baseHp: 19,
+    baseHp: 27,
     tier: 'medium',
     boss: false,
     // Block-then-smash, extended with a scaling special: every 3rd turn the
@@ -207,20 +207,20 @@ export const ENEMIES: EnemyDef[] = [
         {
           name: 'Shield Up',
           telegraph: 'hunkers behind its shield...',
-          effects: [{ kind: 'block', amount: 6 }],
+          effects: [{ kind: 'block', amount: 8 }],
         },
         {
           name: 'Shield Slam',
           telegraph: 'braces to slam shield-first...',
           effects: [
-            { kind: 'damage', amount: 5 },
-            { kind: 'block', amount: 3 },
+            { kind: 'damage', amount: 7 },
+            { kind: 'block', amount: 4 },
           ],
         },
         {
           name: 'Crush',
           telegraph: 'hefts its mace overhead...',
-          effects: [{ kind: 'damage', amount: 7 }],
+          effects: [{ kind: 'damage', amount: 10 }],
         },
       ],
       special: {
@@ -229,8 +229,8 @@ export const ENEMIES: EnemyDef[] = [
           name: 'Shield Bash',
           telegraph: 'plants its shield and drives its full weight through a crushing blow...',
           effects: [
-            { kind: 'block', amount: 3 },
-            { kind: 'damage', amount: 8 },
+            { kind: 'block', amount: 4 },
+            { kind: 'damage', amount: 11 },
           ],
         },
       },
@@ -240,7 +240,7 @@ export const ENEMIES: EnemyDef[] = [
     id: 'knight',
     name: 'Knight',
     texture: 'skeleton',
-    baseHp: 23,
+    baseHp: 34,
     tier: 'strong',
     boss: false,
     // Duelist multi-hit: two different combo granularities (a 2-hit Sword Combo
@@ -252,31 +252,31 @@ export const ENEMIES: EnemyDef[] = [
           name: 'Sword Combo',
           telegraph: 'settles into a dueling stance...',
           effects: [
-            { kind: 'damage', amount: 4 },
-            { kind: 'damage', amount: 4 },
+            { kind: 'damage', amount: 6 },
+            { kind: 'damage', amount: 6 },
           ],
         },
         {
           name: 'Guarded Cut',
           telegraph: 'advances behind its blade...',
           effects: [
-            { kind: 'block', amount: 5 },
-            { kind: 'damage', amount: 5 },
+            { kind: 'block', amount: 6 },
+            { kind: 'damage', amount: 7 },
           ],
         },
         {
           name: 'Riposte Flurry',
           telegraph: 'blade flickers through a three-beat combination...',
           effects: [
-            { kind: 'damage', amount: 3 },
-            { kind: 'damage', amount: 3 },
-            { kind: 'damage', amount: 3 },
+            { kind: 'damage', amount: 4 },
+            { kind: 'damage', amount: 4 },
+            { kind: 'damage', amount: 4 },
           ],
         },
         {
           name: 'Heavy Blade',
           telegraph: 'raises its blade high...',
-          effects: [{ kind: 'damage', amount: 10 }],
+          effects: [{ kind: 'damage', amount: 14 }],
         },
       ],
     },
@@ -285,7 +285,7 @@ export const ENEMIES: EnemyDef[] = [
     id: 'necromancer',
     name: 'Necromancer',
     texture: 'bat',
-    baseHp: 24,
+    baseHp: 35,
     tier: 'strong',
     boss: false,
     // Status/poison pressure, extended with a scaling special: every 4th turn
@@ -296,27 +296,27 @@ export const ENEMIES: EnemyDef[] = [
         {
           name: 'Soul Rot',
           telegraph: 'whispers a rotting litany...',
-          effects: [{ kind: 'status', status: 'poison', amount: 3, duration: 2 }],
+          effects: [{ kind: 'status', status: 'poison', amount: 4, duration: 2 }],
         },
         {
           name: 'Dark Bolt',
           telegraph: 'shadow coils around its hand...',
-          effects: [{ kind: 'damage', amount: 7 }],
+          effects: [{ kind: 'damage', amount: 10 }],
         },
         {
           name: 'Withering Hex',
           telegraph: 'traces a searing sigil...',
           effects: [
-            { kind: 'damage', amount: 4 },
-            { kind: 'status', status: 'burn', amount: 2, duration: 2 },
+            { kind: 'damage', amount: 5 },
+            { kind: 'status', status: 'burn', amount: 3, duration: 2 },
           ],
         },
         {
           name: 'Bone Ward',
           telegraph: 'raises a lattice of bone to ward off retaliation while the curse lingers...',
           effects: [
-            { kind: 'block', amount: 4 },
-            { kind: 'status', status: 'poison', amount: 2, duration: 2 },
+            { kind: 'block', amount: 5 },
+            { kind: 'status', status: 'poison', amount: 3, duration: 2 },
           ],
         },
       ],
@@ -326,8 +326,8 @@ export const ENEMIES: EnemyDef[] = [
           name: 'Reap',
           telegraph: 'shadows coalesce into a reaping strike, the poison sinking deep...',
           effects: [
-            { kind: 'damage', amount: 6 },
-            { kind: 'status', status: 'poison', amount: 3, duration: 3 },
+            { kind: 'damage', amount: 8 },
+            { kind: 'status', status: 'poison', amount: 4, duration: 3 },
           ],
         },
       },
@@ -337,7 +337,7 @@ export const ENEMIES: EnemyDef[] = [
     id: 'ogre',
     name: 'Ogre',
     texture: 'slime',
-    baseHp: 27,
+    baseHp: 40,
     tier: 'strong',
     boss: false,
     // Block-then-big-hit, extended with a scaling special: every 5th turn its
@@ -348,19 +348,19 @@ export const ENEMIES: EnemyDef[] = [
         {
           name: 'Brace Up',
           telegraph: 'plants its feet and tenses...',
-          effects: [{ kind: 'block', amount: 8 }],
+          effects: [{ kind: 'block', amount: 10 }],
         },
         {
           name: 'Smash',
           telegraph: 'drags its club back...',
-          effects: [{ kind: 'damage', amount: 9 }],
+          effects: [{ kind: 'damage', amount: 13 }],
         },
         {
           name: 'Guarded Smash',
           telegraph: 'swings from behind a raised arm...',
           effects: [
-            { kind: 'block', amount: 4 },
-            { kind: 'damage', amount: 7 },
+            { kind: 'block', amount: 5 },
+            { kind: 'damage', amount: 10 },
           ],
         },
       ],
@@ -369,7 +369,7 @@ export const ENEMIES: EnemyDef[] = [
         entry: {
           name: 'Earthbreaker',
           telegraph: 'rears back with both fists locked, ready to bring the ground itself down...',
-          effects: [{ kind: 'damage', amount: 12 }],
+          effects: [{ kind: 'damage', amount: 17 }],
         },
       },
     },
@@ -381,27 +381,27 @@ export const BOSSES: EnemyDef[] = [
     id: 'iron_warden',
     name: 'The Iron Warden',
     texture: 'boss_minotaur',
-    baseHp: 44,
+    baseHp: 52,
     boss: true,
     pattern: {
       cycle: [
         {
           name: 'Hammer Swing',
           telegraph: 'the hammer starts its arc...',
-          effects: [{ kind: 'damage', amount: 7 }],
+          effects: [{ kind: 'damage', amount: 9 }],
         },
         {
           name: 'Iron Guard',
           telegraph: 'iron plates grind together...',
           effects: [
-            { kind: 'block', amount: 8 },
-            { kind: 'damage', amount: 4 },
+            { kind: 'block', amount: 9 },
+            { kind: 'damage', amount: 5 },
           ],
         },
         {
           name: 'Crush',
           telegraph: 'both hands find the haft...',
-          effects: [{ kind: 'damage', amount: 10 }],
+          effects: [{ kind: 'damage', amount: 13 }],
         },
       ],
       special: {
@@ -410,8 +410,8 @@ export const BOSSES: EnemyDef[] = [
           name: 'Warhammer',
           telegraph: 'The Iron Warden braces behind iron plates...',
           effects: [
-            { kind: 'block', amount: 3 },
-            { kind: 'damage', amount: 6 },
+            { kind: 'block', amount: 4 },
+            { kind: 'damage', amount: 8 },
           ],
         },
       },
@@ -421,29 +421,29 @@ export const BOSSES: EnemyDef[] = [
     id: 'bone_oracle',
     name: 'The Bone Oracle',
     texture: 'boss_lich',
-    baseHp: 40,
+    baseHp: 47,
     boss: true,
     pattern: {
       cycle: [
         {
           name: 'Bone Bolt',
           telegraph: 'splinters swirl into a dart...',
-          effects: [{ kind: 'damage', amount: 6 }],
+          effects: [{ kind: 'damage', amount: 8 }],
         },
         {
           name: 'Siphon',
           telegraph: 'a pale thread reaches for you...',
           effects: [
-            { kind: 'damage', amount: 4 },
-            { kind: 'heal', amount: 3 },
+            { kind: 'damage', amount: 6 },
+            { kind: 'heal', amount: 4 },
           ],
         },
         {
           name: 'Splinter Guard',
           telegraph: 'bones knit into a lattice...',
           effects: [
-            { kind: 'block', amount: 6 },
-            { kind: 'damage', amount: 3 },
+            { kind: 'block', amount: 7 },
+            { kind: 'damage', amount: 4 },
           ],
         },
       ],
@@ -452,7 +452,7 @@ export const BOSSES: EnemyDef[] = [
         entry: {
           name: 'Bone Staff',
           telegraph: 'The Bone Oracle raises a staff of splintered bone...',
-          effects: [{ kind: 'status', status: 'poison', amount: 1, duration: 2 }],
+          effects: [{ kind: 'status', status: 'poison', amount: 2, duration: 2 }],
         },
       },
     },
@@ -461,27 +461,27 @@ export const BOSSES: EnemyDef[] = [
     id: 'flame_tyrant',
     name: 'The Flame Tyrant',
     texture: 'boss_demon',
-    baseHp: 42,
+    baseHp: 49,
     boss: true,
     pattern: {
       cycle: [
         {
           name: 'Axe Swing',
           telegraph: 'the axe head glows dull red...',
-          effects: [{ kind: 'damage', amount: 8 }],
+          effects: [{ kind: 'damage', amount: 10 }],
         },
         {
           name: 'Cinder Guard',
           telegraph: 'ash whirls into a shroud...',
           effects: [
-            { kind: 'block', amount: 6 },
-            { kind: 'damage', amount: 3 },
+            { kind: 'block', amount: 7 },
+            { kind: 'damage', amount: 4 },
           ],
         },
         {
           name: 'Overhead Chop',
           telegraph: 'it heaves the axe skyward...',
-          effects: [{ kind: 'damage', amount: 10 }],
+          effects: [{ kind: 'damage', amount: 13 }],
         },
       ],
       special: {
@@ -490,8 +490,8 @@ export const BOSSES: EnemyDef[] = [
           name: 'Flame Axe',
           telegraph: 'The Flame Tyrant gathers heat around its axe...',
           effects: [
-            { kind: 'damage', amount: 5 },
-            { kind: 'status', status: 'burn', amount: 1, duration: 2 },
+            { kind: 'damage', amount: 7 },
+            { kind: 'status', status: 'burn', amount: 2, duration: 2 },
           ],
         },
       },
@@ -514,7 +514,7 @@ export const ELITES: EnemyDef[] = [
     id: 'elite_berserker',
     name: 'The Berserker',
     texture: 'skeleton',
-    baseHp: 34,
+    baseHp: 46,
     tier: 'elite',
     boss: false,
     // Bruiser: Frenzy is a scaling special that dwarfs the cycle's normal hits every
@@ -555,7 +555,7 @@ export const ELITES: EnemyDef[] = [
     id: 'elite_stalker',
     name: 'The Stalker',
     texture: 'slime',
-    baseHp: 30,
+    baseHp: 42,
     tier: 'elite',
     boss: false,
     // Lurker: two guarded-dormancy turns (block, near-no-op) followed by one huge
@@ -588,7 +588,7 @@ export const ELITES: EnemyDef[] = [
     id: 'elite_hexweaver',
     name: 'The Hexweaver',
     texture: 'bat',
-    baseHp: 32,
+    baseHp: 44,
     tier: 'elite',
     boss: false,
     // Hexer: fights the deck itself. Curse Weaving pairs an honestly-telegraphed
@@ -623,7 +623,7 @@ export const ELITES: EnemyDef[] = [
     id: 'elite_bloodleech',
     name: 'The Bloodleech',
     texture: 'slime',
-    baseHp: 33,
+    baseHp: 45,
     tier: 'elite',
     boss: false,
     // Leech: heals itself on hit (reusing the existing `heal` effect, self-targeted —
@@ -660,7 +660,7 @@ export const ELITES: EnemyDef[] = [
     id: 'elite_duelist',
     name: 'The Duelist',
     texture: 'skeleton',
-    baseHp: 29,
+    baseHp: 41,
     tier: 'elite',
     boss: false,
     // Duelist: every entry mixes block-and-strike in the same beat, so the Duelist
@@ -795,9 +795,13 @@ export function getEnemyTierForDepth(depth: number): EnemyTier {
 /**
  * Per-depth HP slope past the first stratum. The base run keeps the original
  * `baseHp + depth`; deeper strata still climb (R10) but at a gentler slope so the
- * delve stays winnable rather than a DPS wall. Tuned against the U7 harness (KTD8).
+ * delve stays winnable rather than a DPS wall. Re-tuned for U12: the stratum-1
+ * base numbers now carry most of the difficulty (roguelike-hard band), so this
+ * slope was more than halved from its pre-U12 value (0.3) — stacking the old
+ * slope on top of the harder base collapsed the moderate delve line's bank rate
+ * to near zero, wrongly crowning "always bank at the first gate" as dominant.
  */
-const DEEP_HP_SLOPE = 0.3;
+const DEEP_HP_SLOPE = 0.03;
 
 /** Enemy HP for a depth: linear through stratum 1, gentler past it. */
 export function enemyHpForDepth(baseHp: number, depth: number): number {
@@ -814,7 +818,8 @@ export function enemyHpForDepth(baseHp: number, depth: number): number {
  */
 export function intentBonusForDepth(depth: number): number {
   if (depth <= MAX_DEPTH) return Math.floor(depth / 2);
-  return Math.floor(MAX_DEPTH / 2) + Math.round((depth - MAX_DEPTH) * 0.15);
+  // Slope more than halved for U12 alongside DEEP_HP_SLOPE — same reason (see above).
+  return Math.floor(MAX_DEPTH / 2) + Math.round((depth - MAX_DEPTH) * 0.03);
 }
 
 /** Enemy behavior is its authored intent pattern (U9), empowered for depth; spawns roll no card decks. */
@@ -826,8 +831,12 @@ export function spawnEnemy(rng: GameRng, depth: number): EnemyInstance {
   return { def, hp, maxHp: hp, armor: 0, statuses: [], pattern };
 }
 
-/** Extra boss HP per depth past the first stratum boundary, so deeper bosses escalate (R10). */
-const BOSS_HP_PER_DEPTH_BEYOND_FIRST = 1;
+/**
+ * Extra boss HP per depth past the first stratum boundary, so deeper bosses escalate
+ * (R10). Softened for U12 (was 1) alongside the other deep-stratum slopes — see
+ * `DEEP_HP_SLOPE`.
+ */
+const BOSS_HP_PER_DEPTH_BEYOND_FIRST = 0.3;
 
 export function spawnBoss(rng: GameRng, depth: number = MAX_DEPTH): EnemyInstance {
   const def = rng.pick(BOSSES);
@@ -839,11 +848,13 @@ export function spawnBoss(rng: GameRng, depth: number = MAX_DEPTH): EnemyInstanc
 
 /**
  * Per-depth HP slope for elites (U5): steeper than `enemyHpForDepth`'s normal-tier
- * shape at every stage, so elites read as clearly above-curve regardless of depth —
- * directional per the tuning-discipline note (R2); U12 rebaselines the exact numbers.
+ * shape at every stage, so elites read as clearly above-curve regardless of depth.
+ * ELITE_DEEP_HP_SLOPE re-tuned for U12 (was 0.5) for the same reason as
+ * `DEEP_HP_SLOPE`: stacked on top of the harder roguelike-hard base, the old slope
+ * made a second stratum's elite an effective wall for the moderate delve line.
  */
 const ELITE_HP_SLOPE = 1.5;
-const ELITE_DEEP_HP_SLOPE = 0.5;
+const ELITE_DEEP_HP_SLOPE = 0.05;
 
 /** Elite HP for a depth: steeper linear term through stratum 1, steeper-than-normal gentling past it. */
 export function eliteHpForDepth(baseHp: number, depth: number): number {

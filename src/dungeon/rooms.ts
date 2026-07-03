@@ -1,4 +1,13 @@
-import { Dir, DIRS, DIR_VEC, OPPOSITE, ROOM_COLS, ROOM_ROWS, STRATUM_SIZE } from '../config';
+import {
+  Dir,
+  DIR_VEC,
+  DIRS,
+  MAX_DEPTH,
+  OPPOSITE,
+  ROOM_COLS,
+  ROOM_ROWS,
+  STRATUM_SIZE,
+} from '../config';
 import { GameRng } from '../game/rng';
 import { depthWithinStratum, isStratumBoundary } from '../game/strata';
 
@@ -26,24 +35,50 @@ export interface RoomData {
 export function rollRoomEvent(rng: GameRng, depth: number): RoomEvent {
   // The chest-heavy pre-boss table fires on the last room of every stratum.
   // The standard table leans toward encounters and away from potion/rest (R6) so
-  // attrition accumulates across a stratum; exact weights are U12's to settle.
-  // 'elite' is never rolled here — it only ever enters via the forced placement
-  // guarantee in makeNextRoom (KTD3), so a stratum never gets more than one.
-  const table: [RoomEvent, number][] =
-    depthWithinStratum(depth) === STRATUM_SIZE - 1
+  // attrition accumulates across a stratum, tuned against the roguelike-hard
+  // band (U12). Past the first stratum (`deep`), the encounter roster stops
+  // escalating in tier (every depth beyond MAX_DEPTH still draws 'strong') but
+  // per-fight risk doesn't relent either — stacking stratum 1's own gauntlet on
+  // top of itself for every subsequent stratum made "bank at gate 1" a dominant
+  // line (R14) even after softening the HP/damage depth-slopes, because the
+  // danger is per-fight, not cumulative attrition a bigger heal can fix. The
+  // deep table leans back toward recovery rooms instead, so push-your-luck
+  // stays a real (if still risky) choice deeper in, without touching stratum
+  // 1's own tuning. 'elite' is never rolled here — it only ever enters via the
+  // forced placement guarantee in makeNextRoom (KTD3), so a stratum never gets
+  // more than one.
+  const preBoss = depthWithinStratum(depth) === STRATUM_SIZE - 1;
+  const deep = depth > MAX_DEPTH;
+  const table: [RoomEvent, number][] = preBoss
+    ? deep
       ? [
-          ['encounter', 22],
-          ['chest', 38],
+          ['encounter', 14],
+          ['chest', 28],
           ['potion', 26],
-          ['rest', 8],
-          ['trap', 6],
+          ['rest', 24],
+          ['trap', 8],
         ]
       : [
-          ['encounter', 40],
-          ['chest', 27],
-          ['potion', 16],
-          ['rest', 11],
-          ['trap', 6],
+          ['encounter', 30],
+          ['chest', 34],
+          ['potion', 18],
+          ['rest', 6],
+          ['trap', 12],
+        ]
+    : deep
+      ? [
+          ['encounter', 24],
+          ['chest', 24],
+          ['potion', 22],
+          ['rest', 22],
+          ['trap', 8],
+        ]
+      : [
+          ['encounter', 50],
+          ['chest', 24],
+          ['potion', 10],
+          ['rest', 8],
+          ['trap', 8],
         ];
 
   let r = rng.frac() * 100;

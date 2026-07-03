@@ -1,7 +1,13 @@
 import { MAX_DEPTH } from '../config';
 import { Card, CARD_DEFS, cardEffectAmount, makeCard } from '../data/cards';
 import { type PendingPrep } from '../data/campfirePurchases';
-import { EnemyInstance, spawnBoss, spawnElite, spawnEnemy } from '../data/enemies';
+import {
+  EnemyInstance,
+  getEnemyTierForDepth,
+  spawnBoss,
+  spawnElite,
+  spawnEnemy,
+} from '../data/enemies';
 import { InventoryItem, type InventoryItemDef, makeItem } from '../data/items';
 import type { StarterKitId } from '../data/starterKits';
 import { isEliteEligibleDepth, rollRoomEvent, type RoomEvent } from '../dungeon/rooms';
@@ -108,6 +114,14 @@ export interface EliteBucketSummary {
   wins: number;
 }
 
+/** Depth-tier band, excluding elite/boss (tracked separately). */
+type StandardTier = 'weak' | 'medium' | 'strong';
+
+export interface TierBucketSummary {
+  total: number;
+  wins: number;
+}
+
 export interface BalanceSimulationSummary {
   runs: number;
   winRate: number;
@@ -120,6 +134,10 @@ export interface BalanceSimulationSummary {
   eliteEngagementRate: number;
   /** wins / engaged — 0 if never engaged across the sample. */
   eliteWinRate: number;
+  /** Individual 'encounter'-room battle outcomes (U12), bucketed by `getEnemyTierForDepth`. */
+  byTier: Record<StandardTier, TierBucketSummary>;
+  /** wins / total for weak-tier fights specifically — fresh-deck winnability (U12 tier-1 floor). 0 if none fought. */
+  weakTierWinRate: number;
 }
 
 interface SimRunResult {
@@ -138,6 +156,16 @@ interface SimRunResult {
   eliteEncounters: number;
   eliteWins: number;
   convertedEmbers: number;
+  /** Individual 'encounter'-room battle outcomes this run, bucketed by tier (U12). */
+  tierFights: Record<StandardTier, TierBucketSummary>;
+}
+
+function emptyTierFights(): Record<StandardTier, TierBucketSummary> {
+  return {
+    weak: { total: 0, wins: 0 },
+    medium: { total: 0, wins: 0 },
+    strong: { total: 0, wins: 0 },
+  };
 }
 
 /**
@@ -558,6 +586,7 @@ export function simulateRun(
   let eliteEligible = 0;
   let eliteEncounters = 0;
   let eliteWins = 0;
+  const tierFights = emptyTierFights();
 
   // Depth climbs forever; a boss sits at every stratum boundary and the loop only
   // exits on a bank or a death. The maxStrata guard caps the boundary count.
@@ -581,6 +610,7 @@ export function simulateRun(
           eliteEncounters,
           eliteWins,
           convertedEmbers: 0,
+          tierFights,
         };
       }
       run.enemiesDefeated++;
@@ -601,6 +631,7 @@ export function simulateRun(
           eliteEncounters,
           eliteWins,
           convertedEmbers: convert(run.gold),
+          tierFights,
         };
       }
       commitDelve(run); // advance stratum + gate-clear breather, then keep descending
@@ -625,6 +656,7 @@ export function simulateRun(
           eliteEncounters,
           eliteWins,
           convertedEmbers: 0,
+          tierFights,
         };
       }
       eliteWins++;
@@ -635,6 +667,8 @@ export function simulateRun(
 
     if (event === 'encounter') {
       encounters++;
+      const tier = getEnemyTierForDepth(depth) as StandardTier;
+      tierFights[tier].total++;
       const battle = simulateBattle(run, spawnEnemy(rng, depth), rng, emphasis);
       if (!battle.won) {
         return {
@@ -648,8 +682,10 @@ export function simulateRun(
           eliteEncounters,
           eliteWins,
           convertedEmbers: 0,
+          tierFights,
         };
       }
+      tierFights[tier].wins++;
       run.enemiesDefeated++;
       applySimulatedPostBattleRewards(run, rng, depth);
       continue;
@@ -686,6 +722,7 @@ export function simulateScenarioSummary(
   let eliteOfferedTotal = 0;
   let eliteEngagedTotal = 0;
   let eliteWinsTotal = 0;
+  const byTier: Record<StandardTier, TierBucketSummary> = emptyTierFights();
 
   for (let seed = 1; seed <= runs; seed++) {
     const result = simulateRun(seed, scenario, options);
@@ -705,6 +742,11 @@ export function simulateScenarioSummary(
     eliteOfferedTotal += result.eliteEligible;
     eliteEngagedTotal += result.eliteEncounters;
     eliteWinsTotal += result.eliteWins;
+
+    for (const tier of ['weak', 'medium', 'strong'] as const) {
+      byTier[tier].total += result.tierFights[tier].total;
+      byTier[tier].wins += result.tierFights[tier].wins;
+    }
   }
 
   return {
@@ -721,6 +763,8 @@ export function simulateScenarioSummary(
     },
     eliteEngagementRate: eliteOfferedTotal === 0 ? 0 : eliteEngagedTotal / eliteOfferedTotal,
     eliteWinRate: eliteEngagedTotal === 0 ? 0 : eliteWinsTotal / eliteEngagedTotal,
+    byTier,
+    weakTierWinRate: byTier.weak.total === 0 ? 0 : byTier.weak.wins / byTier.weak.total,
   };
 }
 

@@ -9,13 +9,13 @@ import { RngDrawDigest, runSignature } from './runSignature';
  */
 const GOLDEN_SEED = 7;
 const GOLDEN_SIGNATURE =
-  // Re-goldened again for U9 (real elite engagement in the simulator): chooseRoomEvent
-  // now draws an extra rng.frac() per stratum for the unscouted engagement-floor roll
-  // (ELITE_ENGAGEMENT_FLOOR), and an 'elite' room can now actually fire in place of a
-  // regular 'encounter' — both shift downstream draw order/count and can change which
-  // fights (and how many) happen before the same bank outcome. Intentional determinism
-  // change, not a regression.
-  'v=1|boss=1|gate=1|death=-|stratum=1|enc=1|embers=3|draws=165|hash=30abd52a';
+  // Re-goldened for U12 (numeric rebaseline): tuned medium/strong/boss/elite HP
+  // and damage, the stratum-1 room-weight table, and the deep-stratum HP/damage
+  // slopes + a dedicated deep room-weight table all change which room events and
+  // battle outcomes occur for a fixed seed, shifting downstream draw order/count.
+  // Intentional determinism change (harder combat → longer/more battles for the
+  // same seed), not a regression.
+  'v=1|boss=1|gate=1|death=-|stratum=1|enc=3|embers=4|draws=254|hash=9ea75460';
 
 describe('RngDrawDigest', () => {
   test('samples draw order and count, not just the value set (the load-bearing property)', () => {
@@ -73,13 +73,13 @@ describe('runSignature', () => {
   });
 
   test('a death and a bank produce stable, distinct signatures', () => {
-    // Under the rebuilt combat, seed 16 dies at the boss; seed 9 banks a victory —
-    // the gate must not collapse these.
+    // Under the roguelike-hard rebaseline (U12), seed 16 dies pre-boss; seed 1
+    // banks a victory — the gate must not collapse these.
     const death = runSignature(16);
-    const bank = runSignature(9);
+    const bank = runSignature(1);
 
     expect(death).toBe(runSignature(16));
-    expect(bank).toBe(runSignature(9));
+    expect(bank).toBe(runSignature(1));
     expect(death).not.toBe(bank);
     expect(death.startsWith('v=0|')).toBe(true);
     expect(bank.startsWith('v=1|')).toBe(true);

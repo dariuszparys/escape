@@ -129,24 +129,43 @@ describe('balance simulator battle kernel (U13)', () => {
 });
 
 describe('balance simulator economy bands', () => {
-  test('baseline runs land in the post-rebuild band', () => {
+  test('baseline runs land in the roguelike-hard band (U12)', () => {
     const summary = simulateScenarioSummary({}, 400);
 
-    // Re-baselined for the turn-system rebuild (U13): multi-card turns hand the
-    // player roughly triple the old action economy and the greedy policy plays
-    // near-optimally, so the base run is won far more often than under the
-    // round model (measured 0.96 win / 0.985 reach at 400 seeds). Restoring a
-    // "difficult but winnable" band is the post-Milestone-2 numeric pass, owned
-    // by playtesting (plan: Tail ownership) — these bounds pin today's behavior
-    // so future tuning shifts are deliberate, not accidental.
-    // pending U12 rebaseline — see docs/plans/2026-07-03-001-feat-roguelike-difficulty-plan.md
-    // (U9 makes elites real in the sim; measured winRate ~0.76 as of U9, below this band.)
-    // expect(summary.winRate).toBeGreaterThanOrEqual(0.88);
-    expect(summary.winRate).toBeLessThanOrEqual(1);
-    // pending U12 rebaseline — see docs/plans/2026-07-03-001-feat-roguelike-difficulty-plan.md
-    // (measured bossReachRate ~0.82 as of U9, below this band.)
-    // expect(summary.bossReachRate).toBeGreaterThanOrEqual(0.94);
-    expect(summary.bossKillGivenReach).toBeGreaterThanOrEqual(0.9);
+    // Rebaselined for U12 (roguelike-hard target: 20-40% first-stratum clear rate).
+    // Measured at 400 seeds: winRate 0.2525, bossReachRate 0.365, bossKillGivenReach
+    // 0.69. Final tuned constants (as a set, per KTD8):
+    //   - medium tier baseHp: bandit 16->23, cultist 17->24, armored_goblin 19->27
+    //   - strong tier baseHp: knight 23->34, necromancer 24->35, ogre 27->40
+    //     (plus proportional damage/block bumps on every entry in both tiers)
+    //   - boss baseHp: iron_warden 44->52, bone_oracle 40->47, flame_tyrant 42->49
+    //     (plus proportional damage bumps)
+    //   - elite baseHp raised 29-34 -> 41-46, to stay clearly above the now-tougher
+    //     strong tier (34-40)
+    //   - room weights (stratum 1): encounter 40->50 / potion 16->10 / rest 11->8
+    //     (non-pre-boss), encounter 22->30 / rest 8->6 (pre-boss)
+    //   - deep-stratum HP/damage slopes softened (DEEP_HP_SLOPE 0.3->0.03,
+    //     ELITE_DEEP_HP_SLOPE 0.5->0.05, BOSS_HP_PER_DEPTH_BEYOND_FIRST 1->0.3) and a
+    //     dedicated (softer) deep room-weight table added — see the delve-dominance
+    //     test below for why.
+    expect(summary.winRate).toBeGreaterThanOrEqual(0.2);
+    expect(summary.winRate).toBeLessThanOrEqual(0.4);
+    expect(summary.bossReachRate).toBeGreaterThanOrEqual(0.25);
+    expect(summary.bossReachRate).toBeLessThanOrEqual(0.55);
+    expect(summary.bossKillGivenReach).toBeGreaterThanOrEqual(0.45);
+    expect(summary.bossKillGivenReach).toBeLessThanOrEqual(0.85);
+  });
+
+  test('weak-tier fights stay highly winnable — fresh-deck floor (U12)', () => {
+    const summary = simulateScenarioSummary({}, 400);
+
+    // Tier-1 winnability floor (plan test scenario): the base run's difficulty
+    // comes from medium/strong tiers, elites, and the boss, not from the
+    // fresh-deck opener. Measured 100% (all weak-tier 'encounter' fights won) at
+    // 400 seeds; the floor sits below that so this isn't brittle to future
+    // balance nudges elsewhere in the run.
+    expect(summary.byTier.weak.total).toBeGreaterThan(0);
+    expect(summary.weakTierWinRate).toBeGreaterThanOrEqual(0.85);
   });
 
   test('the run still models taken fights across the encounter buckets', () => {
@@ -155,16 +174,13 @@ describe('balance simulator economy bands', () => {
     expect(Object.keys(summary.byEncounter).some((key) => key !== '0')).toBe(true);
   });
 
-  // pending U12 rebaseline — see docs/plans/2026-07-03-001-feat-roguelike-difficulty-plan.md
-  // (U9 makes elites real in the sim; both assertions below were the entire test body and
-  // both now measure below their band — winRate ~0.76, bossReachRate ~0.82 — so the whole
-  // test is skipped rather than left empty.)
-  test.skip('starter-card variety alone stays inside the baseline band', () => {
+  test('starter-card variety alone stays inside the baseline band', () => {
     const summary = simulateScenarioSummary({ starterCardVarietyUnlocked: true }, 400);
 
-    // Same re-baselined band as the baseline test; variety must not distort it.
-    expect(summary.winRate).toBeGreaterThanOrEqual(0.88);
-    expect(summary.bossReachRate).toBeGreaterThanOrEqual(0.94);
+    // Same band as the baseline test (measured 0.2525 — variety alone doesn't
+    // distort the challenge band).
+    expect(summary.winRate).toBeGreaterThanOrEqual(0.2);
+    expect(summary.winRate).toBeLessThanOrEqual(0.4);
   });
 
   test('starter kit scenarios change the opener without erasing the challenge band', () => {
@@ -182,13 +198,12 @@ describe('balance simulator economy bands', () => {
       );
 
       expect(summary).not.toEqual(varietyOnly);
-      // Re-baselined for the turn-system rebuild (measured 0.94-0.98 across the
-      // kits at 400 seeds); the challenge band itself is playtest-owned tuning.
-      // pending U12 rebaseline — see docs/plans/2026-07-03-001-feat-roguelike-difficulty-plan.md
-      // (U9 makes elites real in the sim; measured winRate ~0.83-0.88 and bossReachRate
-      // ~0.84-0.92 across the kits as of U9, below this band.)
-      // expect(summary.winRate).toBeGreaterThanOrEqual(0.88);
-      // expect(summary.bossReachRate).toBeGreaterThanOrEqual(0.94);
+      // Kits are a separate tuning surface (not U12's file scope) and legitimately
+      // sit at different power levels — measured 0.26 (hexbinder) to 0.40 (warden)
+      // at 400 seeds, a wider band than the baseline's so a kit can't drift to
+      // "always wins"/"never wins" without failing here.
+      expect(summary.winRate).toBeGreaterThanOrEqual(0.15);
+      expect(summary.winRate).toBeLessThanOrEqual(0.44);
     }
   });
 
@@ -203,13 +218,12 @@ describe('balance simulator economy bands', () => {
       400,
     );
 
-    // Re-baselined for the turn-system rebuild: with the baseline already near
-    // the ceiling (0.96), prep's old +0.1 margin cannot exist — assert prep
-    // never hurts and stays at the top of the band. The meaningful margin
-    // returns when the post-M2 numeric pass restores a real challenge band.
-    expect(prepared.winRate).toBeGreaterThanOrEqual(baseline.winRate);
-    expect(prepared.bossReachRate).toBeGreaterThanOrEqual(baseline.bossReachRate);
-    expect(prepared.bossKillGivenReach).toBeGreaterThanOrEqual(0.9);
+    // Re-baselined for U12: with the base band now genuinely hard (0.2525), full
+    // prep has real headroom to show its worth — measured 0.595 winRate / 0.8175
+    // bossReachRate / 0.728 bossKillGivenReach, vs baseline's 0.2525 / 0.365 / 0.69.
+    expect(prepared.winRate).toBeGreaterThan(baseline.winRate);
+    expect(prepared.bossReachRate).toBeGreaterThan(baseline.bossReachRate);
+    expect(prepared.bossKillGivenReach).toBeGreaterThanOrEqual(0.65);
   });
 });
 
@@ -318,7 +332,11 @@ describe('delve economy', () => {
     // the rebuilt combat the aggressive line dies before it ever banks, so no
     // conversion can crown an extreme (deep-scaling tuning is playtest-owned).
     // The guard's INPUT still matters: 1 Ember per Gold must blow the payoff
-    // spread up by an order of magnitude compared to the tuned conversion.
+    // spread up well past the tuned (guarded) conversion's spread.
+    // Re-baselined for U12: the roguelike-hard base run banks less Gold overall
+    // (attrition eats into it before a stratum clears), so the guarded spread
+    // shrinks too and the multiplier is no longer a full order of magnitude —
+    // measured ~8.8x at 400 seeds (tuned spread ~3.2, generous spread ~28.3).
     const tuned = simulateDelveEconomy({}, { runs: 400 });
     const generous = simulateDelveEconomy({}, { runs: 400, convert: (gold) => Math.floor(gold) });
     const spread = (economy: typeof tuned) => {
@@ -328,7 +346,7 @@ describe('delve economy', () => {
       return Math.max(...lines) - Math.min(...lines);
     };
 
-    expect(spread(generous)).toBeGreaterThan(spread(tuned) * 10);
+    expect(spread(generous)).toBeGreaterThan(spread(tuned) * 6);
   });
 
   test('expected Ember yield stays bounded by the conversion guard across strata', () => {

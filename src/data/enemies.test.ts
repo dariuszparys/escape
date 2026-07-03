@@ -91,9 +91,9 @@ describe('elite encounter class (U5/R2)', () => {
     expect(new Set(ELITES.map((def) => def.id)).size).toBe(ELITES.length);
   });
 
-  test('every elite carries HP clearly above strong-tier baseHp (23-27)', () => {
+  test('every elite carries HP clearly above strong-tier baseHp (34-40, U12)', () => {
     for (const def of ELITES) {
-      expect(def.baseHp, `${def.id} baseHp`).toBeGreaterThan(27);
+      expect(def.baseHp, `${def.id} baseHp`).toBeGreaterThan(40);
     }
   });
 
@@ -374,31 +374,31 @@ describe('U4 medium/strong pattern rebuild (R1)', () => {
     test('bandit', () => {
       const empowered = empowerPattern(defById('bandit').pattern, 3);
       expect(empowered.cycle.map((entry) => entry.effects)).toEqual([
-        [{ kind: 'damage', amount: 9 }], // Quick Slash: 6 -> 9
+        [{ kind: 'damage', amount: 11 }], // Quick Slash: 8 -> 11
         [
-          { kind: 'damage', amount: 3 },
-          { kind: 'damage', amount: 7 }, // Twin Strike: heaviest is the 4, not the 3
+          { kind: 'damage', amount: 4 },
+          { kind: 'damage', amount: 8 }, // Twin Strike: heaviest is the 5, not the 4
         ],
         [
-          { kind: 'damage', amount: 7 }, // Feint: 4 -> 7
-          { kind: 'block', amount: 3 },
+          { kind: 'damage', amount: 8 }, // Feint: 5 -> 8
+          { kind: 'block', amount: 4 },
         ],
-        [{ kind: 'damage', amount: 11 }], // Lunge: 8 -> 11
+        [{ kind: 'damage', amount: 14 }], // Lunge: 11 -> 14
       ]);
     });
 
     test('cultist', () => {
       const empowered = empowerPattern(defById('cultist').pattern, 3);
       expect(empowered.cycle.map((entry) => entry.effects)).toEqual([
-        [{ kind: 'status', status: 'burn', amount: 2, duration: 2 }], // Ember Curse: no damage, untouched
-        [{ kind: 'damage', amount: 8 }], // Talon Rake: 5 -> 8
+        [{ kind: 'status', status: 'burn', amount: 3, duration: 2 }], // Ember Curse: no damage, untouched
+        [{ kind: 'damage', amount: 10 }], // Talon Rake: 7 -> 10
         [
-          { kind: 'damage', amount: 6 }, // Venom Spit: 3 -> 6
-          { kind: 'status', status: 'poison', amount: 2, duration: 2 },
+          { kind: 'damage', amount: 7 }, // Venom Spit: 4 -> 7
+          { kind: 'status', status: 'poison', amount: 3, duration: 2 },
         ],
         [
-          { kind: 'status', status: 'poison', amount: 2, duration: 3 }, // Blood Sigil: no damage, untouched
-          { kind: 'status', status: 'burn', amount: 2, duration: 2 },
+          { kind: 'status', status: 'poison', amount: 3, duration: 3 }, // Blood Sigil: no damage, untouched
+          { kind: 'status', status: 'burn', amount: 3, duration: 2 },
         ],
       ]);
     });
@@ -406,16 +406,16 @@ describe('U4 medium/strong pattern rebuild (R1)', () => {
     test('armored_goblin (cycle and special both empowered independently)', () => {
       const empowered = empowerPattern(defById('armored_goblin').pattern, 3);
       expect(empowered.cycle.map((entry) => entry.effects)).toEqual([
-        [{ kind: 'block', amount: 6 }], // Shield Up: no damage, untouched
+        [{ kind: 'block', amount: 8 }], // Shield Up: no damage, untouched
         [
-          { kind: 'damage', amount: 8 }, // Shield Slam: 5 -> 8
-          { kind: 'block', amount: 3 },
+          { kind: 'damage', amount: 10 }, // Shield Slam: 7 -> 10
+          { kind: 'block', amount: 4 },
         ],
-        [{ kind: 'damage', amount: 10 }], // Crush: 7 -> 10
+        [{ kind: 'damage', amount: 13 }], // Crush: 10 -> 13
       ]);
       expect(empowered.special!.entry.effects).toEqual([
-        { kind: 'block', amount: 3 },
-        { kind: 'damage', amount: 11 }, // Shield Bash: 8 -> 11
+        { kind: 'block', amount: 4 },
+        { kind: 'damage', amount: 14 }, // Shield Bash: 11 -> 14
       ]);
     });
 
@@ -423,54 +423,54 @@ describe('U4 medium/strong pattern rebuild (R1)', () => {
       const empowered = empowerPattern(defById('knight').pattern, 3);
       expect(empowered.cycle.map((entry) => entry.effects)).toEqual([
         [
-          { kind: 'damage', amount: 7 }, // Sword Combo: tie broken in favor of the first hit, 4 -> 7
+          { kind: 'damage', amount: 9 }, // Sword Combo: tie broken in favor of the first hit, 6 -> 9
+          { kind: 'damage', amount: 6 },
+        ],
+        [
+          { kind: 'block', amount: 6 },
+          { kind: 'damage', amount: 10 }, // Guarded Cut: 7 -> 10
+        ],
+        [
+          { kind: 'damage', amount: 7 }, // Riposte Flurry: tie broken in favor of the first hit, 4 -> 7
+          { kind: 'damage', amount: 4 },
           { kind: 'damage', amount: 4 },
         ],
-        [
-          { kind: 'block', amount: 5 },
-          { kind: 'damage', amount: 8 }, // Guarded Cut: 5 -> 8
-        ],
-        [
-          { kind: 'damage', amount: 6 }, // Riposte Flurry: tie broken in favor of the first hit, 3 -> 6
-          { kind: 'damage', amount: 3 },
-          { kind: 'damage', amount: 3 },
-        ],
-        [{ kind: 'damage', amount: 13 }], // Heavy Blade: 10 -> 13
+        [{ kind: 'damage', amount: 17 }], // Heavy Blade: 14 -> 17
       ]);
     });
 
     test('necromancer (cycle and special both empowered independently)', () => {
       const empowered = empowerPattern(defById('necromancer').pattern, 3);
       expect(empowered.cycle.map((entry) => entry.effects)).toEqual([
-        [{ kind: 'status', status: 'poison', amount: 3, duration: 2 }], // Soul Rot: no damage, untouched
-        [{ kind: 'damage', amount: 10 }], // Dark Bolt: 7 -> 10
+        [{ kind: 'status', status: 'poison', amount: 4, duration: 2 }], // Soul Rot: no damage, untouched
+        [{ kind: 'damage', amount: 13 }], // Dark Bolt: 10 -> 13
         [
-          { kind: 'damage', amount: 7 }, // Withering Hex: 4 -> 7
-          { kind: 'status', status: 'burn', amount: 2, duration: 2 },
+          { kind: 'damage', amount: 8 }, // Withering Hex: 5 -> 8
+          { kind: 'status', status: 'burn', amount: 3, duration: 2 },
         ],
         [
-          { kind: 'block', amount: 4 }, // Bone Ward: no damage, untouched
-          { kind: 'status', status: 'poison', amount: 2, duration: 2 },
+          { kind: 'block', amount: 5 }, // Bone Ward: no damage, untouched
+          { kind: 'status', status: 'poison', amount: 3, duration: 2 },
         ],
       ]);
       expect(empowered.special!.entry.effects).toEqual([
-        { kind: 'damage', amount: 9 }, // Reap: 6 -> 9
-        { kind: 'status', status: 'poison', amount: 3, duration: 3 },
+        { kind: 'damage', amount: 11 }, // Reap: 8 -> 11
+        { kind: 'status', status: 'poison', amount: 4, duration: 3 },
       ]);
     });
 
     test('ogre (cycle and special both empowered independently)', () => {
       const empowered = empowerPattern(defById('ogre').pattern, 3);
       expect(empowered.cycle.map((entry) => entry.effects)).toEqual([
-        [{ kind: 'block', amount: 8 }], // Brace Up: no damage, untouched
-        [{ kind: 'damage', amount: 12 }], // Smash: 9 -> 12
+        [{ kind: 'block', amount: 10 }], // Brace Up: no damage, untouched
+        [{ kind: 'damage', amount: 16 }], // Smash: 13 -> 16
         [
-          { kind: 'block', amount: 4 },
-          { kind: 'damage', amount: 10 }, // Guarded Smash: 7 -> 10
+          { kind: 'block', amount: 5 },
+          { kind: 'damage', amount: 13 }, // Guarded Smash: 10 -> 13
         ],
       ]);
       expect(empowered.special!.entry.effects).toEqual([
-        { kind: 'damage', amount: 15 }, // Earthbreaker: 12 -> 15
+        { kind: 'damage', amount: 20 }, // Earthbreaker: 17 -> 20
       ]);
     });
   });
@@ -486,7 +486,7 @@ describe('U4 medium/strong pattern rebuild (R1)', () => {
       const entry = defById('necromancer').pattern.cycle.find((e) => e.name === 'Bone Ward')!;
       const view = intentView(entry);
       expect(view.kind).toBe('block');
-      expect(view.magnitude).toBe(4);
+      expect(view.magnitude).toBe(5);
       expect(entry.telegraph.toLowerCase()).toMatch(/ward|guard|shield|brace|lattice/);
     });
 

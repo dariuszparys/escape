@@ -11,14 +11,6 @@ import { isStratumBoundary, stratumForDepth } from './strata';
  * structured result the caller renders and records.
  */
 
-/**
- * HP restored on committing a delve — a breather between strata. Tuned against the
- * U7 harness (KTD8): enough that early delves are survivable so banking-at-gate-1 is
- * not a dominant line (R14), but a flat amount that deep escalation eventually
- * outpaces, so pushing forever still ends in death.
- */
-export const STRATUM_CLEAR_HEAL = 20;
-
 export interface DelveResolution {
   /** Run terminus: banked-and-escaped (true) vs. died (false). */
   escaped: boolean;
@@ -43,10 +35,19 @@ export function isAtGate(depth: number): boolean {
  * Commit to delving the next stratum. Advances the stratum counter; depth keeps
  * climbing via subsequent room transitions, so escalation is automatic — there is
  * no multiplier to apply. Irreversible until the next gate (R3).
+ *
+ * The gate-clear breather is a full heal (re-tuned for U12): the roguelike-hard
+ * base run (stratum 1 alone: ~37% boss-reach) already spends most of a run's HP
+ * margin just clearing one stratum, so the old partial heal made a second stratum
+ * a near-certain death and wrongly crowned "bank at gate 1" as a dominant line
+ * (R14). A full heal keeps push-your-luck a genuine, non-degenerate choice — deep
+ * escalation (HP/damage slopes past MAX_DEPTH, plus a still-real per-fight risk)
+ * outpaces it eventually, so pushing forever still ends in death (proven by the
+ * aggressive line's near-0% bank rate).
  */
 export function commitDelve(run: RunState): RunState {
   run.stratum += 1;
-  run.heal(STRATUM_CLEAR_HEAL);
+  run.heal(run.maxHp);
   return run;
 }
 
