@@ -76,7 +76,11 @@ export function awardEnemyGold(run: RunState, rng: GameRng, depth: number): numb
   return amount;
 }
 
-/** Elite reward bias (R5/KTD5): directional placeholders — U12 rebaselines as a set. */
+/**
+ * Elite reward bias (R5/KTD5). Reviewed under the U12 numeric rebaseline and left
+ * unchanged — the target win-rate band and elite engagement/win rates were reached
+ * through enemy and room-weight tuning alone, without needing a reward-side lever.
+ */
 export const ELITE_CARD_OFFER_COUNT = 4;
 export const ELITE_TIER_BIAS_DEPTH = 5; // added to `depth` only for elite offer rolls, biasing randomCard's tier odds up without touching randomCard itself
 export const ELITE_GOLD_MULTIPLIER = 2;

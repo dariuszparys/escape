@@ -374,10 +374,11 @@ function roomEventScore(run: RunState, event: RoomEvent): number {
     case 'start':
       return 0;
     case 'elite':
-      // Directional placeholder (KTD8) — scored above trap, comparable to a
-      // fresh-HP encounter, so a scouted player sometimes routes toward it for
-      // the richer reward and sometimes away for safety. U12 tunes the exact
-      // value from measurement, alongside every other coupled constant.
+      // Reviewed under the U12 numeric rebaseline and left unchanged: scored
+      // above trap, comparable to a fresh-HP encounter, so a scouted player
+      // sometimes routes toward it for the richer reward and sometimes away
+      // for safety — the target band and elite engagement rate were reached
+      // without needing to move this heuristic.
       return run.hp >= run.maxHp * 0.6 ? 18 : 4;
   }
 }
@@ -393,9 +394,9 @@ function roomEventScore(run: RunState, event: RoomEvent): number {
  * guarantee is *spent* the moment it's due regardless of the roll's outcome
  * (see chooseRoomEvent below) — exactly one flip per stratum, never retried
  * across the rest of the window — so the measured engagement rate tracks this
- * constant directly rather than compounding across every eligible depth. U12
- * retunes this alongside every other coupled constant once all difficulty
- * content has landed; this unit only needs it non-degenerate (KTD8).
+ * constant directly rather than compounding across every eligible depth.
+ * Reviewed under the U12 numeric rebaseline and left unchanged (measured
+ * eliteEngagementRate ~0.505 — comfortably non-degenerate, KTD8).
  */
 export const ELITE_ENGAGEMENT_FLOOR = 0.5;
 

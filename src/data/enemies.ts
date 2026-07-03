@@ -504,10 +504,8 @@ export const BOSSES: EnemyDef[] = [
  * weak/medium/strong depth-tier ladder. Room-triggered (U7 wires the room type) —
  * `spawnElite` picks from this array directly, never through `getEnemyTierForDepth`.
  * Each elite carries exactly ONE signature mechanic teaching a specific counterplay
- * lesson; HP is elite-grade (clearly above strong-tier's 23-27 baseHp) and scales
- * with a steeper-than-normal depth slope (see `eliteHpForDepth`). Numbers here are
- * structural placeholders — U12 rebaselines every coupled constant from simulator
- * measurement, not hand-tuning done here.
+ * lesson; HP is elite-grade (clearly above strong-tier's 34-40 baseHp, U12) and
+ * scales with a steeper-than-normal depth slope (see `eliteHpForDepth`).
  */
 export const ELITES: EnemyDef[] = [
   {
