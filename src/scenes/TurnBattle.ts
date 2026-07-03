@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { playSfx } from '../audio/sfx';
+import { playSfx, startAmbience, stopAmbience } from '../audio/sfx';
+import { playMusic, stopAllMusic, trackForEncounterKind } from '../audio/music';
 import { GAME_H, GAME_W } from '../config';
 import { Card, StatusEffectType } from '../data/cards';
 import { EnemyInstance } from '../data/enemies';
@@ -263,6 +264,9 @@ export class TurnBattleScene extends Phaser.Scene {
     this.keyC = this.input.keyboard!.addKey('C');
     this.keyE = this.input.keyboard!.addKey('E');
 
+    stopAmbience(this.game);
+    playMusic(this, trackForEncounterKind(this.encounterKind));
+
     this.drawStaticChrome();
     this.createEnemyZone();
     this.createPlayerZone();
@@ -322,7 +326,11 @@ export class TurnBattleScene extends Phaser.Scene {
     this.refreshAllBars();
 
     this.exposeDebugHandle();
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.closePilePanel());
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.closePilePanel();
+      stopAllMusic(this.game);
+      startAmbience(this.game);
+    });
   }
 
   update(): void {
