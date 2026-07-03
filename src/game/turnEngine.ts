@@ -48,6 +48,10 @@ export interface TurnBattleState {
   drawPile: Card[];
   hand: Card[];
   discardPile: Card[];
+  /** Cards played with `exhaust` set (KTD1): they leave play for the rest of this battle,
+   * joining neither the Draw Pile nor the Discard Pile. Per-battle only — `createBattle`
+   * always rebuilds the Draw Pile from the full collection, so exhaust never persists. */
+  exhaustPile: Card[];
   player: TurnCombatant;
   enemy: TurnCombatant;
   intent: IntentState;
@@ -107,6 +111,7 @@ function cloneState(state: TurnBattleState): TurnBattleState {
     drawPile: [...state.drawPile],
     hand: [...state.hand],
     discardPile: [...state.discardPile],
+    exhaustPile: [...state.exhaustPile],
     player: cloneCombatant(state.player),
     enemy: cloneCombatant(state.enemy),
     intent: cloneIntentState(state.intent),
@@ -425,6 +430,7 @@ export function createBattle(config: TurnEngineConfig, rng: GameRng): TurnComman
     drawPile: shuffle(rng, config.deck),
     hand: [],
     discardPile: [],
+    exhaustPile: [],
     player: {
       id: 'player',
       name: config.player.name ?? 'You',
@@ -456,8 +462,10 @@ export function createBattle(config: TurnEngineConfig, rng: GameRng): TurnComman
 /**
  * F2: play one card. Rules resolve here, completely and instantly; the returned
  * events replay it. Effects stop the moment lethal is reached (R18 — leftovers
- * are forfeit), but the card still lands in the discard pile before the outcome
- * marker so its lifecycle stays legible (R10).
+ * are forfeit), but the card still lands in a pile before the outcome marker so
+ * its lifecycle stays legible (R10): a card marked `exhaust` (KTD1) routes to
+ * `exhaustPile` instead of `discardPile`, leaving play for the rest of the
+ * battle without shrinking the collection permanently (AE1).
  */
 export function playCard(input: TurnBattleState, cardUid: number, rng: GameRng): TurnCommandResult {
   if (input.phase === 'decided') return reject(input, 'battle_decided');
@@ -478,8 +486,17 @@ export function playCard(input: TurnBattleState, cardUid: number, rng: GameRng):
     applyEffect(rt, effect, 'player');
     if (checkTerminal(rt)) break;
   }
-  state.discardPile.push(played);
-  rt.events.push({ type: 'cardDiscarded', card: played, discardCount: state.discardPile.length });
+  if (played.exhaust) {
+    state.exhaustPile.push(played);
+    rt.events.push({
+      type: 'cardExhausted',
+      card: played,
+      exhaustCount: state.exhaustPile.length,
+    });
+  } else {
+    state.discardPile.push(played);
+    rt.events.push({ type: 'cardDiscarded', card: played, discardCount: state.discardPile.length });
+  }
   announceNoPlays(rt);
   return finish(rt);
 }

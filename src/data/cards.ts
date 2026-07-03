@@ -23,6 +23,8 @@ export interface CardDef {
   description: string;
   effects: CardEffect[];
   starterKitOnly?: boolean;
+  /** Engine-routed pile flag (KTD1): a played exhaust card joins `exhaustPile` instead of the Discard Pile for the rest of the battle. Pure routing — no per-target resolution semantics. */
+  exhaust?: boolean;
 }
 
 export interface Card extends CardDef {

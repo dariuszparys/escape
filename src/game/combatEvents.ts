@@ -99,6 +99,7 @@ export type CombatEvent =
       readonly hpAfter: number;
     }
   | { readonly type: 'cardDiscarded'; readonly card: Card; readonly discardCount: number }
+  | { readonly type: 'cardExhausted'; readonly card: Card; readonly exhaustCount: number }
   | { readonly type: 'handDiscarded'; readonly count: number; readonly discardCount: number }
   | { readonly type: 'itemUsed'; readonly itemName: string }
   | { readonly type: 'enemyBeatStarted'; readonly name: string }

@@ -45,6 +45,7 @@ function playVenomStrike(): void {
     drawPile: [],
     hand: [venomStrike],
     discardPile: [],
+    exhaustPile: [],
     player: { id: 'player', name: 'Player', hp: 20, maxHp: 20, armor: 0, block: 0, statuses: [] },
     enemy: { id: 'enemy', name: 'Enemy', hp: 20, maxHp: 20, armor: 0, block: 0, statuses: [] },
     intent,

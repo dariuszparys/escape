@@ -62,6 +62,7 @@ const STEP_MS: Record<CombatEvent['type'], number> = {
   blockGained: 190,
   healed: 210,
   cardDiscarded: 140,
+  cardExhausted: 140,
   handDiscarded: 180,
   itemUsed: 200,
   enemyBeatStarted: 300,
