@@ -8,6 +8,14 @@ import {
   spawnEnemy,
 } from './enemies';
 import { SequenceRng } from '../game/test-rng';
+import {
+  createIntentState,
+  empowerPattern,
+  intentView,
+  resolveIntent,
+  telegraphIntent,
+  type IntentPattern,
+} from '../game/intentPatterns';
 
 describe('enemy generation', () => {
   test('enemy tiers follow dungeon depth', () => {
@@ -125,5 +133,234 @@ describe('depth-scaled intent damage (U13/R10)', () => {
       ),
     );
     expect(instanceMax).toBe(defMax + intentBonusForDepth(8));
+  });
+});
+
+describe('U4 medium/strong pattern rebuild (R1)', () => {
+  const defById = (id: string) => [...ENEMIES, ...BOSSES].find((def) => def.id === id)!;
+
+  /** Drives telegraphIntent/resolveIntent for turns 1..count, collecting the named entry seen each turn. */
+  function namesOverTurns(pattern: IntentPattern, count: number): string[] {
+    let state = createIntentState(pattern);
+    const seen: string[] = [];
+    for (let turn = 1; turn <= count; turn++) {
+      state = telegraphIntent(state, turn);
+      seen.push(state.current!.name);
+      state = resolveIntent(state);
+    }
+    return seen;
+  }
+
+  describe('cycle wrap-around for rebuilt patterns without a special', () => {
+    test('bandit: 4-entry cycle wraps cleanly', () => {
+      expect(namesOverTurns(defById('bandit').pattern, 8)).toEqual([
+        'Quick Slash',
+        'Twin Strike',
+        'Feint',
+        'Lunge',
+        'Quick Slash',
+        'Twin Strike',
+        'Feint',
+        'Lunge',
+      ]);
+    });
+
+    test('cultist: 4-entry cycle wraps cleanly', () => {
+      expect(namesOverTurns(defById('cultist').pattern, 8)).toEqual([
+        'Ember Curse',
+        'Talon Rake',
+        'Venom Spit',
+        'Blood Sigil',
+        'Ember Curse',
+        'Talon Rake',
+        'Venom Spit',
+        'Blood Sigil',
+      ]);
+    });
+
+    test('knight: 4-entry cycle wraps cleanly', () => {
+      expect(namesOverTurns(defById('knight').pattern, 8)).toEqual([
+        'Sword Combo',
+        'Guarded Cut',
+        'Riposte Flurry',
+        'Heavy Blade',
+        'Sword Combo',
+        'Guarded Cut',
+        'Riposte Flurry',
+        'Heavy Blade',
+      ]);
+    });
+  });
+
+  describe('special intervals interleave without advancing (or resetting) the cycle', () => {
+    test('armored_goblin: interval 3 against a 3-entry cycle drifts through every cycle position', () => {
+      expect(namesOverTurns(defById('armored_goblin').pattern, 9)).toEqual([
+        'Shield Up',
+        'Shield Slam',
+        'Shield Bash', // turn 3: special fires, cycle index untouched
+        'Crush', // cycle resumes exactly where it left off
+        'Shield Up',
+        'Shield Bash', // turn 6
+        'Shield Slam',
+        'Crush',
+        'Shield Bash', // turn 9
+      ]);
+    });
+
+    test('necromancer: interval 4 against a 4-entry cycle', () => {
+      expect(namesOverTurns(defById('necromancer').pattern, 9)).toEqual([
+        'Soul Rot',
+        'Dark Bolt',
+        'Withering Hex',
+        'Reap', // turn 4: special fires
+        'Bone Ward', // cycle resumes at the entry it would have played next
+        'Soul Rot',
+        'Dark Bolt',
+        'Reap', // turn 8
+        'Withering Hex',
+      ]);
+    });
+
+    test('ogre: interval 5 against a 3-entry cycle', () => {
+      expect(namesOverTurns(defById('ogre').pattern, 10)).toEqual([
+        'Brace Up',
+        'Smash',
+        'Guarded Smash',
+        'Brace Up',
+        'Earthbreaker', // turn 5: special fires
+        'Smash',
+        'Guarded Smash',
+        'Brace Up',
+        'Smash',
+        'Earthbreaker', // turn 10
+      ]);
+    });
+  });
+
+  describe('empowerPattern boosts the correct heaviest hit for every rebuilt def', () => {
+    test('bandit', () => {
+      const empowered = empowerPattern(defById('bandit').pattern, 3);
+      expect(empowered.cycle.map((entry) => entry.effects)).toEqual([
+        [{ kind: 'damage', amount: 9 }], // Quick Slash: 6 -> 9
+        [
+          { kind: 'damage', amount: 3 },
+          { kind: 'damage', amount: 7 }, // Twin Strike: heaviest is the 4, not the 3
+        ],
+        [
+          { kind: 'damage', amount: 7 }, // Feint: 4 -> 7
+          { kind: 'block', amount: 3 },
+        ],
+        [{ kind: 'damage', amount: 11 }], // Lunge: 8 -> 11
+      ]);
+    });
+
+    test('cultist', () => {
+      const empowered = empowerPattern(defById('cultist').pattern, 3);
+      expect(empowered.cycle.map((entry) => entry.effects)).toEqual([
+        [{ kind: 'status', status: 'burn', amount: 2, duration: 2 }], // Ember Curse: no damage, untouched
+        [{ kind: 'damage', amount: 8 }], // Talon Rake: 5 -> 8
+        [
+          { kind: 'damage', amount: 6 }, // Venom Spit: 3 -> 6
+          { kind: 'status', status: 'poison', amount: 2, duration: 2 },
+        ],
+        [
+          { kind: 'status', status: 'poison', amount: 2, duration: 3 }, // Blood Sigil: no damage, untouched
+          { kind: 'status', status: 'burn', amount: 2, duration: 2 },
+        ],
+      ]);
+    });
+
+    test('armored_goblin (cycle and special both empowered independently)', () => {
+      const empowered = empowerPattern(defById('armored_goblin').pattern, 3);
+      expect(empowered.cycle.map((entry) => entry.effects)).toEqual([
+        [{ kind: 'block', amount: 6 }], // Shield Up: no damage, untouched
+        [
+          { kind: 'damage', amount: 8 }, // Shield Slam: 5 -> 8
+          { kind: 'block', amount: 3 },
+        ],
+        [{ kind: 'damage', amount: 10 }], // Crush: 7 -> 10
+      ]);
+      expect(empowered.special!.entry.effects).toEqual([
+        { kind: 'block', amount: 3 },
+        { kind: 'damage', amount: 11 }, // Shield Bash: 8 -> 11
+      ]);
+    });
+
+    test('knight', () => {
+      const empowered = empowerPattern(defById('knight').pattern, 3);
+      expect(empowered.cycle.map((entry) => entry.effects)).toEqual([
+        [
+          { kind: 'damage', amount: 7 }, // Sword Combo: tie broken in favor of the first hit, 4 -> 7
+          { kind: 'damage', amount: 4 },
+        ],
+        [
+          { kind: 'block', amount: 5 },
+          { kind: 'damage', amount: 8 }, // Guarded Cut: 5 -> 8
+        ],
+        [
+          { kind: 'damage', amount: 6 }, // Riposte Flurry: tie broken in favor of the first hit, 3 -> 6
+          { kind: 'damage', amount: 3 },
+          { kind: 'damage', amount: 3 },
+        ],
+        [{ kind: 'damage', amount: 13 }], // Heavy Blade: 10 -> 13
+      ]);
+    });
+
+    test('necromancer (cycle and special both empowered independently)', () => {
+      const empowered = empowerPattern(defById('necromancer').pattern, 3);
+      expect(empowered.cycle.map((entry) => entry.effects)).toEqual([
+        [{ kind: 'status', status: 'poison', amount: 3, duration: 2 }], // Soul Rot: no damage, untouched
+        [{ kind: 'damage', amount: 10 }], // Dark Bolt: 7 -> 10
+        [
+          { kind: 'damage', amount: 7 }, // Withering Hex: 4 -> 7
+          { kind: 'status', status: 'burn', amount: 2, duration: 2 },
+        ],
+        [
+          { kind: 'block', amount: 4 }, // Bone Ward: no damage, untouched
+          { kind: 'status', status: 'poison', amount: 2, duration: 2 },
+        ],
+      ]);
+      expect(empowered.special!.entry.effects).toEqual([
+        { kind: 'damage', amount: 9 }, // Reap: 6 -> 9
+        { kind: 'status', status: 'poison', amount: 3, duration: 3 },
+      ]);
+    });
+
+    test('ogre (cycle and special both empowered independently)', () => {
+      const empowered = empowerPattern(defById('ogre').pattern, 3);
+      expect(empowered.cycle.map((entry) => entry.effects)).toEqual([
+        [{ kind: 'block', amount: 8 }], // Brace Up: no damage, untouched
+        [{ kind: 'damage', amount: 12 }], // Smash: 9 -> 12
+        [
+          { kind: 'block', amount: 4 },
+          { kind: 'damage', amount: 10 }, // Guarded Smash: 7 -> 10
+        ],
+      ]);
+      expect(empowered.special!.entry.effects).toEqual([
+        { kind: 'damage', amount: 15 }, // Earthbreaker: 12 -> 15
+      ]);
+    });
+  });
+
+  describe('telegraph honesty for the newly authored pure-status/pure-block entries (R5)', () => {
+    test('Blood Sigil (cultist) is a pure status combo and reads like one', () => {
+      const entry = defById('cultist').pattern.cycle.find((e) => e.name === 'Blood Sigil')!;
+      expect(intentView(entry).kind).toBe('status');
+      expect(entry.telegraph.toLowerCase()).toMatch(/rot|flame|venom|poison|burn|curse|sigil/);
+    });
+
+    test('Bone Ward (necromancer) is block-primary by intentView priority and its telegraph leads with defense', () => {
+      const entry = defById('necromancer').pattern.cycle.find((e) => e.name === 'Bone Ward')!;
+      const view = intentView(entry);
+      expect(view.kind).toBe('block');
+      expect(view.magnitude).toBe(4);
+      expect(entry.telegraph.toLowerCase()).toMatch(/ward|guard|shield|brace|lattice/);
+    });
+
+    test('escalating specials telegraph as attacks, matching their damage-led effects', () => {
+      expect(intentView(defById('armored_goblin').pattern.special!.entry).kind).toBe('attack');
+      expect(intentView(defById('necromancer').pattern.special!.entry).kind).toBe('attack');
+      expect(intentView(defById('ogre').pattern.special!.entry).kind).toBe('attack');
+    });
   });
 });

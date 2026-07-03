@@ -118,12 +118,23 @@ export const ENEMIES: EnemyDef[] = [
     baseHp: 16,
     tier: 'medium',
     boss: false,
+    // Fast/bursty: Twin Strike splits its damage into two hits so half-invested
+    // block doesn't fully absorb it (block depletes per-effect, not per-turn),
+    // teaching that partial block loses value against multi-hit turns.
     pattern: {
       cycle: [
         {
           name: 'Quick Slash',
           telegraph: 'a knife flashes...',
           effects: [{ kind: 'damage', amount: 6 }],
+        },
+        {
+          name: 'Twin Strike',
+          telegraph: 'twin blades flicker in, one after the other...',
+          effects: [
+            { kind: 'damage', amount: 3 },
+            { kind: 'damage', amount: 4 },
+          ],
         },
         {
           name: 'Feint',
@@ -148,6 +159,8 @@ export const ENEMIES: EnemyDef[] = [
     baseHp: 17,
     tier: 'medium',
     boss: false,
+    // Status-heavy: Blood Sigil stacks two DoTs in one turn with no direct damage,
+    // pressuring the player to race the kill rather than trade hits at leisure.
     pattern: {
       cycle: [
         {
@@ -168,6 +181,14 @@ export const ENEMIES: EnemyDef[] = [
             { kind: 'status', status: 'poison', amount: 2, duration: 2 },
           ],
         },
+        {
+          name: 'Blood Sigil',
+          telegraph: 'carves a sigil that festers with rot and creeping flame...',
+          effects: [
+            { kind: 'status', status: 'poison', amount: 2, duration: 3 },
+            { kind: 'status', status: 'burn', amount: 2, duration: 2 },
+          ],
+        },
       ],
     },
   },
@@ -178,6 +199,9 @@ export const ENEMIES: EnemyDef[] = [
     baseHp: 19,
     tier: 'medium',
     boss: false,
+    // Block-then-smash, extended with a scaling special: every 3rd turn the
+    // turtling goblin converts its guard into a heavier crushing blow than its
+    // normal Crush, punishing players who let its cycle run unpressured.
     pattern: {
       cycle: [
         {
@@ -199,6 +223,17 @@ export const ENEMIES: EnemyDef[] = [
           effects: [{ kind: 'damage', amount: 7 }],
         },
       ],
+      special: {
+        interval: 3,
+        entry: {
+          name: 'Shield Bash',
+          telegraph: 'plants its shield and drives its full weight through a crushing blow...',
+          effects: [
+            { kind: 'block', amount: 3 },
+            { kind: 'damage', amount: 8 },
+          ],
+        },
+      },
     },
   },
   {
@@ -208,6 +243,9 @@ export const ENEMIES: EnemyDef[] = [
     baseHp: 23,
     tier: 'strong',
     boss: false,
+    // Duelist multi-hit: two different combo granularities (a 2-hit Sword Combo
+    // and a 3-hit Riposte Flurry) both shred partial block, contrasted against
+    // Heavy Blade's single hit that a full block cleanly stops.
     pattern: {
       cycle: [
         {
@@ -227,6 +265,15 @@ export const ENEMIES: EnemyDef[] = [
           ],
         },
         {
+          name: 'Riposte Flurry',
+          telegraph: 'blade flickers through a three-beat combination...',
+          effects: [
+            { kind: 'damage', amount: 3 },
+            { kind: 'damage', amount: 3 },
+            { kind: 'damage', amount: 3 },
+          ],
+        },
+        {
           name: 'Heavy Blade',
           telegraph: 'raises its blade high...',
           effects: [{ kind: 'damage', amount: 10 }],
@@ -241,6 +288,9 @@ export const ENEMIES: EnemyDef[] = [
     baseHp: 24,
     tier: 'strong',
     boss: false,
+    // Status/poison pressure, extended with a scaling special: every 4th turn
+    // channels a heavier strike-plus-poison combo than its normal hits, rewarding
+    // players who race the kill instead of trading at leisure.
     pattern: {
       cycle: [
         {
@@ -261,7 +311,26 @@ export const ENEMIES: EnemyDef[] = [
             { kind: 'status', status: 'burn', amount: 2, duration: 2 },
           ],
         },
+        {
+          name: 'Bone Ward',
+          telegraph: 'raises a lattice of bone to ward off retaliation while the curse lingers...',
+          effects: [
+            { kind: 'block', amount: 4 },
+            { kind: 'status', status: 'poison', amount: 2, duration: 2 },
+          ],
+        },
       ],
+      special: {
+        interval: 4,
+        entry: {
+          name: 'Reap',
+          telegraph: 'shadows coalesce into a reaping strike, the poison sinking deep...',
+          effects: [
+            { kind: 'damage', amount: 6 },
+            { kind: 'status', status: 'poison', amount: 3, duration: 3 },
+          ],
+        },
+      },
     },
   },
   {
@@ -271,6 +340,9 @@ export const ENEMIES: EnemyDef[] = [
     baseHp: 27,
     tier: 'strong',
     boss: false,
+    // Block-then-big-hit, extended with a scaling special: every 5th turn its
+    // brace-and-swing rhythm culminates in a single overhead blow that dwarfs
+    // its normal Smash, testing whether the player timed their defenses to it.
     pattern: {
       cycle: [
         {
@@ -292,6 +364,14 @@ export const ENEMIES: EnemyDef[] = [
           ],
         },
       ],
+      special: {
+        interval: 5,
+        entry: {
+          name: 'Earthbreaker',
+          telegraph: 'rears back with both fists locked, ready to bring the ground itself down...',
+          effects: [{ kind: 'damage', amount: 12 }],
+        },
+      },
     },
   },
 ];

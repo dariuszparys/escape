@@ -9,11 +9,12 @@ import { RngDrawDigest, runSignature } from './runSignature';
  */
 const GOLDEN_SEED = 7;
 const GOLDEN_SIGNATURE =
-  // Re-goldened for the roguelike-difficulty rework (U6): the standard room weight
-  // table shifted toward encounters and away from potion/rest (R6), so this seed's
-  // fixed path now hits more encounters and draws more RNG before the same bank
-  // outcome — an intentional determinism change, not a regression.
-  'v=1|boss=1|gate=1|death=-|stratum=1|enc=3|embers=3|draws=182|hash=bd5e51f4';
+  // Re-goldened again for the roguelike-difficulty rework (U3 + U4, landed together):
+  // U3 expanded the card pool (shifts what rng.pick(pool) returns for reward/starter
+  // draws) and U4 rebuilt medium/strong intent patterns (multi-hit turns, new status
+  // moves, new specials — changes fight length and in-battle RNG draws). Same bank
+  // outcome, more encounters and draws before it. Intentional determinism change.
+  'v=1|boss=1|gate=1|death=-|stratum=1|enc=5|embers=4|draws=163|hash=c5f04b6f';
 
 describe('RngDrawDigest', () => {
   test('samples draw order and count, not just the value set (the load-bearing property)', () => {
