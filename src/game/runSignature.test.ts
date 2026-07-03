@@ -9,12 +9,13 @@ import { RngDrawDigest, runSignature } from './runSignature';
  */
 const GOLDEN_SEED = 7;
 const GOLDEN_SIGNATURE =
-  // Re-goldened again for the roguelike-difficulty rework (U3 + U4, landed together):
-  // U3 expanded the card pool (shifts what rng.pick(pool) returns for reward/starter
-  // draws) and U4 rebuilt medium/strong intent patterns (multi-hit turns, new status
-  // moves, new specials — changes fight length and in-battle RNG draws). Same bank
-  // outcome, more encounters and draws before it. Intentional determinism change.
-  'v=1|boss=1|gate=1|death=-|stratum=1|enc=5|embers=4|draws=163|hash=c5f04b6f';
+  // Re-goldened again for U9 (real elite engagement in the simulator): chooseRoomEvent
+  // now draws an extra rng.frac() per stratum for the unscouted engagement-floor roll
+  // (ELITE_ENGAGEMENT_FLOOR), and an 'elite' room can now actually fire in place of a
+  // regular 'encounter' — both shift downstream draw order/count and can change which
+  // fights (and how many) happen before the same bank outcome. Intentional determinism
+  // change, not a regression.
+  'v=1|boss=1|gate=1|death=-|stratum=1|enc=1|embers=3|draws=165|hash=30abd52a';
 
 describe('RngDrawDigest', () => {
   test('samples draw order and count, not just the value set (the load-bearing property)', () => {
