@@ -5,6 +5,8 @@ import { GAME_H, GAME_W } from '../config';
 import { Card, StatusEffectType } from '../data/cards';
 import { EnemyInstance } from '../data/enemies';
 import { InventoryItem } from '../data/items';
+import { cardRulesLines } from '../data/keywords';
+import { createCardTooltip, estimateTooltipHeight } from '../gfx/cardTooltip';
 import { CARD_H, CARD_W, makeCardView } from '../gfx/cardview';
 import { createPileInspector } from '../gfx/pileView';
 import { compactRewardImpactLabel, createRewardImpactText } from '../gfx/rewardImpactView';
@@ -29,6 +31,7 @@ import {
   slicePlayer,
 } from '../game/sliceBattle';
 import { getRun } from '../state';
+import { computeTooltipPlacement, TOOLTIP_WIDTH } from '../game/tooltipLayout';
 import {
   getTurnBattleLayout,
   HAND_CARD_SCALE,
@@ -200,6 +203,8 @@ export class TurnBattleScene extends Phaser.Scene {
   private logLines: string[] = [];
   private itemButtons: Phaser.GameObjects.Text[] = [];
   private pilePanel: Phaser.GameObjects.Container | null = null;
+  /** The rules-text tooltip for whichever card is currently hovered (hand or reward), if any (U11). */
+  private activeTooltip: Phaser.GameObjects.Container | null = null;
   private outcomeShown = false;
   private keyC!: Phaser.Input.Keyboard.Key;
   private keyE!: Phaser.Input.Keyboard.Key;
@@ -254,6 +259,7 @@ export class TurnBattleScene extends Phaser.Scene {
     this.logLines = [];
     this.itemButtons = [];
     this.pilePanel = null;
+    this.activeTooltip = null;
     this.endTurnPulse = null;
     this.outcomeShown = false;
     this.layout = getTurnBattleLayout();
@@ -328,6 +334,7 @@ export class TurnBattleScene extends Phaser.Scene {
     this.exposeDebugHandle();
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.closePilePanel();
+      this.hideCardTooltip();
       stopAllMusic(this.game);
       startAmbience(this.game);
     });
@@ -726,11 +733,13 @@ export class TurnBattleScene extends Phaser.Scene {
       if (!this.committedUids.has(card.uid) && !this.beatActive) {
         container.setDepth(15);
         container.setY(this.handY() - 16);
+        this.showCardTooltip(card, container);
       }
     });
     container.on('pointerout', () => {
       container.setDepth(10);
       container.setY(this.handY());
+      this.hideCardTooltip();
     });
     container.on('pointerdown', () => this.pressCard(card.uid));
     container.setDepth(10);
@@ -739,6 +748,35 @@ export class TurnBattleScene extends Phaser.Scene {
 
   private handY(): number {
     return this.layout.handArea.y + this.layout.handArea.h / 2;
+  }
+
+  // -------------------------------------------------------------- tooltip
+
+  /**
+   * Show the rules-text tooltip for `card`, anchored to `anchor`'s CURRENT
+   * on-screen rect (read at call time, not baked in earlier — a card's exact
+   * position/scale can shift between when its view was built and when it's
+   * hovered). Shared by hand cards (`makeHandCardView`) and victory reward
+   * cards (`runVictory`) — both call sites pass whatever container they're
+   * hovering; this method makes no hand-specific assumptions (U11 / KTD7).
+   */
+  private showCardTooltip(card: Card, anchor: Phaser.GameObjects.Container): void {
+    this.hideCardTooltip();
+    const anchorRect: TurnBattleRect = {
+      x: anchor.x - (CARD_W * anchor.scale) / 2,
+      y: anchor.y - (CARD_H * anchor.scale) / 2,
+      w: CARD_W * anchor.scale,
+      h: CARD_H * anchor.scale,
+    };
+    const lineCount = cardRulesLines(card).length;
+    const tooltipSize = { w: TOOLTIP_WIDTH, h: estimateTooltipHeight(lineCount) };
+    const placement = computeTooltipPlacement(anchorRect, tooltipSize);
+    this.activeTooltip = createCardTooltip(this, card, placement);
+  }
+
+  private hideCardTooltip(): void {
+    this.activeTooltip?.destroy();
+    this.activeTooltip = null;
   }
 
   private spawnDrawnCard(card: Card): void {
@@ -1326,8 +1364,14 @@ export class TurnBattleScene extends Phaser.Scene {
       const view = makeCardView(this, card, startX + index * spacing, 258, 0.92);
       view.setDepth(401);
       view.setInteractive({ useHandCursor: true });
-      view.on('pointerover', () => view.setScale(1.0));
-      view.on('pointerout', () => view.setScale(0.92));
+      view.on('pointerover', () => {
+        view.setScale(1.0);
+        this.showCardTooltip(card, view);
+      });
+      view.on('pointerout', () => {
+        view.setScale(0.92);
+        this.hideCardTooltip();
+      });
       view.on('pointerdown', () => {
         run.addCard(card);
         this.game.events.emit('hud-update');
