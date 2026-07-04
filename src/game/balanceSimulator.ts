@@ -7,7 +7,7 @@ import {
   getEnemyTierForDepth,
   spawnBoss,
   spawnElite,
-  spawnEnemy,
+  spawnEncounter,
   toEngineEnemies,
 } from '../data/enemies';
 import { InventoryItem, type InventoryItemDef, makeItem } from '../data/items';
@@ -869,7 +869,7 @@ export function simulateRun(
       encounters++;
       const tier = getEnemyTierForDepth(depth) as StandardTier;
       tierFights[tier].total++;
-      const battle = simulateBattle(run, spawnEnemy(rng, depth), rng, emphasis);
+      const battle = simulateBattle(run, spawnEncounter(rng, depth), rng, emphasis);
       if (!battle.won) {
         return {
           victory: false,

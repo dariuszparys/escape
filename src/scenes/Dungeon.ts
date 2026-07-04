@@ -13,7 +13,7 @@ import {
   VISION_RADIUS,
 } from '../config';
 import { Card, makeCard, CARD_DEFS } from '../data/cards';
-import { EnemyInstance, spawnBoss, spawnElite, spawnEnemy } from '../data/enemies';
+import { EnemyInstance, spawnBoss, spawnElite, spawnEncounter } from '../data/enemies';
 import { InventoryItem, makeItem, randomItemIdForDepth } from '../data/items';
 import { STARTER_KITS } from '../data/starterKits';
 import { ARCHETYPES } from '../data/archetypes';
@@ -82,7 +82,10 @@ interface BuiltRoom {
   chest: { x: number; y: number; img: Phaser.GameObjects.Image; opened: boolean } | null;
   restAt: { x: number; y: number; img: Phaser.GameObjects.Image; opened: boolean } | null;
   cardPicks: CardPickup[];
+  /** The room's representative enemy (the pack leader): the entry cue anchor and victory fade target. */
   enemy: EnemyInstance | null;
+  /** The full pack fought in this room's battle (multi-enemy); a solo fight is one element. */
+  enemyPack: EnemyInstance[] | null;
   enemySprite: Phaser.GameObjects.Image | null;
 }
 
@@ -397,6 +400,7 @@ export class DungeonScene extends Phaser.Scene {
       restAt: null,
       cardPicks: [],
       enemy: null,
+      enemyPack: null,
       enemySprite: null,
     };
 
@@ -512,7 +516,8 @@ export class DungeonScene extends Phaser.Scene {
         break;
       }
       case 'encounter': {
-        built.enemy = spawnEnemy(this.gameRng, room.depth);
+        built.enemyPack = spawnEncounter(this.gameRng, room.depth);
+        built.enemy = built.enemyPack[0];
         this.createEnemyActor(built, origin, 'normal', built.enemy);
         break;
       }
@@ -831,7 +836,7 @@ export class DungeonScene extends Phaser.Scene {
     // fight-trigger condition gates it — so this narrowing is exhaustive in practice.
     const data: RunBattleSceneData = {
       mode: 'run',
-      enemies: [this.built.enemy],
+      enemies: this.built.enemyPack ?? [this.built.enemy],
       rng: this.gameRng,
       encounterKind:
         this.room.event === 'boss' ? 'boss' : this.room.event === 'elite' ? 'elite' : 'normal',
@@ -855,6 +860,7 @@ export class DungeonScene extends Phaser.Scene {
       });
       this.built.enemySprite = null;
       this.built.enemy = null;
+      this.built.enemyPack = null;
     }
     if (this.room.event === 'boss') {
       getRun().bossDefeated = true;

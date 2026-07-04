@@ -3,13 +3,17 @@ import {
   BOSSES,
   ELITES,
   ENEMIES,
+  MINIONS,
   eliteHpForDepth,
   enemyHpForDepth,
   getEnemyTierForDepth,
   intentBonusForDepth,
   spawnBoss,
   spawnElite,
+  spawnEncounter,
   spawnEnemy,
+  spawnMinionPack,
+  toEngineEnemies,
 } from './enemies';
 import { SequenceRng } from '../game/test-rng';
 import {
@@ -502,5 +506,73 @@ describe('U4 medium/strong pattern rebuild (R1)', () => {
       expect(intentView(defById('necromancer').pattern.special!.entry).kind).toBe('attack');
       expect(intentView(defById('ogre').pattern.special!.entry).kind).toBe('attack');
     });
+  });
+});
+
+describe('multi-enemy packs (spawnEncounter)', () => {
+  test('the first two depths always spawn a clean 1v1', () => {
+    // frac 0.9 would otherwise favor a pack; depth <= 2 forces solo before any roll.
+    for (const depth of [1, 2]) {
+      const pack = spawnEncounter(new SequenceRng([0.9, 0.9]), depth);
+      expect(pack).toHaveLength(1);
+      expect(ENEMIES.some((def) => def.id === pack[0].def.id)).toBe(true);
+    }
+  });
+
+  test('a low solo roll keeps a single normal enemy past depth 2', () => {
+    // frac 0 < PACK_SOLO_CHANCE -> solo; the member is a normal-tier enemy, not a minion.
+    const pack = spawnEncounter(new SequenceRng([0]), 5);
+    expect(pack).toHaveLength(1);
+    expect(MINIONS.some((def) => def.id === pack[0].def.id)).toBe(false);
+  });
+
+  test('a high solo roll spawns a minion pack of 2 or 3', () => {
+    const pair = spawnEncounter(new SequenceRng([0.9, 0.9]), 5); // pack, size roll 0.9 -> size 2
+    const trio = spawnEncounter(new SequenceRng([0.9, 0.1]), 5); // pack, size roll 0.1 -> size 3
+    expect(pair).toHaveLength(2);
+    expect(trio).toHaveLength(3);
+    for (const member of [...pair, ...trio]) {
+      expect(MINIONS.some((def) => def.id === member.def.id)).toBe(true);
+    }
+  });
+
+  test("a pack's combined HP is anchored near a solo enemy of the tier (budget)", () => {
+    for (const depth of [3, 5, 8]) {
+      const solo = enemyHpForDepth(spawnEnemy(new SequenceRng([0]), depth).def.baseHp, depth);
+      for (const size of [2, 3]) {
+        const pack = spawnMinionPack(new SequenceRng([0.9]), depth, size);
+        expect(pack).toHaveLength(size);
+        const totalHp = pack.reduce((sum, member) => sum + member.hp, 0);
+        // Total pack HP ~ 1.3x a solo (PACK_HP_MULTIPLIER offsets focus-fire), give or take rounding
+        // and the per-member floor. It is clearly in a solo's ballpark, never a runaway wall.
+        expect(totalHp).toBeGreaterThan(solo);
+        expect(totalHp).toBeLessThan(solo * 2.2 + size * 6);
+        for (const member of pack) expect(member.hp).toBeGreaterThanOrEqual(6);
+      }
+    }
+  });
+
+  test('pack spawning is deterministic under a scripted rng', () => {
+    const seq = () => new SequenceRng([0.9, 0.1, 0.4, 0.7, 0.2]);
+    const a = spawnEncounter(seq(), 6).map((m) => ({ id: m.def.id, hp: m.hp }));
+    const b = spawnEncounter(seq(), 6).map((m) => ({ id: m.def.id, hp: m.hp }));
+    expect(a).toEqual(b);
+  });
+
+  test('toEngineEnemies gives pack members unique ids but leaves a solo bare', () => {
+    const pack = spawnMinionPack(new SequenceRng([0.9]), 5, 3);
+    const ids = toEngineEnemies(pack).map((enemy) => enemy.id);
+    expect(new Set(ids).size).toBe(3); // unique even when all three are the same minion type
+    const solo = toEngineEnemies([spawnEnemy(new SequenceRng([0]), 5)]);
+    expect(solo[0].id).not.toContain('#');
+  });
+
+  test('every minion has a telegraphable intent cycle', () => {
+    for (const def of MINIONS) {
+      expect(def.pattern.cycle.length).toBeGreaterThan(0);
+      for (const entry of def.pattern.cycle) {
+        expect(entry.effects.length).toBeGreaterThan(0);
+      }
+    }
   });
 });
