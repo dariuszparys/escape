@@ -38,6 +38,11 @@ export const KEYWORD_GLOSSARY: Record<KeywordKey, string> = {
     "Deals its listed damage directly to HP (ignoring block) at the afflicted's own turn start, then its duration ticks down by one turn.",
   burn: "Deals its listed damage directly to HP (ignoring block) at the afflicted's own turn start, then its duration ticks down by one turn.",
   stun: "Skips the afflicted's next turn of card plays; against an enemy it instead voids their telegraphed move immediately. Consumed the moment it takes effect.",
+  vulnerable: 'While Vulnerable, the afflicted takes 50% more damage from every hit.',
+  weak: 'While Weak, the afflicted deals 25% less damage with every attack.',
+  frail: 'While Frail, the afflicted gains 25% less Block from cards.',
+  strength:
+    'Raises the attacker’s damage by its amount on every hit for the rest of the battle (permanent, stacks, capped).',
 };
 
 function pluralize(amount: number, noun: string): string {
@@ -51,6 +56,10 @@ function capitalize(word: string): string {
 function statusLine(status: StatusEffectType, amount: number, duration: number): string {
   if (status === 'stun') {
     return `Apply Stun, skipping the target's next turn of card plays.`;
+  }
+  // vulnerable/weak/frail are flag debuffs — their amount is unused, only the duration matters.
+  if (status === 'vulnerable' || status === 'weak' || status === 'frail') {
+    return `Apply ${capitalize(status)} for ${duration} ${pluralize(duration, 'turn')}.`;
   }
   return `Apply ${amount} ${capitalize(status)} for ${duration} ${pluralize(duration, 'turn')}.`;
 }
@@ -68,6 +77,8 @@ function effectLine(effect: CardEffect): string {
       return `Draw ${effect.amount} ${pluralize(effect.amount, 'card')}.`;
     case 'energy':
       return `Gain ${effect.amount} energy.`;
+    case 'strength':
+      return `Gain ${effect.amount} Strength.`;
     case 'shuffleCurse':
       return `Shuffle ${effect.amount} ${pluralize(effect.amount, 'curse')} into the target's draw pile.`;
     case 'status':

@@ -1,6 +1,7 @@
-import { Card, CardDef } from '../data/cards';
+import { Card, CardDef, StatusEffectType } from '../data/cards';
 import type { InventoryItem } from '../data/items';
 import type { ActiveStatusEffect, MutableCombatant } from './combat';
+import { modifiedDamage, statusValue } from './combat';
 import { CombatEvent, emitCombatEvent } from './combatEvents';
 import { dispatchEffect, ResolvableEffect } from './effectHandlers';
 import {
@@ -250,9 +251,13 @@ function applyEffect(
     shuffleIntoDrawPile: (card) => shuffleCardIntoDrawPile(rt, card),
   });
 
+  // The single resolved damage number (B1): the same value the damage handler used for HP, so
+  // block depletion and the presentation event can never desync from the modifiers.
+  const resolvedDamage =
+    effect.kind === 'damage' ? modifiedDamage(effect.amount ?? 0, actorM, targetM) : 0;
+
   if (effect.kind === 'damage') {
-    const raw = effect.amount ?? 0;
-    const absorbed = Math.min(beforeTargetBlock, raw);
+    const absorbed = Math.min(beforeTargetBlock, resolvedDamage);
     targetM.roundBlock = beforeTargetBlock - absorbed;
   }
   writeBack(actorM, actor);
@@ -264,9 +269,20 @@ function applyEffect(
       sourceId: actor.id,
       targetId: target.id,
       amount: beforeTargetHp - target.hp,
-      blockAbsorbed: Math.min(beforeTargetBlock, effect.amount ?? 0),
+      blockAbsorbed: Math.min(beforeTargetBlock, resolvedDamage),
       hpAfter: target.hp,
       blockAfter: target.block,
+    });
+  } else if (effect.kind === 'strength') {
+    // Strength is a self-buff: mirror it as a statusApplied on the ACTOR carrying the
+    // post-stack total so the HUD shows the running stack (B-adjust: dual-channel amounts).
+    const current = actor.statuses.find((status) => status.type === 'strength');
+    rt.events.push({
+      type: 'statusApplied',
+      targetId: actor.id,
+      status: 'strength',
+      amount: current?.amount ?? effect.amount ?? 0,
+      remainingTurns: 0,
     });
   } else if (effect.kind === 'block') {
     rt.events.push({
@@ -324,6 +340,37 @@ function tickStatuses(rt: EngineRuntime, side: 'player' | 'enemy'): void {
   combatant.statuses = next;
 }
 
+/** The timed modifier debuffs, ticked by `tickDebuffs`. Strength (permanent) and DoTs (ticked at
+ * turn start) are deliberately excluded — see B4. */
+const TIMED_DEBUFFS: StatusEffectType[] = ['vulnerable', 'weak', 'frail'];
+
+/**
+ * Count the listed timed debuffs on one side down by one and drop the expired ones (B4). Timed by
+ * WHAT they modify, not "the side's turn": enemy debuffs decay at the end of the enemy beat; the
+ * player's `weak`/`frail` (spent in the card phase) at the start of `endTurn`; the player's
+ * `vulnerable` (spent by the enemy's hit) right after the beat resolves. Emits a silent
+ * `statusFaded` per change so the HUD decrements without a damage pop.
+ */
+function tickDebuffs(rt: EngineRuntime, side: 'player' | 'enemy', kinds: StatusEffectType[]): void {
+  const combatant = side === 'player' ? rt.state.player : rt.state.enemy;
+  const next: ActiveStatusEffect[] = [];
+  for (const status of combatant.statuses) {
+    if (!kinds.includes(status.type)) {
+      next.push(status);
+      continue;
+    }
+    const remaining = status.remainingTurns - 1;
+    if (remaining > 0) next.push({ ...status, remainingTurns: remaining });
+    rt.events.push({
+      type: 'statusFaded',
+      targetId: combatant.id,
+      status: status.type,
+      remainingTurns: Math.max(0, remaining),
+    });
+  }
+  combatant.statuses = next;
+}
+
 /** R22 legibility: when no card play is possible, say so and highlight end turn. */
 function announceNoPlays(rt: EngineRuntime): void {
   const state = rt.state;
@@ -367,7 +414,9 @@ function startPlayerTurn(rt: EngineRuntime): void {
   drawCards(rt, state.drawSize);
   state.intent = telegraphIntent(state.intent, state.turn);
   if (state.intent.current) {
-    const view = intentView(state.intent.current);
+    // Fold the enemy's Strength into the telegraphed magnitude so a ritual-buffed hit reads
+    // honestly (R5) — the number shown matches what the beat will resolve.
+    const view = intentView(state.intent.current, statusValue(state.enemy, 'strength'));
     rt.events.push({
       type: 'intentTelegraphed',
       name: view.name,
@@ -395,21 +444,23 @@ function enemyBeat(rt: EngineRuntime): void {
   const intent = state.intent;
   if (!intent.current) {
     state.intent = resolveIntent(intent);
-    return;
-  }
-  if (intent.voided) {
+  } else if (intent.voided) {
     rt.events.push({ type: 'enemyBeatFizzled', reason: intent.voided });
     rt.log.push(`${state.enemy.name}'s ${intent.current.name} fizzles`);
     state.intent = clearVoidedIntent(intent);
-    return;
+  } else {
+    rt.events.push({ type: 'enemyBeatStarted', name: intent.current.name });
+    rt.log.push(`${state.enemy.name} uses ${intent.current.name}`);
+    for (const effect of intent.current.effects) {
+      applyEffect(rt, effect, 'enemy');
+      if (checkTerminal(rt)) break;
+    }
+    state.intent = resolveIntent(state.intent);
   }
-  rt.events.push({ type: 'enemyBeatStarted', name: intent.current.name });
-  rt.log.push(`${state.enemy.name} uses ${intent.current.name}`);
-  for (const effect of intent.current.effects) {
-    applyEffect(rt, effect, 'enemy');
-    if (checkTerminal(rt)) break;
-  }
-  state.intent = resolveIntent(state.intent);
+  // Enemy-side timed debuffs decay at the END of the enemy's beat, on every non-terminal path
+  // (empty/fizzled/resolved) — a fizzled beat is still the enemy's action (mirrors "stun delays,
+  // not skips"). Skipped only when the battle already ended this beat.
+  if (state.phase !== 'decided') tickDebuffs(rt, 'enemy', TIMED_DEBUFFS);
 }
 
 /**
@@ -548,7 +599,13 @@ export function endTurn(input: TurnBattleState, rng: GameRng): TurnCommandResult
     state.hand = [];
     rt.events.push({ type: 'handDiscarded', count, discardCount: state.discardPile.length });
   }
+  // Player Weak/Frail were spent across the card phase that just ended (B4).
+  tickDebuffs(rt, 'player', ['weak', 'frail']);
   enemyBeat(rt);
-  if (state.phase !== 'decided') startPlayerTurn(rt);
+  if (state.phase !== 'decided') {
+    // Player Vulnerable was spent by the enemy hit that just resolved (B4).
+    tickDebuffs(rt, 'player', ['vulnerable']);
+    startPlayerTurn(rt);
+  }
   return finish(rt);
 }

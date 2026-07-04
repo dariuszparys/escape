@@ -61,6 +61,7 @@ const STEP_MS: Record<CombatEvent['type'], number> = {
   turnStarted: 150,
   blockExpired: 130,
   statusTicked: 260,
+  statusFaded: 120,
   stunned: 420,
   energyChanged: 110,
   cardDrawn: 90,
@@ -165,7 +166,10 @@ export class TurnBattleScene extends Phaser.Scene {
   private shownHand: Card[] = [];
   private handViews = new Map<number, HandView>();
   private committedUids = new Set<number>();
-  private shownStatuses: Record<'player' | 'enemy', Map<StatusEffectType, number>> = {
+  private shownStatuses: Record<
+    'player' | 'enemy',
+    Map<StatusEffectType, { amount: number; turns: number }>
+  > = {
     player: new Map(),
     enemy: new Map(),
   };
@@ -506,7 +510,10 @@ export class TurnBattleScene extends Phaser.Scene {
         playSfx(this, 'heal');
         break;
       case 'statusApplied':
-        this.shownStatuses[this.sideFor(event.targetId)].set(event.status, event.remainingTurns);
+        this.shownStatuses[this.sideFor(event.targetId)].set(event.status, {
+          amount: event.amount,
+          turns: event.remainingTurns,
+        });
         this.renderStatuses();
         this.combatPop(this.spriteFor(event.targetId), event.status.toUpperCase(), '#c58cff');
         playSfx(this, 'trap', 0.3);
@@ -514,7 +521,10 @@ export class TurnBattleScene extends Phaser.Scene {
       case 'statusTicked': {
         const side = this.sideFor(event.targetId);
         if (event.remainingTurns > 0)
-          this.shownStatuses[side].set(event.status, event.remainingTurns);
+          this.shownStatuses[side].set(event.status, {
+            amount: event.amount,
+            turns: event.remainingTurns,
+          });
         else this.shownStatuses[side].delete(event.status);
         this.renderStatuses();
         this.setShownHp(event.targetId, event.hpAfter);
@@ -524,6 +534,18 @@ export class TurnBattleScene extends Phaser.Scene {
           '#c58cff',
         );
         this.flash(this.spriteFor(event.targetId));
+        break;
+      }
+      case 'statusFaded': {
+        const side = this.sideFor(event.targetId);
+        const existing = this.shownStatuses[side].get(event.status);
+        if (event.remainingTurns > 0)
+          this.shownStatuses[side].set(event.status, {
+            amount: existing?.amount ?? 0,
+            turns: event.remainingTurns,
+          });
+        else this.shownStatuses[side].delete(event.status);
+        this.renderStatuses();
         break;
       }
       case 'blockExpired':
@@ -1259,8 +1281,11 @@ export class TurnBattleScene extends Phaser.Scene {
   }
 
   private renderStatuses(): void {
-    const format = (map: Map<StatusEffectType, number>): string =>
-      [...map.entries()].map(([type, turns]) => `${type} ${turns}`).join('  ');
+    const format = (map: Map<StatusEffectType, { amount: number; turns: number }>): string =>
+      [...map.entries()]
+        // Strength is a permanent stack (no timer) — show its amount; timed statuses show turns.
+        .map(([type, v]) => (type === 'strength' ? `str +${v.amount}` : `${type} ${v.turns}`))
+        .join('  ');
     this.playerStatusText.setText(format(this.shownStatuses.player));
     this.enemyStatusText.setText(format(this.shownStatuses.enemy));
   }

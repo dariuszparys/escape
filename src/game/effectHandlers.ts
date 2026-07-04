@@ -1,6 +1,7 @@
 import type { Card, CardDef, StatusEffectType } from '../data/cards';
 import { makeCard } from '../data/cards';
 import type { ActiveStatusEffect, MutableCombatant } from './combat';
+import { modifiedBlock, modifiedDamage, STRENGTH_CAP } from './combat';
 import { emitCombatEvent, hasCombatEventSubscribers } from './combatEvents';
 
 /**
@@ -65,12 +66,27 @@ export function dispatchEffect(effect: ResolvableEffect, ctx: EffectContext): vo
 
 function formatStatusLine(status: ActiveStatusEffect): string {
   if (status.type === 'stun') return 'stunned';
+  if (status.type === 'strength') return `at +${status.amount} strength`;
   const rounds = `${status.remainingTurns} round${status.remainingTurns === 1 ? '' : 's'}`;
+  if (status.type === 'vulnerable' || status.type === 'weak' || status.type === 'frail') {
+    return `${status.type} for ${rounds}`;
+  }
   return `${status.type}ed (${status.amount} for ${rounds})`;
 }
 
+/**
+ * Stacking rules fork by type (B2): Strength stacks ADDITIVELY (capped, no duration) so the
+ * scaling archetype actually ramps; vulnerable/weak/frail take the stronger amount and refresh
+ * to the longer duration; poison/burn/stun keep the original max/max contract (locked by tests).
+ */
 function addStatus(target: MutableCombatant, status: ActiveStatusEffect): void {
   const existing = target.statuses.find((candidate) => candidate.type === status.type);
+  if (status.type === 'strength') {
+    const total = Math.min(STRENGTH_CAP, (existing?.amount ?? 0) + status.amount);
+    if (existing) existing.amount = total;
+    else target.statuses.push({ type: 'strength', amount: total, remainingTurns: 0 });
+    return;
+  }
   if (!existing) {
     target.statuses.push(status);
     return;
@@ -82,9 +98,21 @@ function addStatus(target: MutableCombatant, status: ActiveStatusEffect): void {
 // Built-in resolvers, registered at module load. Registering them here — rather than in
 // a switch — is what lets a new kind be added by registration alone (R1).
 registerEffectHandler('block', (effect, { actor, log }) => {
-  const amount = effect.amount ?? 0;
+  const amount = modifiedBlock(effect.amount ?? 0, actor);
   actor.roundBlock += amount;
   log.push(`${actor.name} gains ${amount} block`);
+});
+
+// Strength is a SELF-buff (actor-targeted), unlike the target-targeted `status` debuffs. It is
+// permanent within the battle (no duration), stacks additively, and is capped in addStatus (B2).
+registerEffectHandler('strength', (effect, { actor, log }) => {
+  const amount = effect.amount ?? 0;
+  if (amount === 0) return;
+  addStatus(actor, { type: 'strength', amount, remainingTurns: 0 });
+  const current = actor.statuses.find((status) => status.type === 'strength');
+  log.push(
+    `${actor.name} is ${formatStatusLine(current ?? { type: 'strength', amount, remainingTurns: 0 })}`,
+  );
 });
 
 registerEffectHandler('heal', (effect, { actor, log }) => {
@@ -95,8 +123,9 @@ registerEffectHandler('heal', (effect, { actor, log }) => {
 });
 
 registerEffectHandler('damage', (effect, { actor, target, log }) => {
+  const incoming = modifiedDamage(effect.amount ?? 0, actor, target);
   const reduction = target.armor + target.roundBlock;
-  const dealt = Math.max(0, (effect.amount ?? 0) - reduction);
+  const dealt = Math.max(0, incoming - reduction);
   target.hp = Math.max(0, target.hp - dealt);
   if (dealt > 0) log.push(`${target.name} takes ${dealt} damage`);
   else log.push(`${target.name} blocks the hit`);

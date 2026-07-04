@@ -115,7 +115,7 @@ export const ENEMIES: EnemyDef[] = [
     id: 'bandit',
     name: 'Bandit',
     texture: 'skeleton',
-    baseHp: 23,
+    baseHp: 26,
     tier: 'medium',
     boss: false,
     // Fast/bursty: Twin Strike splits its damage into two hits so half-invested
@@ -156,7 +156,7 @@ export const ENEMIES: EnemyDef[] = [
     id: 'cultist',
     name: 'Cultist',
     texture: 'bat',
-    baseHp: 24,
+    baseHp: 27,
     tier: 'medium',
     boss: false,
     // Status-heavy: Blood Sigil stacks two DoTs in one turn with no direct damage,
@@ -183,10 +183,12 @@ export const ENEMIES: EnemyDef[] = [
         },
         {
           name: 'Blood Sigil',
-          telegraph: 'carves a sigil that festers with rot and creeping flame...',
+          telegraph:
+            'carves a sigil that festers with rot and creeping flame, sapping your strength...',
           effects: [
             { kind: 'status', status: 'poison', amount: 3, duration: 3 },
             { kind: 'status', status: 'burn', amount: 3, duration: 2 },
+            { kind: 'status', status: 'weak', amount: 1, duration: 1 },
           ],
         },
       ],
@@ -196,7 +198,7 @@ export const ENEMIES: EnemyDef[] = [
     id: 'armored_goblin',
     name: 'Armored Goblin',
     texture: 'slime',
-    baseHp: 27,
+    baseHp: 30,
     tier: 'medium',
     boss: false,
     // Block-then-smash, extended with a scaling special: every 3rd turn the
@@ -240,7 +242,7 @@ export const ENEMIES: EnemyDef[] = [
     id: 'knight',
     name: 'Knight',
     texture: 'skeleton',
-    baseHp: 34,
+    baseHp: 40,
     tier: 'strong',
     boss: false,
     // Duelist multi-hit: two different combo granularities (a 2-hit Sword Combo
@@ -258,10 +260,11 @@ export const ENEMIES: EnemyDef[] = [
         },
         {
           name: 'Guarded Cut',
-          telegraph: 'advances behind its blade...',
+          telegraph: 'advances behind its blade, hammering your guard brittle...',
           effects: [
             { kind: 'block', amount: 6 },
             { kind: 'damage', amount: 7 },
+            { kind: 'status', status: 'frail', amount: 1, duration: 1 },
           ],
         },
         {
@@ -285,7 +288,7 @@ export const ENEMIES: EnemyDef[] = [
     id: 'necromancer',
     name: 'Necromancer',
     texture: 'bat',
-    baseHp: 35,
+    baseHp: 41,
     tier: 'strong',
     boss: false,
     // Status/poison pressure, extended with a scaling special: every 4th turn
@@ -299,17 +302,21 @@ export const ENEMIES: EnemyDef[] = [
           effects: [{ kind: 'status', status: 'poison', amount: 4, duration: 2 }],
         },
         {
-          name: 'Dark Bolt',
-          telegraph: 'shadow coils around its hand...',
-          effects: [{ kind: 'damage', amount: 10 }],
-        },
-        {
           name: 'Withering Hex',
-          telegraph: 'traces a searing sigil...',
+          telegraph: 'traces a searing sigil that leaves you exposed...',
           effects: [
             { kind: 'damage', amount: 5 },
             { kind: 'status', status: 'burn', amount: 3, duration: 2 },
+            // Duration 2: an enemy-applied Vulnerable must survive the player's turn to boost the
+            // enemy's NEXT hit. Withering Hex sits right before Dark Bolt in the cycle so the mark
+            // actually lands on that hit (a damage-less beat here would waste it — B4 timing).
+            { kind: 'status', status: 'vulnerable', amount: 1, duration: 2 },
           ],
+        },
+        {
+          name: 'Dark Bolt',
+          telegraph: 'shadow coils around its hand...',
+          effects: [{ kind: 'damage', amount: 10 }],
         },
         {
           name: 'Bone Ward',
@@ -337,7 +344,7 @@ export const ENEMIES: EnemyDef[] = [
     id: 'ogre',
     name: 'Ogre',
     texture: 'slime',
-    baseHp: 40,
+    baseHp: 46,
     tier: 'strong',
     boss: false,
     // Block-then-big-hit, extended with a scaling special: every 5th turn its
@@ -381,7 +388,7 @@ export const BOSSES: EnemyDef[] = [
     id: 'iron_warden',
     name: 'The Iron Warden',
     texture: 'boss_minotaur',
-    baseHp: 52,
+    baseHp: 60,
     boss: true,
     pattern: {
       cycle: [
@@ -404,14 +411,19 @@ export const BOSSES: EnemyDef[] = [
           effects: [{ kind: 'damage', amount: 13 }],
         },
       ],
+      // Ritual boss (B3): the Warhammer hits, then the Warden's iron resolve hardens — a permanent
+      // Strength gain that grows its whole kit over the long boss fight. Damage before the buff so
+      // the folded-Strength telegraph stays honest. Single-hit throughout, so the ramp is a race,
+      // not an unblockable multi-hit wall.
       special: {
         interval: 5,
         entry: {
           name: 'Warhammer',
-          telegraph: 'The Iron Warden braces behind iron plates...',
+          telegraph: 'The Iron Warden brings the hammer down, iron resolve hardening...',
           effects: [
             { kind: 'block', amount: 4 },
             { kind: 'damage', amount: 8 },
+            { kind: 'strength', amount: 2 },
           ],
         },
       },
@@ -421,7 +433,7 @@ export const BOSSES: EnemyDef[] = [
     id: 'bone_oracle',
     name: 'The Bone Oracle',
     texture: 'boss_lich',
-    baseHp: 47,
+    baseHp: 55,
     boss: true,
     pattern: {
       cycle: [
@@ -461,7 +473,7 @@ export const BOSSES: EnemyDef[] = [
     id: 'flame_tyrant',
     name: 'The Flame Tyrant',
     texture: 'boss_demon',
-    baseHp: 49,
+    baseHp: 57,
     boss: true,
     pattern: {
       cycle: [
@@ -488,10 +500,12 @@ export const BOSSES: EnemyDef[] = [
         interval: 5,
         entry: {
           name: 'Flame Axe',
-          telegraph: 'The Flame Tyrant gathers heat around its axe...',
+          telegraph: 'The Flame Tyrant gathers heat around its axe, searing your guard away...',
           effects: [
             { kind: 'damage', amount: 7 },
             { kind: 'status', status: 'burn', amount: 2, duration: 2 },
+            // Duration 2 so the mark survives to boost the Tyrant's next heavy swing (B4).
+            { kind: 'status', status: 'vulnerable', amount: 1, duration: 2 },
           ],
         },
       },
@@ -512,7 +526,7 @@ export const ELITES: EnemyDef[] = [
     id: 'elite_berserker',
     name: 'The Berserker',
     texture: 'skeleton',
-    baseHp: 46,
+    baseHp: 54,
     tier: 'elite',
     boss: false,
     // Bruiser: Frenzy is a scaling special that dwarfs the cycle's normal hits every
@@ -539,12 +553,19 @@ export const ELITES: EnemyDef[] = [
           effects: [{ kind: 'damage', amount: 11 }],
         },
       ],
+      // Ritual bruiser (B3): Frenzy hits AND permanently swells the Berserker's Strength, so its
+      // whole kit grows every cycle. Damage resolves BEFORE the Strength gain so the telegraph
+      // (which folds current Strength) stays exactly honest. A race check — turtle and you eat an
+      // ever-larger Frenzy; the only relief is stunning the beat to deny both the hit and the ramp.
       special: {
         interval: 3,
         entry: {
           name: 'Frenzy',
-          telegraph: 'its rage builds to a boiling crescendo...',
-          effects: [{ kind: 'damage', amount: 18 }],
+          telegraph: 'its rage boils over, muscles swelling with every unanswered blow...',
+          effects: [
+            { kind: 'damage', amount: 12 },
+            { kind: 'strength', amount: 2 },
+          ],
         },
       },
     },
@@ -553,7 +574,7 @@ export const ELITES: EnemyDef[] = [
     id: 'elite_stalker',
     name: 'The Stalker',
     texture: 'slime',
-    baseHp: 42,
+    baseHp: 50,
     tier: 'elite',
     boss: false,
     // Lurker: two guarded-dormancy turns (block, near-no-op) followed by one huge
@@ -586,7 +607,7 @@ export const ELITES: EnemyDef[] = [
     id: 'elite_hexweaver',
     name: 'The Hexweaver',
     texture: 'bat',
-    baseHp: 44,
+    baseHp: 52,
     tier: 'elite',
     boss: false,
     // Hexer: fights the deck itself. Curse Weaving pairs an honestly-telegraphed
@@ -621,7 +642,7 @@ export const ELITES: EnemyDef[] = [
     id: 'elite_bloodleech',
     name: 'The Bloodleech',
     texture: 'slime',
-    baseHp: 45,
+    baseHp: 53,
     tier: 'elite',
     boss: false,
     // Leech: heals itself on hit (reusing the existing `heal` effect, self-targeted —
@@ -658,7 +679,7 @@ export const ELITES: EnemyDef[] = [
     id: 'elite_duelist',
     name: 'The Duelist',
     texture: 'skeleton',
-    baseHp: 41,
+    baseHp: 49,
     tier: 'elite',
     boss: false,
     // Duelist: every entry mixes block-and-strike in the same beat, so the Duelist
@@ -685,10 +706,11 @@ export const ELITES: EnemyDef[] = [
         },
         {
           name: 'Flourish Strike',
-          telegraph: 'spins into a flourish, blade singing...',
+          telegraph: 'spins into a flourish that leaves your guard in tatters...',
           effects: [
             { kind: 'block', amount: 3 },
             { kind: 'damage', amount: 9 },
+            { kind: 'status', status: 'frail', amount: 1, duration: 1 },
           ],
         },
       ],
@@ -815,9 +837,13 @@ export function enemyHpForDepth(baseHp: number, depth: number): number {
  * first stratum, gentler beyond.
  */
 export function intentBonusForDepth(depth: number): number {
-  if (depth <= MAX_DEPTH) return Math.floor(depth / 2);
+  // Weak tier (depths 1-3) stays gentle so the opener is winnable; from the medium tier on, an
+  // extra +2 on the heaviest hit turns each fight into a real HP cost, so a stratum accumulates
+  // attrition and clearing it is an achievement (combat-depth rebaseline, 2026-07-04).
+  const stratumOnePunch = depth >= 4 ? 2 : 0;
+  if (depth <= MAX_DEPTH) return Math.floor(depth / 2) + stratumOnePunch;
   // Slope more than halved for U12 alongside DEEP_HP_SLOPE — same reason (see above).
-  return Math.floor(MAX_DEPTH / 2) + Math.round((depth - MAX_DEPTH) * 0.03);
+  return Math.floor(MAX_DEPTH / 2) + 2 + Math.round((depth - MAX_DEPTH) * 0.03);
 }
 
 /** Enemy behavior is its authored intent pattern (U9), empowered for depth; spawns roll no card decks. */

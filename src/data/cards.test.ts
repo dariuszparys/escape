@@ -1,5 +1,13 @@
 import { describe, expect, test } from 'vitest';
-import { CARD_DEFS, Card, CardDef, makeCard, randomCard, randomCardOfTier } from './cards';
+import {
+  CARD_DEFS,
+  Card,
+  CardDef,
+  CardEffect,
+  makeCard,
+  randomCard,
+  randomCardOfTier,
+} from './cards';
 import { SequenceRng } from '../game/test-rng';
 import { createIntentState, IntentPattern, telegraphIntent } from '../game/intentPatterns';
 import { playCard, TurnBattleState } from '../game/turnEngine';
@@ -56,6 +64,70 @@ describe('card costs (U8, R2/R6)', () => {
     for (const def of CARD_DEFS) {
       if (def.tier === 1) expect(def.cost).toBeLessThanOrEqual(1);
       else expect(def.cost).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  test('no standard card is strictly dominated by another of the same tier AND cost (card-lint)', () => {
+    // A reward offer is only a real choice if no same-tier/same-cost card is weakly worse on every
+    // axis. Benefits (more is better): raw damage/block/heal/draw/energy/strength, debuff DURATIONS
+    // (a longer Vulnerable/Weak/Frail is worth more), stun, and DoT output. Exhaust is a COST
+    // (worse). Two cards that each lead on a different axis are a genuine choice, not domination.
+    const sum = (c: CardDef, pred: (e: CardEffect) => number) =>
+      c.effects.reduce((n, e) => n + pred(e), 0);
+    const statusDur = (c: CardDef, s: string) =>
+      sum(c, (e) => (e.kind === 'status' && e.status === s ? e.duration : 0));
+    const profile = (c: CardDef) => ({
+      damage: sum(c, (e) => (e.kind === 'damage' ? e.amount : 0)),
+      block: sum(c, (e) => (e.kind === 'block' ? e.amount : 0)),
+      heal: sum(c, (e) => (e.kind === 'heal' ? e.amount : 0)),
+      draw: sum(c, (e) => (e.kind === 'draw' ? e.amount : 0)),
+      energy: sum(c, (e) => (e.kind === 'energy' ? e.amount : 0)),
+      strength: sum(c, (e) => (e.kind === 'strength' ? e.amount : 0)),
+      vulnerable: statusDur(c, 'vulnerable'),
+      weak: statusDur(c, 'weak'),
+      frail: statusDur(c, 'frail'),
+      stun: statusDur(c, 'stun'),
+      dot: sum(c, (e) =>
+        e.kind === 'status' && (e.status === 'poison' || e.status === 'burn')
+          ? e.amount * e.duration
+          : 0,
+      ),
+    });
+    const cost = (c: CardDef) => (c.exhaust ? 1 : 0); // exhaust is a downside
+    // Standard reward pool only (kit signatures are a separate, opt-in pool).
+    const pool = CARD_DEFS.filter((c) => !c.starterKitOnly);
+
+    for (const a of pool) {
+      for (const b of pool) {
+        if (a.id === b.id || a.tier !== b.tier || a.cost !== b.cost) continue;
+        const pa = profile(a);
+        const pb = profile(b);
+        const keys = Object.keys(pa) as (keyof typeof pa)[];
+        const aWeaklyBetterEverywhere = keys.every((k) => pa[k] >= pb[k]) && cost(a) <= cost(b);
+        const aStrictlyBetterSomewhere = keys.some((k) => pa[k] > pb[k]) || cost(a) < cost(b);
+        expect(
+          aWeaklyBetterEverywhere && aStrictlyBetterSomewhere,
+          `${a.id} strictly dominates ${b.id} (same tier ${a.tier}, cost ${a.cost})`,
+        ).toBe(false);
+      }
+    }
+  });
+
+  test('no 0-cost card is a free compounding engine (card-lint, combat-depth review)', () => {
+    // The full collection reshuffles every battle, so a 0-cost card that nets a permanent buff, or
+    // nets BOTH energy and a draw, would loop for free forever. Guard against authoring one.
+    for (const def of CARD_DEFS) {
+      if (def.cost !== 0 || def.exhaust) continue;
+      const grantsStrength = def.effects.some((e) => e.kind === 'strength');
+      const netEnergy = def.effects
+        .filter((e) => e.kind === 'energy')
+        .reduce((sum, e) => sum + e.amount, 0);
+      const draws = def.effects.some((e) => e.kind === 'draw');
+      expect(grantsStrength, `${def.id}: a 0-cost card must not grant Strength`).toBe(false);
+      expect(
+        netEnergy > 0 && draws,
+        `${def.id}: a 0-cost card must not net both energy and a draw`,
+      ).toBe(false);
     }
   });
 });

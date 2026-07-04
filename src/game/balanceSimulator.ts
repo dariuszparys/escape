@@ -1,5 +1,6 @@
 import { MAX_DEPTH } from '../config';
 import { Card, CARD_DEFS, cardEffectAmount, makeCard } from '../data/cards';
+import { hasStatus, modifiedDamage, statusValue } from './combat';
 import { type PendingPrep } from '../data/campfirePurchases';
 import {
   EnemyInstance,
@@ -185,9 +186,22 @@ export function simCardScore(card: Card, emphasis: CardEmphasis | null = null): 
     if (effect.kind === 'damage') score += effect.amount * (emphasis === 'damage' ? 1.8 : 1.2);
     else if (effect.kind === 'block') score += effect.amount * (emphasis === 'block' ? 1.6 : 1);
     else if (effect.kind === 'heal') score += effect.amount * 0.8;
-    else if (effect.kind === 'status') score += effect.amount * (emphasis === 'disruption' ? 6 : 3);
-    else score += effect.amount * 3; // draw/energy cantrips compress turns
+    else if (effect.kind === 'strength') {
+      // Scaling: worth more than its face because it rides every later hit. A flat proxy — the
+      // fight-length value lives in the play policy, not here (B5).
+      score += effect.amount * (emphasis === 'damage' ? 6 : 4.5);
+    } else if (effect.kind === 'status') {
+      // vulnerable/weak/frail carry amount 1 (flags); value them as tactical utility, not by amount.
+      // Tuned so no single emphasis dominates the seed spread (the disruption line ran ahead).
+      if (effect.status === 'vulnerable') score += emphasis === 'disruption' ? 8 : 6;
+      else if (effect.status === 'weak' || effect.status === 'frail')
+        score += emphasis === 'disruption' ? 5 : 4;
+      else score += effect.amount * (emphasis === 'disruption' ? 6 : 3); // poison/burn DoT
+    } else score += effect.amount * 3; // draw/energy cantrips compress turns
   }
+  // Exhaust cards fire once per battle — discount their recurring value slightly so the curation
+  // policy prefers repeatable engines when the raw scores are close.
+  if (card.exhaust) score *= 0.85;
   return score / Math.max(1, cardCost(card));
 }
 
@@ -272,13 +286,14 @@ function createScenarioRun(seed: number, scenario: BalanceScenario): RunState {
  */
 function chooseRewardCard(run: RunState, offers: readonly Card[]): void {
   if (offers.length === 0) return;
+  const size = run.cardCollection.length;
   const deckAverage =
-    run.cardCollection.length === 0
-      ? 0
-      : run.cardCollection.reduce((sum, card) => sum + simCardScore(card), 0) /
-        run.cardCollection.length;
+    size === 0 ? 0 : run.cardCollection.reduce((sum, card) => sum + simCardScore(card), 0) / size;
   const best = [...offers].sort((a, b) => simCardScore(b) - simCardScore(a))[0];
-  if (simCardScore(best) > deckAverage * 0.9) run.addCard(best);
+  // Curation with a rising dilution bar (B5): in the full-collection reshuffle, every card you add
+  // dilutes the 5-card opening you draw, so a bigger deck demands a proportionally better card.
+  const dilutionBar = 0.9 + Math.max(0, size - 10) * 0.06;
+  if (simCardScore(best) > deckAverage * dilutionBar) run.addCard(best);
 }
 
 export function applySimulatedPostBattleRewards(
@@ -449,28 +464,131 @@ function chooseRoomEvent(
 /** Hard cap so a stalemate deck (all block) terminates as a loss instead of looping. */
 export const SIM_BATTLE_TURN_CAP = 60;
 
-/** The telegraphed intent's raw view, or null once voided (nothing incoming). */
+/** The telegraphed intent's raw view, or null once voided (nothing incoming). Folds the enemy's
+ * Strength into the magnitude so the policy reads (and blocks) the honest incoming number (B-adjust). */
 function incomingIntent(state: TurnBattleState) {
   if (!state.intent.current || state.intent.voided) return null;
-  return intentView(state.intent.current);
+  return intentView(state.intent.current, statusValue(state.enemy, 'strength'));
 }
 
+/** The damage a card would actually deal RIGHT NOW, threading the player's Strength/Weak and the
+ * enemy's Vulnerable through the same resolver the engine uses (before armor/block). */
+function effectiveCardDamage(card: Card, state: TurnBattleState): number {
+  return card.effects.reduce(
+    (sum, effect) =>
+      effect.kind === 'damage'
+        ? sum + modifiedDamage(effect.amount, state.player, state.enemy)
+        : sum,
+    0,
+  );
+}
+
+const grantsStrength = (card: Card): boolean => card.effects.some((e) => e.kind === 'strength');
+const appliesVulnerable = (card: Card): boolean =>
+  card.effects.some((e) => e.kind === 'status' && e.status === 'vulnerable');
+
 /**
- * Greedy multi-card policy: lethal first, otherwise best value-per-energy with
- * block weighted up against a telegraphed attack (the read the telegraph buys).
+ * A competent one-card-at-a-time policy (B5): it detects MULTI-card lethal (dump when the whole
+ * affordable hand can finish, biggest hit first), sequences setup (Vulnerable) before the dump on a
+ * healthy target, blocks/weakens a telegraph that would bite, front-loads scaling early in a long
+ * fight, and otherwise plays best value. Damage math threads Strength/Vulnerable through the real
+ * resolver, so the policy neither under-kills nor misvalues the new cards.
  */
 function pickCardToPlay(state: TurnBattleState, emphasis: CardEmphasis | null): Card | null {
   const playable = playableCards(state);
   if (playable.length === 0) return null;
   const incoming = incomingIntent(state);
-  const enemyEffectiveHp = state.enemy.hp + state.enemy.block;
+  const enemyEff = state.enemy.hp + state.enemy.block + state.enemy.armor;
+  const attackers = playable
+    .filter((card) => effectiveCardDamage(card, state) > 0)
+    .sort((a, b) => effectiveCardDamage(b, state) - effectiveCardDamage(a, state));
+
+  // 1) Kill mode: if the affordable attack SUBSET (greedy knapsack by ascending cost, respecting the
+  //    total energy budget) can finish the enemy, dump the biggest hit (the loop repeats →
+  //    multi-card lethal). Summing every individually-affordable attacker would over-count lethal.
+  const biggestAffordableAttacker =
+    attackers.find((card) => cardCost(card) <= state.energy) ?? null;
+  if (biggestAffordableAttacker) {
+    let budget = state.energy;
+    let reachable = 0;
+    for (const card of [...attackers].sort((a, b) => cardCost(a) - cardCost(b))) {
+      if (cardCost(card) > budget) continue;
+      budget -= cardCost(card);
+      reachable += effectiveCardDamage(card, state);
+    }
+    if (reachable >= enemyEff) return biggestAffordableAttacker;
+  }
+
+  // 1b) Anti-stalemate (harness honesty): once a fight has dragged on, stop turtling and RACE —
+  //     play the biggest hit and only ever block a strictly LETHAL incoming. This mirrors a real
+  //     player abandoning a stall against a heal/block wall, so an unwinnable matchup ends in an
+  //     honest death instead of a full-HP turn-cap loss that would fabricate difficulty.
+  const racing = state.turn > 8;
+  if (racing) {
+    const lethalIncoming =
+      incoming?.kind === 'attack' &&
+      incoming.magnitude - state.player.block - state.player.armor >= state.player.hp;
+    if (lethalIncoming) {
+      const blocker = playable
+        .filter((card) => cardEffectAmount(card, 'block') > 0)
+        .sort((a, b) => cardEffectAmount(b, 'block') - cardEffectAmount(a, 'block'))[0];
+      if (blocker) return blocker;
+    }
+    if (biggestAffordableAttacker) return biggestAffordableAttacker;
+  }
+
+  // 2) Setup before the dump: on a worth-it target that isn't Vulnerable yet, spend a pure setup
+  //    card first — but only with energy and an attacker to spare, so it never wastes the turn.
+  if (!hasStatus(state.enemy, 'vulnerable') && enemyEff > 22) {
+    const setup = playable.find(
+      (card) =>
+        appliesVulnerable(card) &&
+        effectiveCardDamage(card, state) === 0 &&
+        cardCost(card) < state.energy,
+    );
+    if (
+      setup &&
+      attackers.some((card) => card !== setup && cardCost(card) <= state.energy - cardCost(setup))
+    ) {
+      return setup;
+    }
+  }
+
+  // 3) Defense: block (or weaken) a telegraphed hit that would take a real bite out of us.
+  if (incoming?.kind === 'attack') {
+    const projected = incoming.magnitude - state.player.block - state.player.armor;
+    if (projected > 0 && projected >= state.player.hp * 0.45) {
+      const blocker = playable
+        .filter((card) => cardEffectAmount(card, 'block') > 0)
+        .sort((a, b) => cardEffectAmount(b, 'block') - cardEffectAmount(a, 'block'))[0];
+      if (blocker) return blocker;
+      const weaken = playable.find((card) =>
+        card.effects.some((e) => e.kind === 'status' && e.status === 'weak'),
+      );
+      if (weaken) return weaken;
+    }
+  }
+
+  // 4) Heal when badly hurt.
+  if (state.player.hp < state.player.maxHp * 0.4) {
+    const healer = playable
+      .filter((card) => cardEffectAmount(card, 'heal') > 0)
+      .sort((a, b) => cardEffectAmount(b, 'heal') - cardEffectAmount(a, 'heal'))[0];
+    if (healer) return healer;
+  }
+
+  // 5) Scaling: early in a fight that will clearly run long, build Strength.
+  if (enemyEff > 34 && state.turn <= 3 && statusValue(state.player, 'strength') < 6) {
+    const empower = playable.find((card) => grantsStrength(card));
+    if (empower) return empower;
+  }
+
+  // 6) Fallback: best value-per-energy, block weighted up against a telegraphed attack.
   let best: Card | null = null;
   let bestScore = -Infinity;
   for (const card of playable) {
-    if (cardEffectAmount(card, 'damage') >= enemyEffectiveHp + state.enemy.armor) return card;
     let score = simCardScore(card, emphasis);
     if (incoming?.kind === 'attack') score += cardEffectAmount(card, 'block') * 0.8;
-    if (state.player.hp < state.player.maxHp * 0.5) score += cardEffectAmount(card, 'heal') * 0.8;
     if (score > bestScore) {
       bestScore = score;
       best = card;
@@ -517,7 +635,7 @@ export function simulateBattle(
   enemy: EnemyInstance,
   rng: SimRng,
   emphasis: CardEmphasis | null = null,
-): { won: boolean } {
+): { won: boolean; turns: number } {
   let { state } = createBattle(
     {
       deck: run.cardCollection,
@@ -559,7 +677,58 @@ export function simulateBattle(
   }
 
   run.hp = state.outcome === 'defeat' ? 0 : state.player.hp;
-  return { won: state.outcome === 'victory' };
+  return { won: state.outcome === 'victory', turns: state.turn };
+}
+
+/**
+ * The EXTERNAL anchor for difficulty (B5): run a FIXED, hand-authored reference deck at full HP
+ * against one enemy kind many times and report win rate, average HP lost on a win, and how often a
+ * loss was a turn-cap stalemate (a stalemate is a policy artifact, not real difficulty). This does
+ * not depend on the reward/curation policy, so tuning enemies to land these decks in band cannot be
+ * gamed by the very bot being replaced — it breaks the harness's circularity.
+ */
+export interface ReferenceFightSummary {
+  winRate: number;
+  avgHpLostOnWin: number;
+  avgTurns: number;
+  cappedRate: number;
+}
+
+export function simulateReferenceDeck(
+  deckIds: readonly string[],
+  spawn: (rng: SimRng, depth: number) => EnemyInstance,
+  depth: number,
+  runs = 300,
+): ReferenceFightSummary {
+  let wins = 0;
+  let hpLost = 0;
+  let turnsTotal = 0;
+  let capped = 0;
+  for (let seed = 1; seed <= runs; seed++) {
+    const rng = new SeededRng((seed * 2654435761) >>> 0);
+    const run = new RunState(String(seed), `ref-${seed}`);
+    run.cardCollection = deckIds.map((id) => {
+      const def = CARD_DEFS.find((card) => card.id === id);
+      if (!def) throw new Error(`reference deck: unknown card id ${id}`);
+      return makeCard(def);
+    });
+    run.hp = run.maxHp;
+    const before = run.hp;
+    const result = simulateBattle(run, spawn(rng, depth), rng);
+    turnsTotal += result.turns;
+    if (result.won) {
+      wins++;
+      hpLost += before - run.hp;
+    } else if (result.turns >= SIM_BATTLE_TURN_CAP) {
+      capped++;
+    }
+  }
+  return {
+    winRate: wins / runs,
+    avgHpLostOnWin: wins === 0 ? 0 : hpLost / wins,
+    avgTurns: turnsTotal / runs,
+    cappedRate: capped / runs,
+  };
 }
 
 const DEFAULT_RUN_OPTIONS: SimRunOptions = {

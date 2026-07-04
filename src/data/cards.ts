@@ -2,13 +2,35 @@ import { GameRng } from '../game/rng';
 import { stratumForDepth } from '../game/strata';
 
 export type CardType = 'attack' | 'block' | 'heal' | 'utility' | 'status';
-export type StatusEffectType = 'poison' | 'burn' | 'stun';
+
+/**
+ * Everything a combatant can carry. `poison`/`burn` tick damage at turn start; `stun` skips a
+ * turn; `vulnerable`/`weak`/`frail` are timed damage/block modifiers; `strength` is a permanent
+ * (per-battle), additive damage buff. The modifier statuses resolve through `combat.ts`'s
+ * `modifiedDamage`/`modifiedBlock`.
+ */
+export type StatusEffectType =
+  | 'poison'
+  | 'burn'
+  | 'stun'
+  | 'vulnerable'
+  | 'weak'
+  | 'frail'
+  | 'strength';
+
+/**
+ * The subset a `status` effect (a debuff applied to the TARGET) may carry. Strength is excluded
+ * because it is a SELF-buff with its own actor-targeted `strength` effect kind — routing it
+ * through the target-targeted `status` handler would buff the wrong combatant.
+ */
+export type DebuffStatusType = Exclude<StatusEffectType, 'strength'>;
 
 export type CardEffect =
   | { kind: 'damage'; amount: number }
   | { kind: 'block'; amount: number }
   | { kind: 'heal'; amount: number }
-  | { kind: 'status'; status: StatusEffectType; amount: number; duration: number }
+  | { kind: 'status'; status: DebuffStatusType; amount: number; duration: number }
+  | { kind: 'strength'; amount: number }
   | { kind: 'draw'; amount: number }
   | { kind: 'energy'; amount: number }
   | { kind: 'shuffleCurse'; amount: number };
@@ -42,8 +64,10 @@ export const CARD_DEFS: CardDef[] = [
     tier: 1,
     cost: 1,
     color: 0xc0392b,
-    description: 'Deal 5 damage',
-    effects: [{ kind: 'damage', amount: 5 }],
+    // The repeatable basic: pure, reliable damage. Distinct role from Slash (below), which
+    // trades raw for utility — neither strictly dominates the other now (de-dominated, D2).
+    description: 'Deal 6 damage',
+    effects: [{ kind: 'damage', amount: 6 }],
   },
   {
     id: 'slash',
@@ -52,8 +76,12 @@ export const CARD_DEFS: CardDef[] = [
     tier: 1,
     cost: 1,
     color: 0xc0392b,
-    description: 'Deal 6 damage',
-    effects: [{ kind: 'damage', amount: 6 }],
+    // Lower raw than Strike, but softens the enemy's next hit — a defensive tempo sidegrade.
+    description: 'Deal 4, apply Weak',
+    effects: [
+      { kind: 'damage', amount: 4 },
+      { kind: 'status', status: 'weak', amount: 1, duration: 1 },
+    ],
   },
   {
     id: 'guard',
@@ -267,8 +295,9 @@ export const CARD_DEFS: CardDef[] = [
     tier: 3,
     cost: 2,
     color: 0xf39c12,
-    description: 'Deal 12 damage',
-    effects: [{ kind: 'damage', amount: 12 }],
+    // The raw single-hit nuke — highest block-agnostic burst, distinct from Sunder's split+setup.
+    description: 'Deal 14 damage',
+    effects: [{ kind: 'damage', amount: 14 }],
   },
   {
     id: 'aegis',
@@ -316,6 +345,115 @@ export const CARD_DEFS: CardDef[] = [
       { kind: 'draw', amount: 2 },
       { kind: 'heal', amount: 3 },
     ],
+  },
+  // --- Combat-depth pool (2026-07-04): scaling, tactical debuffs, single-card payoffs, and
+  // trade-off cards. Build identity comes from WHICH of these you curate into the collection
+  // (you cannot thin a reshuffled full deck, so payoffs are self-contained, never 2-card combos).
+  {
+    id: 'empower',
+    name: 'Empower',
+    type: 'utility',
+    tier: 2,
+    cost: 1,
+    color: 0xe67e22,
+    // The scaling engine: recurs through the reshuffle so it ramps over a long fight — but the
+    // Strength cap (+8) and the fact that long fights hurt keep it a build-around, not a runaway.
+    description: 'Gain 2 Strength',
+    effects: [{ kind: 'strength', amount: 2 }],
+  },
+  {
+    id: 'war_cry',
+    name: 'War Cry',
+    type: 'utility',
+    tier: 3,
+    cost: 1,
+    color: 0xf39c12,
+    // A burst of scaling, rationed by Exhaust so it can't be recycled every reshuffle.
+    description: 'Gain 3 Strength. Exhaust',
+    exhaust: true,
+    effects: [{ kind: 'strength', amount: 3 }],
+  },
+  {
+    id: 'bash',
+    name: 'Bash',
+    type: 'attack',
+    tier: 2,
+    cost: 1,
+    color: 0x8e44ad,
+    // A cheap setup attack — the Vulnerable it leaves boosts every later hit this fight.
+    description: 'Deal 5, apply Vulnerable',
+    effects: [
+      { kind: 'damage', amount: 5 },
+      { kind: 'status', status: 'vulnerable', amount: 1, duration: 1 },
+    ],
+  },
+  {
+    id: 'expose',
+    name: 'Expose',
+    type: 'status',
+    tier: 2,
+    cost: 1,
+    color: 0x9b59b6,
+    description: 'Apply Vulnerable (2 turns)',
+    effects: [{ kind: 'status', status: 'vulnerable', amount: 1, duration: 2 }],
+  },
+  {
+    id: 'enfeeble',
+    name: 'Enfeeble',
+    type: 'status',
+    tier: 2,
+    cost: 1,
+    color: 0x8e44ad,
+    // Answers a heavy telegraph: the enemy's next two hits land for a quarter less.
+    description: 'Apply Weak (2 turns)',
+    effects: [{ kind: 'status', status: 'weak', amount: 1, duration: 2 }],
+  },
+  {
+    id: 'sunder',
+    name: 'Sunder',
+    type: 'attack',
+    tier: 3,
+    cost: 2,
+    color: 0xc0392b,
+    // Self-contained setup+payoff in ONE card (B6): the second strike lands into the Vulnerable
+    // the first half applied, and the debuff lingers to boost follow-ups. Lower raw than Thunder
+    // (its distinct role is the utility, not the burst) so neither dominates the other.
+    description: 'Deal 4, Vulnerable, then Deal 4',
+    effects: [
+      { kind: 'damage', amount: 4 },
+      { kind: 'status', status: 'vulnerable', amount: 1, duration: 2 },
+      { kind: 'damage', amount: 4 },
+    ],
+  },
+  {
+    id: 'whirlwind',
+    name: 'Whirlwind',
+    type: 'attack',
+    tier: 3,
+    cost: 2,
+    color: 0xc0392b,
+    // Three small hits plus a Weak rider — the Strength/Vulnerable payoff card: each hit scales, so
+    // it rewards a built-up scaling deck and shreds partial block, while the Weak keeps it worth
+    // taking (a defensive tempo tool) even before the deck is built, so it is never a trap pick.
+    description: 'Deal 3 three times, apply Weak',
+    effects: [
+      { kind: 'damage', amount: 3 },
+      { kind: 'damage', amount: 3 },
+      { kind: 'damage', amount: 3 },
+      { kind: 'status', status: 'weak', amount: 1, duration: 1 },
+    ],
+  },
+  {
+    id: 'reckless_swing',
+    name: 'Reckless Swing',
+    type: 'attack',
+    tier: 2,
+    cost: 1,
+    color: 0xc0392b,
+    // A big burst you spend once — the trade-off is Exhaust, so it can't anchor a turtle.
+    description: 'Deal 12. Exhaust',
+    exhaust: true,
+    effects: [{ kind: 'damage', amount: 12 }],
   },
 ];
 
