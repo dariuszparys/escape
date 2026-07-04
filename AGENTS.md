@@ -3,10 +3,17 @@
 ## Project Structure & Module Organization
 
 This is a Phaser 3 + TypeScript + Vite browser game. Runtime code lives in `src/`.
-Use `src/main.ts` for Phaser bootstrapping, `src/scenes/` for game scenes, `src/state.ts`
-for run state, `src/data/` for cards and enemies, `src/dungeon/` for room generation,
-and `src/gfx/` for generated pixel-art rendering helpers. `index.html` hosts the game
-container. `dist/` is build output and should not be edited by hand.
+Use `src/main.ts` for Phaser bootstrapping, `src/scenes/` for game scenes (`TurnBattle.ts`
+is the card-battle scene, `Dungeon.ts` the room crawl, `Progression.ts` the Campfire/archetype
+hub), `src/state.ts` for run state, `src/data/` for cards, enemies, archetypes, relics, and
+starter kits, `src/dungeon/` for room generation, `src/audio/` for procedural music/SFX, and
+`src/gfx/` for generated pixel-art rendering helpers. `src/game/` holds the headless rules
+engine — `turnEngine.ts` (combat rules over an `enemies[]` pack, RNG injected), `combatEvents.ts`
+(the deterministic event bus), `effectHandlers.ts` (the combat-effect handler registry),
+`balanceSimulator.ts` (the automated win-rate harness), `delve.ts`/`strata.ts` (Endless Descent
+bank/delve rules), and `progression.ts`/`campfirePrep.ts` (Ember spend and run prep) among other
+pure rule modules — scene code renders and forwards input but never decides rules. `index.html`
+hosts the game container. `dist/` is build output and should not be edited by hand.
 
 ## Build, Test, and Development Commands
 
@@ -26,8 +33,10 @@ indentation, single quotes, and semicolons to match the existing code. Keep cons
 `PascalCase`, and scene files/classes in `PascalCase` such as `Battle.ts` and
 `BattleScene`.
 
-Prefer small modules organized by responsibility. Add new card/enemy data to `src/data/`,
-new dungeon rules to `src/dungeon/`, and reusable drawing logic to `src/gfx/`.
+Prefer small modules organized by responsibility. Add new card/enemy/archetype data to
+`src/data/`, new dungeon rules to `src/dungeon/`, new combat/progression rules to `src/game/`,
+and reusable drawing logic to `src/gfx/`. New combat effects register a handler in
+`src/game/effectHandlers.ts` rather than adding a branch to the Turn Engine's dispatch.
 
 ## Testing Guidelines
 
@@ -35,6 +44,11 @@ Automated tests use Vitest through `npm test`. Treat `npm run build` as the requ
 baseline validation before submitting changes. For gameplay changes, also run
 `npm run dev` and manually smoke test the affected loop, such as dungeon movement,
 encounters, card selection, treasure, potions, traps, or boss completion.
+
+Changes that touch combat numbers, enemy packs, statuses, or the Endless Descent
+economy are validated against `src/game/balanceSimulator.ts`, an automated policy-driven
+win-rate harness — re-run its tests and check the reported win rate still sits in the
+tuned band rather than eyeballing individual numbers.
 
 Use `docs/solutions/` for repo-local writeups of solved problems and reusable fixes;
 entries are organized by category with YAML frontmatter such as `module`, `tags`,

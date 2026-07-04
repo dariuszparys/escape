@@ -1,6 +1,7 @@
 ---
 title: Decouple Enemy Power from Player-Reward Scaling in Endless Difficulty Curves
 date: 2026-06-29
+last_refreshed: 2026-07-04
 category: design-patterns
 module: dungeon-loop
 problem_type: design_pattern
@@ -60,30 +61,36 @@ function spawnEnemy(rng: GameRng, depth: number): EnemyInstance {
 }
 ```
 
-**(b) Decouple enemy-power curves from player-reward curves.** They serve opposite purposes and should not share an uncapped scaling input. The central fix was to cap the depth that enemy decks see, so enemy quality plateaus at the end of the base run while the player's chest enrichment keeps climbing:
+**(b) Decouple enemy-power curves from player-reward curves.** They serve opposite purposes and should not share an uncapped scaling input. The original fix (2026-06-29) capped the depth that enemy card-hands saw (`ENEMY_DECK_DEPTH_CAP`), so enemy quality plateaued at the end of the base run while the player's chest enrichment kept climbing.
+
+**That specific mechanism no longer exists** — a later combat rebuild replaced card-hand enemies entirely with authored intent patterns (see `spawnEnemy`'s comment: _"Enemy behavior is its authored intent pattern, empowered for depth; spawns roll no card decks"_). The decoupling this doc argues for is now enforced **by construction** rather than by a runtime cap: enemy power scales through `enemyHpForDepth`/`intentBonusForDepth`, functions that share no code path with `randomCard`/`deepTierWeights` (the player chest-reward side). There is no shared seam left to accidentally re-couple. This is a stronger version of the same lesson, not a different one — when you can, decouple by removing the shared function entirely rather than by capping one side's view of it.
 
 ```ts
-// src/data/enemies.ts
-export const ENEMY_DECK_DEPTH_CAP = MAX_DEPTH - 1;
+// src/data/enemies.ts — enemy power scaling, structurally separate from player rewards:
+function intentBonusForDepth(depth: number): number {
+  /* ... */
+}
+export function enemyHpForDepth(baseHp: number, depth: number): number {
+  /* ... */
+}
 
-function spawnEnemy(rng: GameRng, depth: number): EnemyInstance {
-  const cardDepth = Math.min(depth, ENEMY_DECK_DEPTH_CAP); // <- decoupling
-  cards.push(randomCard(rng, cardDepth));
-  // ...
+export function spawnEnemy(rng: GameRng, depth: number): EnemyInstance {
+  const pattern = empowerPattern(def.pattern, intentBonusForDepth(depth));
+  // no randomCard(), no shared seam with the player chest-reward path
 }
 ```
 
-The same principle applied to the rest of the difficulty curve, which we softened so "harder" stayed monotonic without becoming a wall:
+The same principle applied to the rest of the difficulty curve, which was softened so "harder" stayed monotonic without becoming a wall. The two constants below were re-tuned in a later "roguelike-hard" rebalance — current values, not the doc's original ones:
 
 ```ts
 // src/data/enemies.ts
-export const DEEP_HP_SLOPE = 0.3;
+const DEEP_HP_SLOPE = 0.03; // was 0.3 at original authoring; more than halved for the roguelike-hard rebaseline
 export function enemyHpForDepth(baseHp: number, depth: number): number {
   if (depth <= MAX_DEPTH) return baseHp + depth; // stratum 1: linear
   return baseHp + MAX_DEPTH + Math.round((depth - MAX_DEPTH) * DEEP_HP_SLOPE); // beyond: gentle
 }
 
-export const BOSS_HP_PER_DEPTH_BEYOND_FIRST = 1; // was a steep +30/stratum draft
+const BOSS_HP_PER_DEPTH_BEYOND_FIRST = 0.3; // was 1 at original authoring
 ```
 
 ```ts
@@ -108,7 +115,9 @@ export function convertGoldToEmbers(gold: number): number {
 
 **(c) Validate deep/endless difficulty against a headless balance harness with a "no dominant line" assertion before shipping.** The balance simulator (`src/game/balanceSimulator.ts`, unit U7) models three delve strategies — `cautious` (bank at gate 1), `moderate` (delve one stratum then bank), `aggressive` (push until death) — across many seeds, and asserts that no single strategy strictly dominates (requirement R14). This assertion is what caught the bug: it is the difference between "we think it's balanced" and "400 deterministic seeds say it's balanced."
 
-**(d) Tune coupled difficulty constants as a set against the harness, not individually.** The five constants below are co-dependent: enemy deck cap, deep HP slope, stratum-clear heal, boss HP escalation, and the conversion guard. Changing one in isolation re-introduces a dominant line. They were co-tuned together against the harness (this set is recorded as KTD8), and any future change must re-run the harness over the full seed set before landing.
+**(d) Tune coupled difficulty constants as a set against the harness, not individually.** The original five constants are co-dependent: deep HP slope, stratum-clear heal, boss HP escalation, the conversion guard, and (at the time) the enemy deck cap. Changing one in isolation re-introduces a dominant line. They were co-tuned together against the harness (this set is recorded as KTD8), and any future change must re-run the harness over the full seed set before landing.
+
+A later addition, `PACK_HP_MULTIPLIER` (the total-HP multiplier a multi-enemy pack carries over the solo encounter it replaces — see the [multi-enemy pack combat doc](multi-enemy-pack-combat-refactor.md)), joined this coupled set: it multiplies `enemyHpForDepth`'s output, the same curve `DEEP_HP_SLOPE` governs. A naive-seeming value for it broke a delve/gold-economy invariant that has nothing visibly to do with packs — the same "drift apart if edited one at a time" failure mode this rule warns about, just with a new member.
 
 ## Why This Matters
 
@@ -129,16 +138,23 @@ Reach for this guidance whenever you:
 
 ## Examples
 
-**Enemy arming — before vs. after.**
+**Enemy arming — before vs. after (as originally fixed, 2026-06-29).**
 
 ```ts
 // BEFORE: deep enemies inherit the player-reward tier-3 flood => unwinnable deep fights
 cards.push(randomCard(rng, depth));
 
-// AFTER: enemy decks plateau at late-base-run; player chests still enrich past it
+// AFTER (2026-06-29 fix): enemy decks plateau at late-base-run; player chests still enrich past it
 const cardDepth = Math.min(depth, ENEMY_DECK_DEPTH_CAP); // MAX_DEPTH - 1
 cards.push(randomCard(rng, cardDepth));
 ```
+
+**Current state.** A later combat rebuild removed enemy card-hands entirely, so this
+specific cap no longer exists in the code — `spawnEnemy` never calls `randomCard` at
+all. Enemy power now scales through `enemyHpForDepth`/`intentBonusForDepth`, which
+share no function with the player's `randomCard`/`deepTierWeights` reward path. The
+seam this fix originally patched has been removed outright, which is the more durable
+version of the same "decouple enemy power from player reward" lesson.
 
 **Harness signal — before vs. after (400 seeds, deterministic).**
 
@@ -151,7 +167,8 @@ cards.push(randomCard(rng, cardDepth));
 
 ## Related
 
-- `docs/solutions/design-patterns/room-threat-system.md` — sibling pattern in the same dungeon loop that also keeps pure deterministic game logic with the balance simulator as the tuning source of truth. (Note: that doc still cites a `BALANCE_ENCOUNTER_POLICY = 'fight-taken-baseline'` constant that the U7 work in this learning removed — a refresh candidate.)
+- `docs/solutions/design-patterns/room-threat-system.md` — sibling pattern in the same dungeon loop that also keeps pure deterministic game logic with the balance simulator as the tuning source of truth. (That doc already documents its own `BALANCE_ENCOUNTER_POLICY` constant removal — the note previously here claiming it as a refresh candidate was itself stale and has been removed.)
+- [Multi-Enemy Pack Combat via Collection-of-One Refactor](multi-enemy-pack-combat-refactor.md) — `PACK_HP_MULTIPLIER` extends this doc's KTD8 coupled-constant set (rule d) and reuses its enemy-power-anchoring principle for a new encounter shape.
 - `docs/plans/2026-06-29-002-feat-endless-descent-banking-plan.md` — the implementation plan (units U1–U8) this learning came out of; KTD8 records the coupled-constant tuning.
 - `docs/brainstorms/2026-06-29-push-your-luck-banking-requirements.md` — product framing and the R14 "no dominant line" requirement.
 - `docs/plans/2026-06-29-001-feat-reading-the-enemy-combat-plan.md` — sibling initiative sharing the enemy combat-script work (`src/data/enemies.ts`).

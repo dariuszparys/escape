@@ -117,7 +117,26 @@ magnitudes fold the actor's Strength in, so a ritual-buffed hit always reads hon
 The enemy's telegraphed next action — type and raw magnitude, unadjusted for
 the player's block or armor — shown before the player commits any card. Intents
 come from authored per-enemy patterns; a voided intent (for example by stun)
-updates the telegraph immediately so it never lies.
+updates the telegraph immediately so it never lies. In an Enemy Pack, each
+living member telegraphs and acts on its own independent Enemy Intent cycle.
+
+### Enemy Pack
+
+A normal encounter's roster of foes: usually a single enemy, but sometimes 2-3
+lower-HP minions instead (weighted low, gated off the first two depths; bosses
+and Elites never pack). A pack is budget-anchored to the solo encounter it
+replaces — its members split the tier's per-turn damage so the pack's total
+output tracks a solo's, and it carries extra total HP to offset the focus-fire
+advantage of picking members off one at a time. Victory requires the whole
+pack dead. A solo fight is simply a one-member pack, so the Turn Engine,
+balance harness, and reference-deck determinism all share one code path.
+
+### Focus
+
+The player's chosen target within an Enemy Pack, set by clicking an enemy (a gold
+ring marks it, shown only when there's a genuine choice). Cards and items resolve
+against the focused enemy; when it dies, focus slides to the next living member.
+With a solo enemy there is nothing to choose, so the mechanic stays invisible.
 
 ### Turn Engine
 
