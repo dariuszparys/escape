@@ -26,11 +26,35 @@ export interface EnemyInstance {
   pattern: IntentPattern;
 }
 
+/**
+ * Map spawned enemy instances to the turn engine's per-enemy config, assigning a
+ * UNIQUE id to each pack member (`goblin#0`, `goblin#1`) so same-type duplicates
+ * don't collide when the engine/scene address enemies by id. A solo enemy keeps
+ * its bare def id, so single-enemy battles are byte-identical to before packs.
+ */
+export function toEngineEnemies(pack: EnemyInstance[]): {
+  id: string;
+  name: string;
+  hp: number;
+  maxHp: number;
+  armor: number;
+  pattern: IntentPattern;
+}[] {
+  return pack.map((enemy, index) => ({
+    id: pack.length === 1 ? enemy.def.id : `${enemy.def.id}#${index}`,
+    name: enemy.def.name,
+    hp: enemy.hp,
+    maxHp: enemy.maxHp,
+    armor: enemy.armor,
+    pattern: enemy.pattern,
+  }));
+}
+
 export const ENEMIES: EnemyDef[] = [
   {
     id: 'rat',
     name: 'Rat',
-    texture: 'bat',
+    texture: 'rat',
     baseHp: 8,
     tier: 'weak',
     boss: false,
@@ -114,7 +138,7 @@ export const ENEMIES: EnemyDef[] = [
   {
     id: 'bandit',
     name: 'Bandit',
-    texture: 'skeleton',
+    texture: 'bandit',
     baseHp: 26,
     tier: 'medium',
     boss: false,
@@ -155,7 +179,7 @@ export const ENEMIES: EnemyDef[] = [
   {
     id: 'cultist',
     name: 'Cultist',
-    texture: 'bat',
+    texture: 'cultist',
     baseHp: 27,
     tier: 'medium',
     boss: false,
@@ -197,7 +221,7 @@ export const ENEMIES: EnemyDef[] = [
   {
     id: 'armored_goblin',
     name: 'Armored Goblin',
-    texture: 'slime',
+    texture: 'goblin',
     baseHp: 30,
     tier: 'medium',
     boss: false,
@@ -241,7 +265,7 @@ export const ENEMIES: EnemyDef[] = [
   {
     id: 'knight',
     name: 'Knight',
-    texture: 'skeleton',
+    texture: 'knight',
     baseHp: 40,
     tier: 'strong',
     boss: false,
@@ -287,7 +311,7 @@ export const ENEMIES: EnemyDef[] = [
   {
     id: 'necromancer',
     name: 'Necromancer',
-    texture: 'bat',
+    texture: 'necromancer',
     baseHp: 41,
     tier: 'strong',
     boss: false,
@@ -343,7 +367,7 @@ export const ENEMIES: EnemyDef[] = [
   {
     id: 'ogre',
     name: 'Ogre',
-    texture: 'slime',
+    texture: 'ogre',
     baseHp: 46,
     tier: 'strong',
     boss: false,
@@ -525,7 +549,7 @@ export const ELITES: EnemyDef[] = [
   {
     id: 'elite_berserker',
     name: 'The Berserker',
-    texture: 'skeleton',
+    texture: 'orc',
     baseHp: 54,
     tier: 'elite',
     boss: false,
@@ -573,7 +597,7 @@ export const ELITES: EnemyDef[] = [
   {
     id: 'elite_stalker',
     name: 'The Stalker',
-    texture: 'slime',
+    texture: 'gargoyle',
     baseHp: 50,
     tier: 'elite',
     boss: false,
@@ -606,7 +630,7 @@ export const ELITES: EnemyDef[] = [
   {
     id: 'elite_hexweaver',
     name: 'The Hexweaver',
-    texture: 'bat',
+    texture: 'witch',
     baseHp: 52,
     tier: 'elite',
     boss: false,
@@ -641,7 +665,7 @@ export const ELITES: EnemyDef[] = [
   {
     id: 'elite_bloodleech',
     name: 'The Bloodleech',
-    texture: 'slime',
+    texture: 'imp',
     baseHp: 53,
     tier: 'elite',
     boss: false,
@@ -678,7 +702,7 @@ export const ELITES: EnemyDef[] = [
   {
     id: 'elite_duelist',
     name: 'The Duelist',
-    texture: 'skeleton',
+    texture: 'wraith',
     baseHp: 49,
     tier: 'elite',
     boss: false,
@@ -766,7 +790,7 @@ export const SLICE_ENEMIES: SliceEnemyDef[] = [
   {
     id: 'slice_cultist',
     name: 'Ashen Cultist',
-    texture: 'bat',
+    texture: 'cultist',
     hp: 34,
     armor: 0,
     // Status pressure plus an interval special, exercising ticks and the boss-style telegraph.
@@ -853,6 +877,161 @@ export function spawnEnemy(rng: GameRng, depth: number): EnemyInstance {
   const hp = enemyHpForDepth(def.baseHp, depth);
   const pattern = empowerPattern(def.pattern, intentBonusForDepth(depth));
   return { def, hp, maxHp: hp, armor: 0, statuses: [], pattern };
+}
+
+/**
+ * Pack-only minions (multi-enemy): low-HP grunts that never spawn solo. Their
+ * per-hit damage is small so that a pack of 2-3 sums to roughly one solo enemy's
+ * output — the pack budget is anchored in `spawnMinionPack`, not here.
+ */
+export const MINIONS: EnemyDef[] = [
+  {
+    id: 'goblin_grunt',
+    name: 'Goblin',
+    texture: 'goblin',
+    baseHp: 8,
+    tier: 'weak',
+    boss: false,
+    pattern: {
+      cycle: [
+        {
+          name: 'Jab',
+          telegraph: 'jabs with a rusty knife...',
+          effects: [{ kind: 'damage', amount: 3 }],
+        },
+        { name: 'Hack', telegraph: 'hacks wildly...', effects: [{ kind: 'damage', amount: 4 }] },
+      ],
+    },
+  },
+  {
+    id: 'giant_rat',
+    name: 'Giant Rat',
+    texture: 'rat',
+    baseHp: 6,
+    tier: 'weak',
+    boss: false,
+    pattern: {
+      cycle: [
+        { name: 'Bite', telegraph: 'bares its teeth...', effects: [{ kind: 'damage', amount: 3 }] },
+        { name: 'Cower', telegraph: 'shrinks back...', effects: [{ kind: 'block', amount: 2 }] },
+      ],
+    },
+  },
+  {
+    id: 'cave_bat',
+    name: 'Cave Bat',
+    texture: 'bat',
+    baseHp: 5,
+    tier: 'weak',
+    boss: false,
+    pattern: {
+      cycle: [
+        {
+          name: 'Screech',
+          telegraph: 'lets out a screech...',
+          effects: [{ kind: 'damage', amount: 2 }],
+        },
+        {
+          name: 'Dive',
+          telegraph: 'folds its wings to dive...',
+          effects: [{ kind: 'damage', amount: 4 }],
+        },
+      ],
+    },
+  },
+  {
+    id: 'imp_whelp',
+    name: 'Imp',
+    texture: 'imp',
+    baseHp: 7,
+    tier: 'weak',
+    boss: false,
+    pattern: {
+      cycle: [
+        {
+          name: 'Scratch',
+          telegraph: 'rakes with tiny claws...',
+          effects: [{ kind: 'damage', amount: 3 }],
+        },
+        {
+          name: 'Ember',
+          telegraph: 'spits a small ember...',
+          effects: [{ kind: 'status', status: 'burn', amount: 2, duration: 2 }],
+        },
+      ],
+    },
+  },
+  {
+    id: 'gargoyle_whelp',
+    name: 'Gargoyle',
+    texture: 'gargoyle',
+    baseHp: 10,
+    tier: 'weak',
+    boss: false,
+    pattern: {
+      cycle: [
+        {
+          name: 'Chip',
+          telegraph: 'swings a stone fist...',
+          effects: [{ kind: 'damage', amount: 3 }],
+        },
+        {
+          name: 'Harden',
+          telegraph: 'its skin turns to stone...',
+          effects: [{ kind: 'block', amount: 4 }],
+        },
+      ],
+    },
+  },
+];
+
+/** Fraction of eligible encounters that stay a clean 1v1 (packs are weighted low). */
+export const PACK_SOLO_CHANCE = 0.6;
+/** Among the packs, the fraction that are size 3 (the rest are size 2). */
+export const PACK_TRIPLE_CHANCE = 0.35;
+const PACK_MIN_MEMBER_HP = 6;
+/**
+ * A pack carries MORE total HP than the solo it stands in for: because the player
+ * focus-fires and picks members off (cutting the pack's incoming damage each turn),
+ * an equal-HP pack is strictly easier than a solo that keeps hitting at full. This
+ * multiplier restores the tuned attrition — the pack survives ~a turn longer, so more
+ * of its (multi-attacker) damage lands. Tuned against the balance harness so packs
+ * neither soften the roguelike-hard band nor wall the weak-tier floor.
+ */
+const PACK_HP_MULTIPLIER = 1.3;
+
+/** The HP a pack should carry in total: a solo enemy of this depth's tier, scaled up (budget anchor). */
+function packHpBudget(depth: number): number {
+  const tier = getEnemyTierForDepth(depth);
+  const baseHp = tier === 'weak' ? 10 : tier === 'medium' ? 28 : 43;
+  return Math.round(enemyHpForDepth(baseHp, depth) * PACK_HP_MULTIPLIER);
+}
+
+/**
+ * Build a pack of `size` minions whose COMBINED HP and per-turn damage ≈ one solo
+ * enemy of this depth: total HP is split across members, and the tier's per-turn
+ * damage bump is spread across them (each member gets `bonus / size`) so the pack's
+ * scaling tracks a solo enemy's rather than multiplying it by the member count.
+ */
+export function spawnMinionPack(rng: GameRng, depth: number, size: number): EnemyInstance[] {
+  const perHp = Math.max(PACK_MIN_MEMBER_HP, Math.round(packHpBudget(depth) / size));
+  const perMemberBonus = Math.floor(intentBonusForDepth(depth) / size);
+  return Array.from({ length: size }, () => {
+    const def = rng.pick(MINIONS);
+    const pattern = empowerPattern(def.pattern, perMemberBonus);
+    return { def, hp: perHp, maxHp: perHp, armor: 0, statuses: [], pattern };
+  });
+}
+
+/**
+ * A normal-encounter spawn: mostly a single enemy, sometimes a budget-anchored pack
+ * of 2-3 minions (multi-enemy). Gated off the first two depths so the opener stays a
+ * clean 1v1, and weighted low so packs stay a change of pace. Bosses/elites never pack.
+ */
+export function spawnEncounter(rng: GameRng, depth: number): EnemyInstance[] {
+  if (depth <= 2 || rng.frac() < PACK_SOLO_CHANCE) return [spawnEnemy(rng, depth)];
+  const size = rng.frac() < PACK_TRIPLE_CHANCE ? 3 : 2;
+  return spawnMinionPack(rng, depth, size);
 }
 
 /**

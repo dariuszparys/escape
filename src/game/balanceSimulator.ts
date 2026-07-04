@@ -7,7 +7,8 @@ import {
   getEnemyTierForDepth,
   spawnBoss,
   spawnElite,
-  spawnEnemy,
+  spawnEncounter,
+  toEngineEnemies,
 } from '../data/enemies';
 import { InventoryItem, type InventoryItemDef, makeItem } from '../data/items';
 import type { StarterKitId } from '../data/starterKits';
@@ -37,6 +38,7 @@ import {
   endTurn,
   playableCards,
   playCard,
+  resolveOffensiveTarget,
   TurnBattleState,
   useItem,
 } from './turnEngine';
@@ -472,21 +474,46 @@ function chooseRoomEvent(
 /** Hard cap so a stalemate deck (all block) terminates as a loss instead of looping. */
 export const SIM_BATTLE_TURN_CAP = 60;
 
-/** The telegraphed intent's raw view, or null once voided (nothing incoming). Folds the enemy's
- * Strength into the magnitude so the policy reads (and blocks) the honest incoming number (B-adjust). */
-function incomingIntent(state: TurnBattleState) {
-  if (!state.intent.current || state.intent.voided) return null;
-  return intentView(state.intent.current, statusValue(state.enemy, 'strength'));
+/** One enemy's telegraphed view (Strength folded), or null if it has none/voided. */
+function enemyIntentView(enemy: TurnBattleState['enemies'][number]) {
+  if (!enemy.intent.current || enemy.intent.voided) return null;
+  return intentView(enemy.intent.current, statusValue(enemy, 'strength'));
 }
 
-/** The damage a card would actually deal RIGHT NOW, threading the player's Strength/Weak and the
- * enemy's Vulnerable through the same resolver the engine uses (before armor/block). */
+/** Total attack damage telegraphed by the whole living pack this turn (0 if none attack).
+ * For a solo enemy this is exactly the single telegraph — the policy is unchanged there. */
+function incomingAttackTotal(state: TurnBattleState): number {
+  return state.enemies
+    .filter((enemy) => enemy.hp > 0)
+    .reduce((sum, enemy) => {
+      const view = enemyIntentView(enemy);
+      return sum + (view?.kind === 'attack' ? view.magnitude : 0);
+    }, 0);
+}
+
+/** The single biggest telegraphed attack across the pack (drives smoke-bomb value); 0 if none. */
+function biggestIncomingAttack(state: TurnBattleState): number {
+  let best = 0;
+  for (const enemy of state.enemies) {
+    if (enemy.hp <= 0) continue;
+    const view = enemyIntentView(enemy);
+    if (view?.kind === 'attack' && view.magnitude > best) best = view.magnitude;
+  }
+  return best;
+}
+
+/** The enemy the policy attacks this turn: the weakest living one (mirrors the engine's focus). */
+function focusEnemy(state: TurnBattleState) {
+  return resolveOffensiveTarget(state);
+}
+
+/** The damage a card would actually deal to the focus enemy RIGHT NOW, threading the player's
+ * Strength/Weak and the focus enemy's Vulnerable through the same resolver the engine uses. */
 function effectiveCardDamage(card: Card, state: TurnBattleState): number {
+  const focus = focusEnemy(state);
   return card.effects.reduce(
     (sum, effect) =>
-      effect.kind === 'damage'
-        ? sum + modifiedDamage(effect.amount, state.player, state.enemy)
-        : sum,
+      effect.kind === 'damage' ? sum + modifiedDamage(effect.amount, state.player, focus) : sum,
     0,
   );
 }
@@ -505,8 +532,9 @@ const appliesVulnerable = (card: Card): boolean =>
 function pickCardToPlay(state: TurnBattleState, emphasis: CardEmphasis | null): Card | null {
   const playable = playableCards(state);
   if (playable.length === 0) return null;
-  const incoming = incomingIntent(state);
-  const enemyEff = state.enemy.hp + state.enemy.block + state.enemy.armor;
+  const incomingTotal = incomingAttackTotal(state);
+  const focus = focusEnemy(state);
+  const enemyEff = focus.hp + focus.block + focus.armor;
   const attackers = playable
     .filter((card) => effectiveCardDamage(card, state) > 0)
     .sort((a, b) => effectiveCardDamage(b, state) - effectiveCardDamage(a, state));
@@ -534,8 +562,8 @@ function pickCardToPlay(state: TurnBattleState, emphasis: CardEmphasis | null): 
   const racing = state.turn > 8;
   if (racing) {
     const lethalIncoming =
-      incoming?.kind === 'attack' &&
-      incoming.magnitude - state.player.block - state.player.armor >= state.player.hp;
+      incomingTotal > 0 &&
+      incomingTotal - state.player.block - state.player.armor >= state.player.hp;
     if (lethalIncoming) {
       const blocker = playable
         .filter((card) => cardEffectAmount(card, 'block') > 0)
@@ -547,7 +575,7 @@ function pickCardToPlay(state: TurnBattleState, emphasis: CardEmphasis | null): 
 
   // 2) Setup before the dump: on a worth-it target that isn't Vulnerable yet, spend a pure setup
   //    card first — but only with energy and an attacker to spare, so it never wastes the turn.
-  if (!hasStatus(state.enemy, 'vulnerable') && enemyEff > 22) {
+  if (!hasStatus(focus, 'vulnerable') && enemyEff > 22) {
     const setup = playable.find(
       (card) =>
         appliesVulnerable(card) &&
@@ -562,9 +590,9 @@ function pickCardToPlay(state: TurnBattleState, emphasis: CardEmphasis | null): 
     }
   }
 
-  // 3) Defense: block (or weaken) a telegraphed hit that would take a real bite out of us.
-  if (incoming?.kind === 'attack') {
-    const projected = incoming.magnitude - state.player.block - state.player.armor;
+  // 3) Defense: block (or weaken) the turn's incoming that would take a real bite out of us.
+  if (incomingTotal > 0) {
+    const projected = incomingTotal - state.player.block - state.player.armor;
     if (projected > 0 && projected >= state.player.hp * 0.45) {
       const blocker = playable
         .filter((card) => cardEffectAmount(card, 'block') > 0)
@@ -596,7 +624,7 @@ function pickCardToPlay(state: TurnBattleState, emphasis: CardEmphasis | null): 
   let bestScore = -Infinity;
   for (const card of playable) {
     let score = simCardScore(card, emphasis);
-    if (incoming?.kind === 'attack') score += cardEffectAmount(card, 'block') * 0.8;
+    if (incomingTotal > 0) score += cardEffectAmount(card, 'block') * 0.8;
     if (score > bestScore) {
       bestScore = score;
       best = card;
@@ -607,10 +635,13 @@ function pickCardToPlay(state: TurnBattleState, emphasis: CardEmphasis | null): 
 
 /** Free actions (R16): potion when hurt, bomb for lethal, smoke bomb against a heavy telegraph, armor against a hit. */
 function pickBattleItem(run: RunState, state: TurnBattleState): InventoryItem | null {
-  const incoming = incomingIntent(state);
+  const focus = focusEnemy(state);
+  const biggest = biggestIncomingAttack(state);
+  const incomingTotal = incomingAttackTotal(state);
   for (const item of run.inventory) {
     if (!item.usableInCombat) continue;
-    if (item.kind === 'damage' && state.enemy.hp + state.enemy.block <= item.amount) return item;
+    // Bomb when it can finish the focus enemy (the target the policy is committing against).
+    if (item.kind === 'damage' && focus.hp + focus.block <= item.amount) return item;
     if (
       item.kind === 'heal' &&
       state.player.hp < 12 &&
@@ -618,15 +649,12 @@ function pickBattleItem(run: RunState, state: TurnBattleState): InventoryItem | 
     ) {
       return item;
     }
-    if (item.kind === 'skip_attack' && incoming?.kind === 'attack' && incoming.magnitude >= 8) {
+    // Smoke bomb only skips ONE beat, so it earns its use against a single heavy telegraph.
+    if (item.kind === 'skip_attack' && biggest >= 8) {
       return item;
     }
-    if (
-      item.kind === 'shield' &&
-      incoming?.kind === 'attack' &&
-      incoming.magnitude >= 6 &&
-      state.player.block === 0
-    ) {
+    // Armor buffers the turn's whole incoming.
+    if (item.kind === 'shield' && incomingTotal >= 6 && state.player.block === 0) {
       return item;
     }
   }
@@ -640,22 +668,16 @@ function pickBattleItem(run: RunState, state: TurnBattleState): InventoryItem | 
  */
 export function simulateBattle(
   run: RunState,
-  enemy: EnemyInstance,
+  enemyOrPack: EnemyInstance | EnemyInstance[],
   rng: SimRng,
   emphasis: CardEmphasis | null = null,
 ): { won: boolean; turns: number } {
+  const pack = Array.isArray(enemyOrPack) ? enemyOrPack : [enemyOrPack];
   let { state } = createBattle(
     {
       deck: run.cardCollection,
       player: { hp: run.hp, maxHp: run.maxHp, armor: run.armor },
-      enemy: {
-        id: enemy.def.id,
-        name: enemy.def.name,
-        hp: enemy.hp,
-        maxHp: enemy.maxHp,
-        armor: enemy.armor,
-      },
-      pattern: enemy.pattern,
+      enemies: toEngineEnemies(pack),
     },
     rng,
   );
@@ -664,7 +686,7 @@ export function simulateBattle(
   while (state.phase !== 'decided' && state.turn <= SIM_BATTLE_TURN_CAP && guard++ < 2000) {
     const item = pickBattleItem(run, state);
     if (item) {
-      const result = useItem(state, item, rng);
+      const result = useItem(state, item, rng, resolveOffensiveTarget(state).id);
       if (!result.rejected) {
         run.removeItem(item.uid);
         state = result.state;
@@ -673,7 +695,7 @@ export function simulateBattle(
     }
     const card = pickCardToPlay(state, emphasis);
     if (card) {
-      const result = playCard(state, card.uid, rng);
+      const result = playCard(state, card.uid, rng, resolveOffensiveTarget(state).id);
       if (!result.rejected) {
         state = result.state;
         continue;
@@ -847,7 +869,7 @@ export function simulateRun(
       encounters++;
       const tier = getEnemyTierForDepth(depth) as StandardTier;
       tierFights[tier].total++;
-      const battle = simulateBattle(run, spawnEnemy(rng, depth), rng, emphasis);
+      const battle = simulateBattle(run, spawnEncounter(rng, depth), rng, emphasis);
       if (!battle.won) {
         return {
           victory: false,

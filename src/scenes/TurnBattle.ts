@@ -33,6 +33,7 @@ import {
 import { getRun } from '../state';
 import { computeTooltipPlacement, TOOLTIP_WIDTH } from '../game/tooltipLayout';
 import {
+  enemyAnchorsX,
   getTurnBattleLayout,
   HAND_CARD_SCALE,
   handSlotPositions,
@@ -99,10 +100,11 @@ interface SliceSceneData {
   restartCount?: number;
 }
 
-/** The Dungeon's launch payload (R14): the same run inputs the old scene consumed. */
+/** The Dungeon's launch payload (R14): the same run inputs the old scene consumed, now a pack. */
 export interface RunBattleSceneData {
   mode: 'run';
-  enemy: EnemyInstance;
+  /** One or more enemies to fight together (multi-enemy). Bosses/elites pass a single-element pack. */
+  enemies: EnemyInstance[];
   rng: GameRng;
   /** Which room type spawned this battle (U7); read by later units for rewards/music (U8/U10). */
   encounterKind: 'normal' | 'elite' | 'boss';
@@ -110,7 +112,8 @@ export interface RunBattleSceneData {
 
 type TurnBattleSceneData = SliceSceneData | RunBattleSceneData;
 
-/** What the scene needs to draw and script an enemy, mode-independent. */
+/** What the scene needs to draw and script one enemy, mode-independent. `id` is the engine
+ * combatant id (unique within the pack), so events route to the right on-screen enemy. */
 interface EnemyDisplay {
   id: string;
   name: string;
@@ -120,6 +123,23 @@ interface EnemyDisplay {
   armor: number;
   boss: boolean;
   pattern: IntentPattern;
+}
+
+/** Everything drawn for one enemy: sprite, bars, texts, focus ring, and the shown values. */
+interface EnemyView {
+  display: EnemyDisplay;
+  sprite: Phaser.GameObjects.Image;
+  hpBar: Phaser.GameObjects.Graphics;
+  hpText: Phaser.GameObjects.Text;
+  blockText: Phaser.GameObjects.Text;
+  statusText: Phaser.GameObjects.Text;
+  intentText: Phaser.GameObjects.Text;
+  focusRing: Phaser.GameObjects.Graphics;
+  anchorX: number;
+  spriteY: number;
+  shownHp: number;
+  shownBlock: number;
+  statuses: Map<StatusEffectType, { amount: number; turns: number }>;
 }
 
 interface SliceDebugHandle {
@@ -132,6 +152,46 @@ interface SliceDebugHandle {
 }
 
 const MONO = 'monospace';
+
+/** Always-on-top depth for the hover tooltips (mirrors cardTooltip's TOOLTIP_DEPTH). */
+const ITEM_TOOLTIP_DEPTH = 500;
+
+/**
+ * Map spawned enemy instances to display records, assigning each a unique id
+ * (`goblin#0`, `goblin#1`) that matches the engine's `toEngineEnemies` convention
+ * so combat events route to the right on-screen enemy. A solo enemy keeps its bare id.
+ */
+function displaysFromInstances(pack: EnemyInstance[]): EnemyDisplay[] {
+  return pack.map((inst, index) => ({
+    id: pack.length === 1 ? inst.def.id : `${inst.def.id}#${index}`,
+    name: inst.def.name,
+    texture: inst.def.texture,
+    hp: inst.hp,
+    maxHp: inst.maxHp,
+    armor: inst.armor,
+    boss: inst.def.boss,
+    pattern: inst.pattern,
+  }));
+}
+
+/** Which generated sprite stands in for a combat item's icon (R-declutter: icons replace text). */
+function itemTexture(item: InventoryItem): string {
+  switch (item.id) {
+    case 'small_potion':
+      return 'potion';
+    case 'large_potion':
+      return 'potion_large';
+    case 'iron_armor':
+      return 'armor';
+    case 'smoke_bomb':
+      return 'smoke_bomb';
+    case 'bomb':
+      return 'bomb';
+    default:
+      // Fall back by kind so an unmapped item still shows something sensible.
+      return item.kind === 'shield' ? 'armor' : item.kind === 'damage' ? 'bomb' : 'potion';
+  }
+}
 
 /**
  * The Slay-the-Spire-style battle screen (U6). Render and input only: every
@@ -150,7 +210,9 @@ export class TurnBattleScene extends Phaser.Scene {
   encounterKind: 'normal' | 'elite' | 'boss' = 'normal';
   private baseSeed = '';
   private restartCount = 0;
-  private display!: EnemyDisplay;
+  private displays: EnemyDisplay[] = [];
+  /** The enemy the player's attacks target; click an enemy to move it (click-to-focus). */
+  private focusId = '';
   private playerMaxHp = 0;
   private rng!: GameRng;
 
@@ -166,35 +228,23 @@ export class TurnBattleScene extends Phaser.Scene {
   private shownHand: Card[] = [];
   private handViews = new Map<number, HandView>();
   private committedUids = new Set<number>();
-  private shownStatuses: Record<
-    'player' | 'enemy',
-    Map<StatusEffectType, { amount: number; turns: number }>
-  > = {
-    player: new Map(),
-    enemy: new Map(),
-  };
+  /** Player statuses as the presentation currently shows them; enemy statuses live per EnemyView. */
+  private playerStatuses = new Map<StatusEffectType, { amount: number; turns: number }>();
   private shown = {
     playerHp: 0,
     playerBlock: 0,
-    enemyHp: 0,
-    enemyBlock: 0,
     energy: 0,
     draw: 0,
     discard: 0,
   };
 
-  private enemySprite!: Phaser.GameObjects.Image;
+  /** One EnemyView per living-or-dead enemy, keyed by engine combatant id. */
+  private enemyViews = new Map<string, EnemyView>();
   private heroSprite!: Phaser.GameObjects.Image;
-  private enemyHpBar!: Phaser.GameObjects.Graphics;
   private playerHpBar!: Phaser.GameObjects.Graphics;
-  private enemyHpText!: Phaser.GameObjects.Text;
   private playerHpText!: Phaser.GameObjects.Text;
   private playerBlockText!: Phaser.GameObjects.Text;
-  private enemyBlockText!: Phaser.GameObjects.Text;
   private playerStatusText!: Phaser.GameObjects.Text;
-  private enemyStatusText!: Phaser.GameObjects.Text;
-  private intentTitle!: Phaser.GameObjects.Text;
-  private intentLine!: Phaser.GameObjects.Text;
   private announcementText!: Phaser.GameObjects.Text;
   private energyText!: Phaser.GameObjects.Text;
   private turnText!: Phaser.GameObjects.Text;
@@ -203,9 +253,8 @@ export class TurnBattleScene extends Phaser.Scene {
   private endTurnBg!: Phaser.GameObjects.Graphics;
   private endTurnZone!: Phaser.GameObjects.Zone;
   private endTurnPulse: Phaser.Tweens.Tween | null = null;
-  private logText!: Phaser.GameObjects.Text;
-  private logLines: string[] = [];
-  private itemButtons: Phaser.GameObjects.Text[] = [];
+  private itemViews: { icon: Phaser.GameObjects.Image }[] = [];
+  private itemTooltip: Phaser.GameObjects.Container | null = null;
   private pilePanel: Phaser.GameObjects.Container | null = null;
   /** The rules-text tooltip for whichever card is currently hovered (hand or reward), if any (U11). */
   private activeTooltip: Phaser.GameObjects.Container | null = null;
@@ -224,25 +273,20 @@ export class TurnBattleScene extends Phaser.Scene {
       this.restartCount = 0;
       this.rng = data.rng;
       this.encounterKind = data.encounterKind;
-      const def = data.enemy.def;
-      this.display = {
-        id: def.id,
-        name: def.name,
-        texture: def.texture,
-        hp: data.enemy.hp,
-        maxHp: data.enemy.maxHp,
-        armor: data.enemy.armor,
-        boss: def.boss,
-        pattern: data.enemy.pattern,
-      };
+      this.displays = displaysFromInstances(data.enemies);
       this.items = getRun().inventory.filter((item) => item.usableInCombat);
     } else {
       this.mode = 'slice';
       this.baseSeed = data.seed ?? String(Math.random());
       this.restartCount = data.restartCount ?? 0;
-      const sliceDef = sliceEnemy(data.enemyId);
-      this.display = {
-        id: sliceDef.id,
+      // A comma-separated `enemy` param spawns a slice pack (e.g. `?enemy=slice_skeleton,slice_cultist`).
+      const sliceIds = (data.enemyId ?? '')
+        .split(',')
+        .map((id) => id.trim())
+        .filter(Boolean);
+      const sliceDefs = (sliceIds.length ? sliceIds : [undefined]).map((id) => sliceEnemy(id));
+      this.displays = sliceDefs.map((sliceDef, index) => ({
+        id: sliceDefs.length === 1 ? sliceDef.id : `${sliceDef.id}#${index}`,
         name: sliceDef.name,
         texture: sliceDef.texture,
         hp: sliceDef.hp,
@@ -250,18 +294,20 @@ export class TurnBattleScene extends Phaser.Scene {
         armor: sliceDef.armor,
         boss: false,
         pattern: sliceDef.pattern,
-      };
+      }));
       const seed = this.restartCount > 0 ? `${this.baseSeed}:${this.restartCount}` : this.baseSeed;
       this.rng = new PhaserGameRng(new Phaser.Math.RandomDataGenerator([seed]));
       this.items = buildSliceItems();
     }
+    this.focusId = this.displays[0].id;
     this.beatActive = false;
     this.shownHand = [];
     this.handViews = new Map();
     this.committedUids = new Set();
-    this.shownStatuses = { player: new Map(), enemy: new Map() };
-    this.logLines = [];
-    this.itemButtons = [];
+    this.playerStatuses = new Map();
+    this.enemyViews = new Map();
+    this.itemViews = [];
+    this.itemTooltip = null;
     this.pilePanel = null;
     this.activeTooltip = null;
     this.endTurnPulse = null;
@@ -278,11 +324,10 @@ export class TurnBattleScene extends Phaser.Scene {
     playMusic(this, trackForEncounterKind(this.encounterKind));
 
     this.drawStaticChrome();
-    this.createEnemyZone();
+    this.createEnemies();
     this.createPlayerZone();
-    this.createIntentPanel();
     this.createAnnouncement();
-    this.createLogPanel();
+    this.createTurnCounter();
     this.createEnergyAndPiles();
     this.createEndTurnButton();
     this.createItemButtons();
@@ -309,8 +354,6 @@ export class TurnBattleScene extends Phaser.Scene {
     this.shown = {
       playerHp: player.hp,
       playerBlock: 0,
-      enemyHp: this.display.hp,
-      enemyBlock: 0,
       energy: 0,
       draw: deck.length,
       discard: 0,
@@ -319,14 +362,14 @@ export class TurnBattleScene extends Phaser.Scene {
       {
         deck,
         player,
-        enemy: {
-          id: this.display.id,
-          name: this.display.name,
-          hp: this.display.hp,
-          maxHp: this.display.maxHp,
-          armor: this.display.armor,
-        },
-        pattern: this.display.pattern,
+        enemies: this.displays.map((display) => ({
+          id: display.id,
+          name: display.name,
+          hp: display.hp,
+          maxHp: display.maxHp,
+          armor: display.armor,
+          pattern: display.pattern,
+        })),
         // swift_boots re-specified for the deck model (U12): +1 draw each turn.
         drawSize: run?.hasRelic('swift_boots') ? 6 : undefined,
       },
@@ -339,6 +382,7 @@ export class TurnBattleScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.closePilePanel();
       this.hideCardTooltip();
+      this.hideItemTooltip();
       stopAllMusic(this.game);
       startAmbience(this.game);
     });
@@ -355,10 +399,9 @@ export class TurnBattleScene extends Phaser.Scene {
   /** Common post-command bookkeeping: adopt the new truth, queue its replay, log it. */
   private acceptResult(result: TurnCommandResult): void {
     this.engineState = result.state;
-    this.appendLog(result.log);
     this.queue.enqueue(toSteps(result.events));
     this.refreshHandAffordability();
-    this.refreshItemButtons();
+    this.refreshItemIcons();
   }
 
   private pressCard(uid: number): void {
@@ -377,7 +420,7 @@ export class TurnBattleScene extends Phaser.Scene {
       // Already played; its travel just hasn't caught up yet. The press ack is the response.
       return;
     }
-    const result = playCard(this.engineState, uid, this.rng);
+    const result = playCard(this.engineState, uid, this.rng, this.focusId);
     if (result.rejected === 'insufficient_energy') {
       if (view) this.costFlash(view);
       playSfx(this, 'reject');
@@ -420,8 +463,8 @@ export class TurnBattleScene extends Phaser.Scene {
     this.acceptResult(result);
   }
 
-  private pressItem(item: InventoryItem, button: Phaser.GameObjects.Text): void {
-    this.pressAck(button);
+  private pressItem(item: InventoryItem, icon: Phaser.GameObjects.Image): void {
+    this.pressAck(icon);
     if (this.beatActive && !this.queue.idle) {
       this.queue.accelerate();
       return;
@@ -431,7 +474,7 @@ export class TurnBattleScene extends Phaser.Scene {
       this.queue.accelerate();
       return;
     }
-    const result = useItem(this.engineState, item, this.rng);
+    const result = useItem(this.engineState, item, this.rng, this.focusId);
     if (result.rejected) {
       this.rejectCue('Battle decided');
       return;
@@ -475,19 +518,25 @@ export class TurnBattleScene extends Phaser.Scene {
         this.announce('Discard pile shuffled into draw pile', '#8ecbff');
         playSfx(this, 'shuffle', 0.5);
         break;
-      case 'intentTelegraphed':
-        this.setIntent(event.name, `${event.telegraph}`, event.kind, event.magnitude, false);
+      case 'intentTelegraphed': {
+        const view = this.enemyViews.get(event.sourceId);
+        if (view) this.setEnemyIntent(view, event.name, event.kind, event.magnitude, false);
         playSfx(this, 'boss_telegraph', 0.25);
         break;
-      case 'intentVoided':
-        this.setIntent(
-          event.reason === 'stun' ? 'STUNNED' : 'SMOKED',
-          event.reason === 'stun' ? 'the intent is lost' : 'it cannot see you',
-          'unknown',
-          0,
-          true,
-        );
+      }
+      case 'intentVoided': {
+        const view = this.enemyViews.get(event.sourceId);
+        if (view) {
+          this.setEnemyIntent(
+            view,
+            event.reason === 'stun' ? 'STUNNED' : 'SMOKED',
+            'unknown',
+            0,
+            true,
+          );
+        }
         break;
+      }
       case 'cardPlayed':
         this.shown.energy = event.energyAfter;
         this.energyText.setText(`${event.energyAfter}/${this.engineState.energyPerTurn}`);
@@ -509,24 +558,20 @@ export class TurnBattleScene extends Phaser.Scene {
         }
         playSfx(this, 'heal');
         break;
-      case 'statusApplied':
-        this.shownStatuses[this.sideFor(event.targetId)].set(event.status, {
-          amount: event.amount,
-          turns: event.remainingTurns,
-        });
-        this.renderStatuses();
+      case 'statusApplied': {
+        const map = this.statusMapFor(event.targetId);
+        map.set(event.status, { amount: event.amount, turns: event.remainingTurns });
+        this.renderStatusesFor(event.targetId);
         this.combatPop(this.spriteFor(event.targetId), event.status.toUpperCase(), '#c58cff');
         playSfx(this, 'trap', 0.3);
         break;
+      }
       case 'statusTicked': {
-        const side = this.sideFor(event.targetId);
+        const map = this.statusMapFor(event.targetId);
         if (event.remainingTurns > 0)
-          this.shownStatuses[side].set(event.status, {
-            amount: event.amount,
-            turns: event.remainingTurns,
-          });
-        else this.shownStatuses[side].delete(event.status);
-        this.renderStatuses();
+          map.set(event.status, { amount: event.amount, turns: event.remainingTurns });
+        else map.delete(event.status);
+        this.renderStatusesFor(event.targetId);
         this.setShownHp(event.targetId, event.hpAfter);
         this.combatPop(
           this.spriteFor(event.targetId),
@@ -537,23 +582,20 @@ export class TurnBattleScene extends Phaser.Scene {
         break;
       }
       case 'statusFaded': {
-        const side = this.sideFor(event.targetId);
-        const existing = this.shownStatuses[side].get(event.status);
+        const map = this.statusMapFor(event.targetId);
+        const existing = map.get(event.status);
         if (event.remainingTurns > 0)
-          this.shownStatuses[side].set(event.status, {
-            amount: existing?.amount ?? 0,
-            turns: event.remainingTurns,
-          });
-        else this.shownStatuses[side].delete(event.status);
-        this.renderStatuses();
+          map.set(event.status, { amount: existing?.amount ?? 0, turns: event.remainingTurns });
+        else map.delete(event.status);
+        this.renderStatusesFor(event.targetId);
         break;
       }
       case 'blockExpired':
         this.setShownBlock(event.targetId, 0);
         break;
       case 'stunned':
-        this.shownStatuses.player.delete('stun');
-        this.renderStatuses();
+        this.playerStatuses.delete('stun');
+        this.renderPlayerStatuses();
         this.announce('You are stunned — card plays are skipped', '#f1c40f');
         playSfx(this, 'reject', 0.4);
         break;
@@ -573,22 +615,30 @@ export class TurnBattleScene extends Phaser.Scene {
       case 'itemUsed':
         this.announce(`Used ${event.itemName}`, '#5fe07a');
         break;
-      case 'enemyBeatStarted':
+      case 'enemyBeatStarted': {
         this.beatActive = true;
-        this.tweens.add({
-          targets: this.enemySprite,
-          y: this.enemySprite.y + 14,
-          duration: 130,
-          yoyo: true,
-          ease: 'Cubic.easeIn',
-        });
+        const view = this.enemyViews.get(event.sourceId);
+        if (view) {
+          this.tweens.add({
+            targets: view.sprite,
+            y: view.sprite.y + 14,
+            duration: 130,
+            yoyo: true,
+            ease: 'Cubic.easeIn',
+          });
+        }
         break;
-      case 'enemyBeatFizzled':
+      }
+      case 'enemyBeatFizzled': {
         this.beatActive = true;
-        this.combatPop(this.enemySprite, 'FIZZLE', '#b8b0c8');
-        this.setIntent('...', 'the moment passes', 'unknown', 0, false);
+        const view = this.enemyViews.get(event.sourceId);
+        if (view) {
+          this.combatPop(view.sprite, 'FIZZLE', '#b8b0c8');
+          this.setEnemyIntent(view, '...', 'unknown', 0, true);
+        }
         playSfx(this, 'trap', 0.35);
         break;
+      }
       case 'noPlayableCards':
         this.pulseEndTurn(true);
         this.announce(
@@ -612,23 +662,168 @@ export class TurnBattleScene extends Phaser.Scene {
   // --------------------------------------------------------------- visuals
 
   private spriteFor(targetId: string): Phaser.GameObjects.Image {
-    return targetId === 'player' ? this.heroSprite : this.enemySprite;
+    if (targetId === 'player') return this.heroSprite;
+    return this.enemyViews.get(targetId)?.sprite ?? this.heroSprite;
   }
 
-  private sideFor(targetId: string): 'player' | 'enemy' {
-    return targetId === 'player' ? 'player' : 'enemy';
+  private statusMapFor(targetId: string): Map<StatusEffectType, { amount: number; turns: number }> {
+    if (targetId === 'player') return this.playerStatuses;
+    return this.enemyViews.get(targetId)?.statuses ?? this.playerStatuses;
+  }
+
+  private renderStatusesFor(targetId: string): void {
+    if (targetId === 'player') {
+      this.renderPlayerStatuses();
+      return;
+    }
+    const view = this.enemyViews.get(targetId);
+    if (view) this.renderEnemyStatuses(view);
   }
 
   private setShownHp(targetId: string, hp: number): void {
-    if (targetId === 'player') this.shown.playerHp = hp;
-    else this.shown.enemyHp = hp;
-    this.refreshAllBars();
+    if (targetId === 'player') {
+      this.shown.playerHp = hp;
+      this.refreshPlayerBar();
+      return;
+    }
+    const view = this.enemyViews.get(targetId);
+    if (!view) return;
+    view.shownHp = hp;
+    this.refreshEnemyBar(view);
+    if (hp <= 0) this.markEnemyDown(view);
   }
 
   private setShownBlock(targetId: string, block: number): void {
-    if (targetId === 'player') this.shown.playerBlock = block;
-    else this.shown.enemyBlock = block;
-    this.refreshAllBars();
+    if (targetId === 'player') {
+      this.shown.playerBlock = block;
+      this.refreshPlayerBar();
+      return;
+    }
+    const view = this.enemyViews.get(targetId);
+    if (!view) return;
+    view.shownBlock = block;
+    this.refreshEnemyBar(view);
+  }
+
+  // ------------------------------------------------------------- enemy views
+
+  /** Move the player's attack focus to `id` (click-to-focus), if it is a living enemy. */
+  private setFocus(id: string): void {
+    const view = this.enemyViews.get(id);
+    if (!view || view.shownHp <= 0) return;
+    this.focusId = id;
+    this.redrawFocusRings();
+  }
+
+  private onEnemyClicked(id: string): void {
+    // A click during the enemy beat / after the battle is decided only accelerates (R11).
+    if ((this.beatActive || this.engineState.phase === 'decided') && !this.queue.idle) return;
+    this.setFocus(id);
+  }
+
+  /** When the current focus dies mid-pack, slide focus to the next living enemy. */
+  private refocusToLiving(): void {
+    if ((this.enemyViews.get(this.focusId)?.shownHp ?? 0) > 0) return;
+    const next = this.displays.find((d) => (this.enemyViews.get(d.id)?.shownHp ?? 0) > 0);
+    if (next) this.setFocus(next.id);
+    this.redrawFocusRings();
+  }
+
+  /** A gold ring marks the focused enemy — only shown when there is a choice to make (a pack). */
+  private redrawFocusRings(): void {
+    const size = 84;
+    for (const view of this.enemyViews.values()) {
+      view.focusRing.clear();
+      const focused =
+        view.display.id === this.focusId && view.shownHp > 0 && this.enemyViews.size > 1;
+      if (!focused) continue;
+      view.focusRing.lineStyle(3, 0xf1c40f, 0.85);
+      view.focusRing.strokeRoundedRect(
+        view.anchorX - size / 2,
+        view.spriteY - size / 2,
+        size,
+        size,
+        8,
+      );
+    }
+  }
+
+  /** A downed pack member fades out where it stands and stops carrying an intent. */
+  private markEnemyDown(view: EnemyView): void {
+    if (view.sprite.getData('down')) return;
+    view.sprite.setData('down', true);
+    this.tweens.killTweensOf(view.sprite);
+    this.tweens.add({
+      targets: view.sprite,
+      alpha: 0.12,
+      angle: 12,
+      scale: view.sprite.scale * 0.7,
+      duration: 320,
+      ease: 'Cubic.easeIn',
+    });
+    view.intentText.setText('');
+    view.blockText.setText('');
+    view.statusText.setText('');
+    view.focusRing.clear();
+    this.refocusToLiving();
+  }
+
+  /** Compact per-enemy telegraph: the number that matters, colored by kind. */
+  private setEnemyIntent(
+    view: EnemyView,
+    name: string,
+    kind: string,
+    magnitude: number,
+    voided: boolean,
+  ): void {
+    const label = voided
+      ? name
+      : kind === 'attack'
+        ? `${magnitude} DMG`
+        : kind === 'block'
+          ? `BLOCK ${magnitude}`
+          : kind === 'status'
+            ? name.toUpperCase()
+            : kind === 'heal'
+              ? `HEAL ${magnitude}`
+              : kind === 'buff'
+                ? `+${magnitude} STR`
+                : name;
+    const color = voided
+      ? '#b8b0c8'
+      : kind === 'attack'
+        ? '#ff6b5e'
+        : kind === 'block'
+          ? '#8ecbff'
+          : kind === 'heal'
+            ? '#5fe07a'
+            : '#c58cff';
+    view.intentText.setText(label).setColor(color);
+    view.intentText.setScale(1.15);
+    this.tweens.add({ targets: view.intentText, scale: 1, duration: 160 });
+  }
+
+  private formatStatuses(map: Map<StatusEffectType, { amount: number; turns: number }>): string {
+    return (
+      [...map.entries()]
+        // Strength is a permanent stack (no timer) — show its amount; timed statuses show turns.
+        .map(([type, v]) => (type === 'strength' ? `str +${v.amount}` : `${type} ${v.turns}`))
+        .join('  ')
+    );
+  }
+
+  private renderPlayerStatuses(): void {
+    this.playerStatusText.setText(this.formatStatuses(this.playerStatuses));
+  }
+
+  private renderEnemyStatuses(view: EnemyView): void {
+    view.statusText.setText(this.formatStatuses(view.statuses));
+  }
+
+  private spriteScale(count: number, boss: boolean): number {
+    if (count >= 3) return 3.8;
+    if (count === 2) return 4.6;
+    return boss ? 5.5 : 6;
   }
 
   private applyDamageVisual(event: Extract<CombatEvent, { type: 'damageResolved' }>): void {
@@ -686,7 +881,9 @@ export class TurnBattleScene extends Phaser.Scene {
   }
 
   /** Same-frame press acknowledgment (R7): the element visibly reacts before any rules run. */
-  private pressAck(target: Phaser.GameObjects.Container | Phaser.GameObjects.Text): void {
+  private pressAck(
+    target: Phaser.GameObjects.Container | Phaser.GameObjects.Text | Phaser.GameObjects.Image,
+  ): void {
     const base = target.scale;
     target.setScale(base * 0.93);
     this.tweens.add({ targets: target, scale: base, duration: 90 });
@@ -725,16 +922,10 @@ export class TurnBattleScene extends Phaser.Scene {
     });
   }
 
-  private appendLog(lines: string[]): void {
-    this.logLines.push(...lines.filter((line) => line.length > 0));
-    this.logLines = this.logLines.slice(-13);
-    this.logText.setText(this.logLines.join('\n'));
-  }
-
   // ------------------------------------------------------------- hand views
 
   private makeHandCardView(card: Card): HandView {
-    const container = makeCardView(this, card, 0, 0);
+    const container = makeCardView(this, card, 0, 0, 1, false);
     const badge = this.add.graphics();
     badge.fillStyle(0x16121e, 1);
     badge.fillCircle(-CARD_W / 2 + 14, -CARD_H / 2 + 14, 13);
@@ -939,44 +1130,80 @@ export class TurnBattleScene extends Phaser.Scene {
     bg.fillRoundedRect(hand.x, hand.y, hand.w, hand.h, 8);
   }
 
-  private createEnemyZone(): void {
-    const zone = this.layout.enemyZone;
-    const cx = zone.x + zone.w / 2;
-    this.add
-      .text(cx, zone.y + 12, this.display.name, {
-        fontFamily: MONO,
-        fontSize: this.display.boss ? '24px' : '22px',
-        fontStyle: 'bold',
-        color: this.display.boss ? '#ff5544' : '#f5edd8',
-      })
-      .setOrigin(0.5);
-    this.enemySprite = this.add
-      .image(cx, zone.y + 110, this.display.texture)
-      .setScale(this.display.boss ? 5.5 : 6);
-    this.tweens.add({
-      targets: this.enemySprite,
-      y: this.enemySprite.y - 8,
-      duration: 900,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
+  /** Build one EnemyView per foe, laid out in a row across the enemy band (multi-enemy). */
+  private createEnemies(): void {
+    const band = this.layout.enemyZone;
+    const count = this.displays.length;
+    const anchors = enemyAnchorsX(count);
+    const barW = Math.min(band.w / count - 16, 180);
+    this.displays.forEach((display, index) => {
+      const cx = anchors[index];
+      const spriteY = band.y + 112;
+      this.add
+        .text(cx, band.y + 4, display.name, {
+          fontFamily: MONO,
+          fontSize: display.boss ? '18px' : '14px',
+          fontStyle: 'bold',
+          color: display.boss ? '#ff5544' : '#f5edd8',
+        })
+        .setOrigin(0.5, 0);
+      const focusRing = this.add.graphics();
+      const hpBar = this.add.graphics();
+      const hpText = this.add
+        .text(cx, band.y + 30, '', { fontFamily: MONO, fontSize: '11px', color: '#f5edd8' })
+        .setOrigin(0.5)
+        .setDepth(1);
+      const blockText = this.add
+        .text(cx + barW / 2 + 4, band.y + 30, '', {
+          fontFamily: MONO,
+          fontSize: '11px',
+          fontStyle: 'bold',
+          color: '#8ecbff',
+        })
+        .setOrigin(0, 0.5);
+      const sprite = this.add
+        .image(cx, spriteY, display.texture)
+        .setScale(this.spriteScale(count, display.boss))
+        .setInteractive({ useHandCursor: true });
+      sprite.on('pointerdown', () => this.onEnemyClicked(display.id));
+      this.tweens.add({
+        targets: sprite,
+        y: spriteY - 6,
+        duration: 900,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+      const statusText = this.add
+        .text(cx, band.y + 176, '', { fontFamily: MONO, fontSize: '10px', color: '#c58cff' })
+        .setOrigin(0.5);
+      const intentText = this.add
+        .text(cx, band.y + 200, '', {
+          fontFamily: MONO,
+          fontSize: '13px',
+          fontStyle: 'bold',
+          color: '#ff9944',
+        })
+        .setOrigin(0.5);
+      const view: EnemyView = {
+        display,
+        sprite,
+        hpBar,
+        hpText,
+        blockText,
+        statusText,
+        intentText,
+        focusRing,
+        anchorX: cx,
+        spriteY,
+        shownHp: display.hp,
+        shownBlock: 0,
+        statuses: new Map(),
+      };
+      this.enemyViews.set(display.id, view);
+      this.refreshEnemyBar(view);
     });
-    this.enemyHpBar = this.add.graphics();
-    this.enemyHpText = this.add
-      .text(cx, zone.y + 38, '', { fontFamily: MONO, fontSize: '12px', color: '#f5edd8' })
-      .setOrigin(0.5)
-      .setDepth(1);
-    this.enemyBlockText = this.add
-      .text(zone.x + zone.w - 4, zone.y + 30, '', {
-        fontFamily: MONO,
-        fontSize: '12px',
-        fontStyle: 'bold',
-        color: '#8ecbff',
-      })
-      .setOrigin(1, 0.5);
-    this.enemyStatusText = this.add
-      .text(cx, zone.y + zone.h - 8, '', { fontFamily: MONO, fontSize: '10px', color: '#c58cff' })
-      .setOrigin(0.5);
+    this.redrawFocusRings();
   }
 
   private createPlayerZone(): void {
@@ -1001,53 +1228,6 @@ export class TurnBattleScene extends Phaser.Scene {
       .setOrigin(0, 0.5);
   }
 
-  private createIntentPanel(): void {
-    const panel = this.layout.intentPanel;
-    const g = this.add.graphics();
-    g.fillStyle(0x16121e, 0.85);
-    g.fillRoundedRect(panel.x, panel.y, panel.w, panel.h, 6);
-    g.lineStyle(1, 0x3a3544, 1);
-    g.strokeRoundedRect(panel.x, panel.y, panel.w, panel.h, 6);
-    this.intentTitle = this.add
-      .text(panel.x + panel.w / 2, panel.y + 13, 'The enemy stirs...', {
-        fontFamily: MONO,
-        fontSize: '14px',
-        fontStyle: 'bold',
-        color: '#ff9944',
-      })
-      .setOrigin(0.5);
-    this.intentLine = this.add
-      .text(panel.x + panel.w / 2, panel.y + 32, '', {
-        fontFamily: MONO,
-        fontSize: '10px',
-        color: '#b8b0c8',
-      })
-      .setOrigin(0.5);
-  }
-
-  private setIntent(
-    name: string,
-    telegraph: string,
-    kind: string,
-    magnitude: number,
-    voided: boolean,
-  ): void {
-    const label =
-      kind === 'attack'
-        ? `${name} — ${magnitude} damage incoming`
-        : kind === 'block'
-          ? `${name} — braces for ${magnitude}`
-          : kind === 'status'
-            ? `${name} — affliction incoming`
-            : kind === 'heal'
-              ? `${name} — recovers ${magnitude}`
-              : name;
-    this.intentTitle.setText(label).setColor(voided ? '#b8b0c8' : '#ff9944');
-    this.intentLine.setText(telegraph);
-    this.intentTitle.setScale(1.12);
-    this.tweens.add({ targets: this.intentTitle, scale: 1, duration: 180 });
-  }
-
   private createAnnouncement(): void {
     const region = this.layout.announcement;
     this.announcementText = this.add
@@ -1062,25 +1242,17 @@ export class TurnBattleScene extends Phaser.Scene {
       .setAlpha(0);
   }
 
-  private createLogPanel(): void {
-    const panel = this.layout.logPanel;
-    const g = this.add.graphics();
-    g.fillStyle(0x16121e, 0.7);
-    g.fillRoundedRect(panel.x, panel.y, panel.w, panel.h, 6);
-    g.lineStyle(1, 0x3a3544, 1);
-    g.strokeRoundedRect(panel.x, panel.y, panel.w, panel.h, 6);
-    this.turnText = this.add.text(panel.x + 10, panel.y + 8, 'TURN 1', {
+  /**
+   * The battle log is gone (R-declutter): the turn model is transparent enough
+   * that the play-by-play scroll no longer earned its column. Only the turn
+   * counter it used to host survives, relocated to the top-left corner.
+   */
+  private createTurnCounter(): void {
+    this.turnText = this.add.text(28, 286, 'TURN 1', {
       fontFamily: MONO,
-      fontSize: '12px',
+      fontSize: '13px',
       fontStyle: 'bold',
       color: '#f1c40f',
-    });
-    this.logText = this.add.text(panel.x + 10, panel.y + 26, '', {
-      fontFamily: MONO,
-      fontSize: '9px',
-      color: '#b8b0c8',
-      lineSpacing: 2,
-      wordWrap: { width: panel.w - 20, useAdvancedWrap: true },
     });
   }
 
@@ -1207,68 +1379,117 @@ export class TurnBattleScene extends Phaser.Scene {
   }
 
   private createItemButtons(): void {
-    this.refreshItemButtons();
+    const row = this.layout.itemRow;
+    this.add
+      .text(row.x + row.w / 2, row.y, 'ITEMS', {
+        fontFamily: MONO,
+        fontSize: '10px',
+        fontStyle: 'bold',
+        color: '#b8b0c8',
+      })
+      .setOrigin(0.5);
+    this.refreshItemIcons();
   }
 
-  private refreshItemButtons(): void {
-    for (const button of this.itemButtons) button.destroy();
-    this.itemButtons = [];
+  /**
+   * Free-action items as hover-only icons (R-declutter): the generated sprite
+   * carries each item's identity, the tooltip carries its name + effect. Replaces
+   * the old column of wrapped green text that crowded the right edge.
+   */
+  private refreshItemIcons(): void {
+    for (const view of this.itemViews) view.icon.destroy();
+    this.itemViews = [];
+    this.hideItemTooltip();
     const row = this.layout.itemRow;
+    const cx = row.x + row.w / 2;
     for (const [index, item] of this.items.entries()) {
-      const button = this.add
-        .text(row.x + row.w / 2, row.y + 20 + index * 38, `${item.name}\n${item.description}`, {
-          fontFamily: MONO,
-          fontSize: '9px',
-          fontStyle: 'bold',
-          color: '#5fe07a',
-          backgroundColor: '#1c2a1e',
-          padding: { x: 6, y: 4 },
-          align: 'center',
-          wordWrap: { width: row.w - 16, useAdvancedWrap: true },
-        })
-        .setOrigin(0.5)
+      const icon = this.add
+        .image(cx, row.y + 30 + index * 48, itemTexture(item))
+        .setScale(2.4)
         .setInteractive({ useHandCursor: true });
-      button.on('pointerdown', () => this.pressItem(item, button));
-      this.itemButtons.push(button);
+      icon.on('pointerover', () => this.showItemTooltip(item, icon));
+      icon.on('pointerout', () => this.hideItemTooltip());
+      icon.on('pointerdown', () => this.pressItem(item, icon));
+      this.itemViews.push({ icon });
     }
   }
 
+  /** Name + effect panel for a hovered item, anchored just left of its icon. */
+  private showItemTooltip(item: InventoryItem, icon: Phaser.GameObjects.Image): void {
+    this.hideItemTooltip();
+    const w = 150;
+    const pad = 8;
+    const name = this.add.text(pad, pad, item.name, {
+      fontFamily: MONO,
+      fontSize: '12px',
+      fontStyle: 'bold',
+      color: '#5fe07a',
+    });
+    const desc = this.add.text(pad, pad + name.height + 4, item.description, {
+      fontFamily: MONO,
+      fontSize: '10px',
+      color: '#d8d2e4',
+      wordWrap: { width: w - pad * 2, useAdvancedWrap: true },
+    });
+    const h = pad * 2 + name.height + 4 + desc.height;
+    const bg = this.add.graphics();
+    bg.fillStyle(0x111019, 0.96);
+    bg.fillRoundedRect(0, 0, w, h, 8);
+    bg.lineStyle(2, 0xcab98a, 0.85);
+    bg.strokeRoundedRect(0, 0, w, h, 8);
+    const x = icon.x - icon.displayWidth / 2 - 12 - w;
+    const y = Phaser.Math.Clamp(icon.y - h / 2, 14, GAME_H - h - 14);
+    this.itemTooltip = this.add.container(x, y, [bg, name, desc]).setDepth(ITEM_TOOLTIP_DEPTH);
+  }
+
+  private hideItemTooltip(): void {
+    this.itemTooltip?.destroy();
+    this.itemTooltip = null;
+  }
+
+  private drawBar(
+    g: Phaser.GameObjects.Graphics,
+    x: number,
+    y: number,
+    w: number,
+    frac: number,
+    color: number,
+  ): void {
+    g.clear();
+    g.fillStyle(0x16121e, 1);
+    g.fillRoundedRect(x, y, w, 14, 4);
+    if (frac > 0) {
+      g.fillStyle(color, 1);
+      g.fillRoundedRect(x, y, Math.max(8, w * frac), 14, 4);
+    }
+    g.lineStyle(2, 0x3a3544, 1);
+    g.strokeRoundedRect(x, y, w, 14, 4);
+  }
+
   private refreshAllBars(): void {
-    const bar = (
-      g: Phaser.GameObjects.Graphics,
-      x: number,
-      y: number,
-      w: number,
-      frac: number,
-      color: number,
-    ) => {
-      g.clear();
-      g.fillStyle(0x16121e, 1);
-      g.fillRoundedRect(x, y, w, 14, 4);
-      if (frac > 0) {
-        g.fillStyle(color, 1);
-        g.fillRoundedRect(x, y, Math.max(8, w * frac), 14, 4);
-      }
-      g.lineStyle(2, 0x3a3544, 1);
-      g.strokeRoundedRect(x, y, w, 14, 4);
-    };
-    const enemyZone = this.layout.enemyZone;
-    bar(
-      this.enemyHpBar,
-      enemyZone.x + 10,
-      enemyZone.y + 30,
-      enemyZone.w - 20,
-      this.shown.enemyHp / this.display.maxHp,
+    this.refreshPlayerBar();
+    for (const view of this.enemyViews.values()) this.refreshEnemyBar(view);
+  }
+
+  private refreshEnemyBar(view: EnemyView): void {
+    const band = this.layout.enemyZone;
+    const barW = Math.min(band.w / this.displays.length - 16, 180);
+    this.drawBar(
+      view.hpBar,
+      view.anchorX - barW / 2,
+      band.y + 22,
+      barW,
+      view.shownHp / view.display.maxHp,
       0xe23b4e,
     );
-    this.enemyHpText
-      .setText(`${Math.max(0, this.shown.enemyHp)} / ${this.display.maxHp}`)
-      .setY(enemyZone.y + 38);
-    this.enemyBlockText.setText(this.shown.enemyBlock > 0 ? `■ ${this.shown.enemyBlock}` : '');
+    view.hpText.setText(`${Math.max(0, view.shownHp)} / ${view.display.maxHp}`);
+    view.blockText.setText(view.shownBlock > 0 ? `■ ${view.shownBlock}` : '');
+  }
 
+  private refreshPlayerBar(): void {
     const playerZone = this.layout.playerZone;
     const maxHp = this.playerMaxHp || slicePlayer().maxHp;
-    bar(
+    this.drawBar(
       this.playerHpBar,
       playerZone.x + 10,
       playerZone.y + 98,
@@ -1278,16 +1499,6 @@ export class TurnBattleScene extends Phaser.Scene {
     );
     this.playerHpText.setText(`${Math.max(0, this.shown.playerHp)} / ${maxHp}`);
     this.playerBlockText.setText(this.shown.playerBlock > 0 ? `■ ${this.shown.playerBlock}` : '');
-  }
-
-  private renderStatuses(): void {
-    const format = (map: Map<StatusEffectType, { amount: number; turns: number }>): string =>
-      [...map.entries()]
-        // Strength is a permanent stack (no timer) — show its amount; timed statuses show turns.
-        .map(([type, v]) => (type === 'strength' ? `str +${v.amount}` : `${type} ${v.turns}`))
-        .join('  ');
-    this.playerStatusText.setText(format(this.shownStatuses.player));
-    this.enemyStatusText.setText(format(this.shownStatuses.enemy));
   }
 
   private togglePilePanel(): void {
@@ -1315,14 +1526,16 @@ export class TurnBattleScene extends Phaser.Scene {
     this.outcomeShown = true;
     this.closePilePanel();
     if (outcome === 'victory') {
-      this.tweens.add({
-        targets: this.enemySprite,
-        alpha: 0,
-        angle: 12,
-        scale: this.enemySprite.scale * 0.4,
-        duration: 500,
-        ease: 'Cubic.easeIn',
-      });
+      for (const view of this.enemyViews.values()) {
+        this.tweens.add({
+          targets: view.sprite,
+          alpha: 0,
+          angle: 12,
+          scale: view.sprite.scale * 0.4,
+          duration: 500,
+          ease: 'Cubic.easeIn',
+        });
+      }
     }
     if (this.mode === 'run') {
       if (outcome === 'victory') this.runVictory();
@@ -1392,7 +1605,7 @@ export class TurnBattleScene extends Phaser.Scene {
     const spacing = Math.min(CARD_W + 24, (GAME_W - 80) / Math.max(offers.length, 1));
     const startX = GAME_W / 2 - ((offers.length - 1) * spacing) / 2;
     for (const [index, card] of offers.entries()) {
-      const view = makeCardView(this, card, startX + index * spacing, 258, 0.92);
+      const view = makeCardView(this, card, startX + index * spacing, 258, 0.92, false);
       view.setDepth(401);
       view.setInteractive({ useHandCursor: true });
       view.on('pointerover', () => {
@@ -1486,13 +1699,15 @@ export class TurnBattleScene extends Phaser.Scene {
         })
         .setOrigin(0.5),
     );
-    const other = nextSliceEnemy(this.display.id);
+    // Restart reuses the same pack; strip the per-member `#index` back to slice def ids.
+    const packParam = this.displays.map((d) => d.id.split('#')[0]).join(',');
+    const other = nextSliceEnemy(this.displays[0].id.split('#')[0]);
     const options: { label: string; action: () => void }[] = [
       {
         label: '[ Fight again ]',
         action: () =>
           this.scene.restart({
-            enemyId: this.display.id,
+            enemyId: packParam,
             seed: this.baseSeed,
             restartCount: this.restartCount + 1,
           }),
@@ -1538,8 +1753,8 @@ export class TurnBattleScene extends Phaser.Scene {
       endTurn: () => this.pressEndTurn(),
       useItem: (index: number) => {
         const item = this.items[index];
-        const button = this.itemButtons[index];
-        if (item && button) this.pressItem(item, button);
+        const view = this.itemViews[index];
+        if (item && view) this.pressItem(item, view.icon);
       },
       accelerate: () => this.queue.accelerate(),
       skipAll: () => this.queue.skipAll(),
