@@ -228,8 +228,9 @@ describe('U3 new cards (draw, exhaust, energy, tempo)', () => {
       discardPile: [],
       exhaustPile: [],
       player: { id: 'player', name: 'You', hp: 30, maxHp: 30, armor: 0, block: 0, statuses: [] },
-      enemy: { id: 'foe', name: 'Foe', hp: 30, maxHp: 30, armor: 0, block: 0, statuses: [] },
-      intent,
+      enemies: [
+        { id: 'foe', name: 'Foe', hp: 30, maxHp: 30, armor: 0, block: 0, statuses: [], intent },
+      ],
       playerStunned: false,
       phase: 'player',
       outcome: null,

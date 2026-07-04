@@ -35,8 +35,9 @@ function makeState(partial: Partial<TurnBattleState>, pattern: IntentPattern): T
     discardPile: [],
     exhaustPile: [],
     player: { id: 'player', name: 'You', hp: 40, maxHp: 40, armor: 0, block: 0, statuses: [] },
-    enemy: { id: 'foe', name: 'Foe', hp: 100, maxHp: 100, armor: 0, block: 0, statuses: [] },
-    intent,
+    enemies: [
+      { id: 'foe', name: 'Foe', hp: 100, maxHp: 100, armor: 0, block: 0, statuses: [], intent },
+    ],
     playerStunned: false,
     phase: 'player',
     outcome: null,
@@ -96,8 +97,7 @@ describe('strength stacking + cap (B2)', () => {
       {
         deck,
         player: { hp: 40, maxHp: 40, armor: 0 },
-        enemy: { id: 'foe', name: 'Foe', hp: 100, maxHp: 100, armor: 0 },
-        pattern: waitPattern,
+        enemies: [{ id: 'foe', name: 'Foe', hp: 100, maxHp: 100, armor: 0, pattern: waitPattern }],
       },
       minRng,
     );
@@ -127,7 +127,18 @@ describe('B1 block-depletion no longer desyncs from modified damage', () => {
           block: 0,
           statuses: [{ type: 'strength', amount: 4, remainingTurns: 0 }],
         },
-        enemy: { id: 'foe', name: 'Foe', hp: 100, maxHp: 100, armor: 0, block: 7, statuses: [] },
+        enemies: [
+          {
+            id: 'foe',
+            name: 'Foe',
+            hp: 100,
+            maxHp: 100,
+            armor: 0,
+            block: 7,
+            statuses: [],
+            intent: telegraphIntent(createIntentState(waitPattern), 1),
+          },
+        ],
         hand: [card('Strike', [{ kind: 'damage', amount: 5 }])],
       },
       waitPattern,
@@ -137,7 +148,7 @@ describe('B1 block-depletion no longer desyncs from modified damage', () => {
     expect(ev.amount).toBe(2);
     expect(ev.blockAbsorbed).toBe(7);
     expect(ev.blockAfter).toBe(0);
-    expect(res.state.enemy.hp).toBe(98);
+    expect(res.state.enemies[0].hp).toBe(98);
   });
 });
 
@@ -182,8 +193,7 @@ describe('debuff tick timing (B4)', () => {
       {
         deck,
         player: { hp: 40, maxHp: 40, armor: 0 },
-        enemy: { id: 'foe', name: 'Foe', hp: 100, maxHp: 100, armor: 0 },
-        pattern,
+        enemies: [{ id: 'foe', name: 'Foe', hp: 100, maxHp: 100, armor: 0, pattern }],
       },
       minRng,
     );
@@ -215,8 +225,7 @@ describe('debuff tick timing (B4)', () => {
       {
         deck,
         player: { hp: 40, maxHp: 40, armor: 0 },
-        enemy: { id: 'foe', name: 'Foe', hp: 100, maxHp: 100, armor: 0 },
-        pattern: waitPattern,
+        enemies: [{ id: 'foe', name: 'Foe', hp: 100, maxHp: 100, armor: 0, pattern: waitPattern }],
       },
       minRng,
     );
@@ -227,7 +236,7 @@ describe('debuff tick timing (B4)', () => {
     expect(damageResolved(boosted.events).amount).toBe(12); // vulnerable applied this turn
     // The enemy beat ends the turn; Vulnerable decays at end of the enemy beat.
     state = endTurn(boosted.state, minRng).state;
-    expect(hasStatus(state.enemy, 'vulnerable')).toBe(false);
+    expect(hasStatus(state.enemies[0], 'vulnerable')).toBe(false);
     const strike2 = state.hand.find((c) => c.effects[0].kind === 'damage')!;
     const plain = playCard(state, strike2.uid, minRng);
     expect(damageResolved(plain.events).amount).toBe(8); // no longer vulnerable
@@ -250,8 +259,7 @@ describe('debuff tick timing (B4)', () => {
       {
         deck: [card('Wait', [{ kind: 'block', amount: 0 }])],
         player: { hp: 40, maxHp: 40, armor: 0 },
-        enemy: { id: 'foe', name: 'Foe', hp: 100, maxHp: 100, armor: 0 },
-        pattern,
+        enemies: [{ id: 'foe', name: 'Foe', hp: 100, maxHp: 100, armor: 0, pattern }],
       },
       minRng,
     );
@@ -271,8 +279,7 @@ describe('debuff tick timing (B4)', () => {
       {
         deck,
         player: { hp: 40, maxHp: 40, armor: 0 },
-        enemy: { id: 'foe', name: 'Foe', hp: 100, maxHp: 100, armor: 0 },
-        pattern: waitPattern,
+        enemies: [{ id: 'foe', name: 'Foe', hp: 100, maxHp: 100, armor: 0, pattern: waitPattern }],
       },
       minRng,
     );
@@ -294,8 +301,7 @@ describe('exhaust scaling cards (real defs) route to exhaust, not discard', () =
       {
         deck,
         player: { hp: 40, maxHp: 40, armor: 0 },
-        enemy: { id: 'foe', name: 'Foe', hp: 100, maxHp: 100, armor: 0 },
-        pattern: waitPattern,
+        enemies: [{ id: 'foe', name: 'Foe', hp: 100, maxHp: 100, armor: 0, pattern: waitPattern }],
       },
       minRng,
     ).state;
@@ -336,8 +342,7 @@ describe('telegraph honesty under Strength (R5)', () => {
       {
         deck: [card('Guard', [{ kind: 'block', amount: 0 }])],
         player: { hp: 40, maxHp: 40, armor: 0 },
-        enemy: { id: 'foe', name: 'Foe', hp: 100, maxHp: 100, armor: 0 },
-        pattern,
+        enemies: [{ id: 'foe', name: 'Foe', hp: 100, maxHp: 100, armor: 0, pattern }],
       },
       minRng,
     );

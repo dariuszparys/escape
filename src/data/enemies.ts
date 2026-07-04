@@ -26,6 +26,30 @@ export interface EnemyInstance {
   pattern: IntentPattern;
 }
 
+/**
+ * Map spawned enemy instances to the turn engine's per-enemy config, assigning a
+ * UNIQUE id to each pack member (`goblin#0`, `goblin#1`) so same-type duplicates
+ * don't collide when the engine/scene address enemies by id. A solo enemy keeps
+ * its bare def id, so single-enemy battles are byte-identical to before packs.
+ */
+export function toEngineEnemies(pack: EnemyInstance[]): {
+  id: string;
+  name: string;
+  hp: number;
+  maxHp: number;
+  armor: number;
+  pattern: IntentPattern;
+}[] {
+  return pack.map((enemy, index) => ({
+    id: pack.length === 1 ? enemy.def.id : `${enemy.def.id}#${index}`,
+    name: enemy.def.name,
+    hp: enemy.hp,
+    maxHp: enemy.maxHp,
+    armor: enemy.armor,
+    pattern: enemy.pattern,
+  }));
+}
+
 export const ENEMIES: EnemyDef[] = [
   {
     id: 'rat',

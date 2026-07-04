@@ -31,6 +31,15 @@ export interface TurnCombatant {
   statuses: ActiveStatusEffect[];
 }
 
+/**
+ * An enemy combatant. Multi-enemy packs carry an intent PER enemy (each
+ * telegraphs and beats on its own cycle), so the intent lives on the combatant
+ * rather than a single battle-level field.
+ */
+export interface EnemyCombatant extends TurnCombatant {
+  intent: IntentState;
+}
+
 /** `decided` is the R18 terminal state: rules reached lethal, only skip/accelerate remain legal. */
 export type BattlePhase = 'player' | 'decided';
 export type BattleOutcome = 'victory' | 'defeat';
@@ -54,8 +63,12 @@ export interface TurnBattleState {
    * always rebuilds the Draw Pile from the full collection, so exhaust never persists. */
   exhaustPile: Card[];
   player: TurnCombatant;
-  enemy: TurnCombatant;
-  intent: IntentState;
+  /**
+   * The enemy pack (multi-enemy). A solo fight is a one-element array; index 0
+   * is the "primary" enemy that presentation/policy default their focus to.
+   * Victory is when every enemy is dead. Each enemy owns its intent.
+   */
+  enemies: EnemyCombatant[];
   /** True while the player's consumed stun skips card plays this turn (R21); items stay legal. */
   playerStunned: boolean;
   phase: BattlePhase;
@@ -66,8 +79,15 @@ export interface TurnEngineConfig {
   /** The full card collection — the deck IS the collection (R1). */
   deck: readonly Card[];
   player: { name?: string; hp: number; maxHp: number; armor: number };
-  enemy: { id: string; name: string; hp: number; maxHp: number; armor: number };
-  pattern: IntentPattern;
+  /** One or more enemies; each carries its own authored intent pattern. */
+  enemies: {
+    id: string;
+    name: string;
+    hp: number;
+    maxHp: number;
+    armor: number;
+    pattern: IntentPattern;
+  }[];
   energyPerTurn?: number;
   drawSize?: number;
 }
@@ -102,8 +122,36 @@ export function playableCards(state: TurnBattleState): Card[] {
   return state.hand.filter((card) => cardCost(card) <= state.energy);
 }
 
+/** Living enemies (hp > 0), in pack order. */
+export function livingEnemies(state: TurnBattleState): EnemyCombatant[] {
+  return state.enemies.filter((enemy) => enemy.hp > 0);
+}
+
+/**
+ * The living enemy a player's offensive effect lands on: the caller's focus if
+ * it is still alive, otherwise the weakest living enemy (hp+block), so a combo
+ * that overkills its focus spills onto the next-nearest kill instead of a corpse.
+ * Falls back to `enemies[0]` only when the pack is already wiped (the effect loop
+ * breaks on the terminal check before that is ever hit).
+ */
+export function resolveOffensiveTarget(state: TurnBattleState, focusId?: string): EnemyCombatant {
+  const living = livingEnemies(state);
+  if (living.length === 0) return state.enemies[0];
+  const focused = focusId ? living.find((enemy) => enemy.id === focusId) : undefined;
+  if (focused) return focused;
+  return [...living].sort((a, b) => a.hp + a.block - (b.hp + b.block))[0];
+}
+
 function cloneCombatant(combatant: TurnCombatant): TurnCombatant {
   return { ...combatant, statuses: combatant.statuses.map((status) => ({ ...status })) };
+}
+
+function cloneEnemy(enemy: EnemyCombatant): EnemyCombatant {
+  return {
+    ...enemy,
+    statuses: enemy.statuses.map((status) => ({ ...status })),
+    intent: cloneIntentState(enemy.intent),
+  };
 }
 
 function cloneState(state: TurnBattleState): TurnBattleState {
@@ -114,8 +162,7 @@ function cloneState(state: TurnBattleState): TurnBattleState {
     discardPile: [...state.discardPile],
     exhaustPile: [...state.exhaustPile],
     player: cloneCombatant(state.player),
-    enemy: cloneCombatant(state.enemy),
-    intent: cloneIntentState(state.intent),
+    enemies: state.enemies.map(cloneEnemy),
   };
 }
 
@@ -145,10 +192,11 @@ function reject(input: TurnBattleState, rejected: TurnCommandRejection): TurnCom
   return { state: input, events: [], log: [], rejected };
 }
 
-/** Flip into the R18 terminal state the moment rules resolution reaches lethal. Enemy death wins ties. */
+/** Flip into the R18 terminal state the moment rules resolution reaches lethal. The whole pack
+ * dying wins the battle; player death loses. Enemy death wins ties (checked first). */
 function checkTerminal(rt: EngineRuntime): boolean {
   if (rt.state.phase === 'decided') return true;
-  if (rt.state.enemy.hp <= 0) {
+  if (rt.state.enemies.every((enemy) => enemy.hp <= 0)) {
     rt.state.phase = 'decided';
     rt.state.outcome = 'victory';
     return true;
@@ -230,13 +278,14 @@ function writeBack(mutable: MutableCombatant, combatant: TurnCombatant): void {
 function applyEffect(
   rt: EngineRuntime,
   effect: ResolvableEffect,
-  actorSide: 'player' | 'enemy',
+  actor: TurnCombatant,
+  target: TurnCombatant,
 ): void {
   const state = rt.state;
-  const actor = actorSide === 'player' ? state.player : state.enemy;
-  const target = actorSide === 'player' ? state.enemy : state.player;
   const actorM = toMutable(actor);
-  const targetM = toMutable(target);
+  // A self-targeted effect (a block/heal item: actor === target) must share ONE mutable, or the
+  // second writeBack below would revert the first from a stale copy (silently zeroing the gain).
+  const targetM = actor === target ? actorM : toMutable(target);
   const beforeTargetHp = targetM.hp;
   const beforeTargetBlock = targetM.roundBlock;
   const beforeActorHp = actorM.hp;
@@ -307,17 +356,17 @@ function applyEffect(
       amount: current?.amount ?? effect.amount ?? 0,
       remainingTurns: current?.remainingTurns ?? effect.duration ?? 0,
     });
-    if (effect.status === 'stun' && target === state.enemy) {
-      target.statuses = target.statuses.filter((status) => status.type !== 'stun');
-      state.intent = voidIntent(state.intent, 'stun');
-      rt.events.push({ type: 'intentVoided', reason: 'stun' });
+    if (effect.status === 'stun' && target !== state.player) {
+      const enemy = target as EnemyCombatant;
+      enemy.statuses = enemy.statuses.filter((status) => status.type !== 'stun');
+      enemy.intent = voidIntent(enemy.intent, 'stun');
+      rt.events.push({ type: 'intentVoided', reason: 'stun', sourceId: enemy.id });
     }
   }
 }
 
 /** Poison/burn tick at the afflicted combatant's turn start, before input opens (R20). Direct HP — block never absorbs a tick. */
-function tickStatuses(rt: EngineRuntime, side: 'player' | 'enemy'): void {
-  const combatant = side === 'player' ? rt.state.player : rt.state.enemy;
+function tickStatuses(rt: EngineRuntime, combatant: TurnCombatant): void {
   const next: ActiveStatusEffect[] = [];
   for (const status of combatant.statuses) {
     if (status.type === 'poison' || status.type === 'burn') {
@@ -351,8 +400,7 @@ const TIMED_DEBUFFS: StatusEffectType[] = ['vulnerable', 'weak', 'frail'];
  * `vulnerable` (spent by the enemy's hit) right after the beat resolves. Emits a silent
  * `statusFaded` per change so the HUD decrements without a damage pop.
  */
-function tickDebuffs(rt: EngineRuntime, side: 'player' | 'enemy', kinds: StatusEffectType[]): void {
-  const combatant = side === 'player' ? rt.state.player : rt.state.enemy;
+function tickDebuffs(rt: EngineRuntime, combatant: TurnCombatant, kinds: StatusEffectType[]): void {
   const next: ActiveStatusEffect[] = [];
   for (const status of combatant.statuses) {
     if (!kinds.includes(status.type)) {
@@ -401,7 +449,7 @@ function startPlayerTurn(rt: EngineRuntime): void {
     rt.events.push({ type: 'blockExpired', targetId: state.player.id, amount: state.player.block });
     state.player.block = 0;
   }
-  tickStatuses(rt, 'player');
+  tickStatuses(rt, state.player);
   if (checkTerminal(rt)) return;
   const stun = state.player.statuses.find((status) => status.type === 'stun');
   state.playerStunned = Boolean(stun);
@@ -412,18 +460,23 @@ function startPlayerTurn(rt: EngineRuntime): void {
   state.energy = state.energyPerTurn;
   rt.events.push({ type: 'energyChanged', energy: state.energy, max: state.energyPerTurn });
   drawCards(rt, state.drawSize);
-  state.intent = telegraphIntent(state.intent, state.turn);
-  if (state.intent.current) {
-    // Fold the enemy's Strength into the telegraphed magnitude so a ritual-buffed hit reads
-    // honestly (R5) — the number shown matches what the beat will resolve.
-    const view = intentView(state.intent.current, statusValue(state.enemy, 'strength'));
-    rt.events.push({
-      type: 'intentTelegraphed',
-      name: view.name,
-      telegraph: view.telegraph,
-      kind: view.kind,
-      magnitude: view.magnitude,
-    });
+  // Every living enemy telegraphs its own next beat (multi-enemy: one panel per enemy).
+  for (const enemy of state.enemies) {
+    if (enemy.hp <= 0) continue;
+    enemy.intent = telegraphIntent(enemy.intent, state.turn);
+    if (enemy.intent.current) {
+      // Fold the enemy's Strength into the telegraphed magnitude so a ritual-buffed hit reads
+      // honestly (R5) — the number shown matches what the beat will resolve.
+      const view = intentView(enemy.intent.current, statusValue(enemy, 'strength'));
+      rt.events.push({
+        type: 'intentTelegraphed',
+        sourceId: enemy.id,
+        name: view.name,
+        telegraph: view.telegraph,
+        kind: view.kind,
+        magnitude: view.magnitude,
+      });
+    }
   }
   announceNoPlays(rt);
 }
@@ -433,34 +486,36 @@ function startPlayerTurn(rt: EngineRuntime): void {
  * the telegraphed intent resolves — or fizzles without advancing the cycle when
  * voided by stun or smoke bomb (R21; delay, not skip — see clearVoidedIntent).
  */
-function enemyBeat(rt: EngineRuntime): void {
+function enemyBeat(rt: EngineRuntime, enemy: EnemyCombatant): void {
   const state = rt.state;
-  if (state.enemy.block > 0) {
-    rt.events.push({ type: 'blockExpired', targetId: state.enemy.id, amount: state.enemy.block });
-    state.enemy.block = 0;
+  if (enemy.block > 0) {
+    rt.events.push({ type: 'blockExpired', targetId: enemy.id, amount: enemy.block });
+    enemy.block = 0;
   }
-  tickStatuses(rt, 'enemy');
+  tickStatuses(rt, enemy);
   if (checkTerminal(rt)) return;
-  const intent = state.intent;
+  // A DoT can drop THIS enemy while its packmates live (not terminal) — a corpse takes no beat.
+  if (enemy.hp <= 0) return;
+  const intent = enemy.intent;
   if (!intent.current) {
-    state.intent = resolveIntent(intent);
+    enemy.intent = resolveIntent(intent);
   } else if (intent.voided) {
-    rt.events.push({ type: 'enemyBeatFizzled', reason: intent.voided });
-    rt.log.push(`${state.enemy.name}'s ${intent.current.name} fizzles`);
-    state.intent = clearVoidedIntent(intent);
+    rt.events.push({ type: 'enemyBeatFizzled', sourceId: enemy.id, reason: intent.voided });
+    rt.log.push(`${enemy.name}'s ${intent.current.name} fizzles`);
+    enemy.intent = clearVoidedIntent(intent);
   } else {
-    rt.events.push({ type: 'enemyBeatStarted', name: intent.current.name });
-    rt.log.push(`${state.enemy.name} uses ${intent.current.name}`);
+    rt.events.push({ type: 'enemyBeatStarted', sourceId: enemy.id, name: intent.current.name });
+    rt.log.push(`${enemy.name} uses ${intent.current.name}`);
     for (const effect of intent.current.effects) {
-      applyEffect(rt, effect, 'enemy');
+      applyEffect(rt, effect, enemy, state.player);
       if (checkTerminal(rt)) break;
     }
-    state.intent = resolveIntent(state.intent);
+    enemy.intent = resolveIntent(enemy.intent);
   }
   // Enemy-side timed debuffs decay at the END of the enemy's beat, on every non-terminal path
   // (empty/fizzled/resolved) — a fizzled beat is still the enemy's action (mirrors "stun delays,
   // not skips"). Skipped only when the battle already ended this beat.
-  if (state.phase !== 'decided') tickDebuffs(rt, 'enemy', TIMED_DEBUFFS);
+  if (state.phase !== 'decided') tickDebuffs(rt, enemy, TIMED_DEBUFFS);
 }
 
 /**
@@ -499,16 +554,16 @@ export function createBattle(config: TurnEngineConfig, rng: GameRng): TurnComman
       block: 0,
       statuses: [],
     },
-    enemy: {
-      id: config.enemy.id,
-      name: config.enemy.name,
-      hp: config.enemy.hp,
-      maxHp: config.enemy.maxHp,
-      armor: config.enemy.armor,
+    enemies: config.enemies.map((enemy) => ({
+      id: enemy.id,
+      name: enemy.name,
+      hp: enemy.hp,
+      maxHp: enemy.maxHp,
+      armor: enemy.armor,
       block: 0,
       statuses: [],
-    },
-    intent: createIntentState(config.pattern),
+      intent: createIntentState(enemy.pattern),
+    })),
     playerStunned: false,
     phase: 'player',
     outcome: null,
@@ -526,7 +581,12 @@ export function createBattle(config: TurnEngineConfig, rng: GameRng): TurnComman
  * `exhaustPile` instead of `discardPile`, leaving play for the rest of the
  * battle without shrinking the collection permanently (AE1).
  */
-export function playCard(input: TurnBattleState, cardUid: number, rng: GameRng): TurnCommandResult {
+export function playCard(
+  input: TurnBattleState,
+  cardUid: number,
+  rng: GameRng,
+  targetId?: string,
+): TurnCommandResult {
   if (input.phase === 'decided') return reject(input, 'battle_decided');
   if (input.playerStunned) return reject(input, 'player_stunned');
   const card = input.hand.find((candidate) => candidate.uid === cardUid);
@@ -541,8 +601,10 @@ export function playCard(input: TurnBattleState, cardUid: number, rng: GameRng):
   state.energy -= cost;
   rt.events.push({ type: 'cardPlayed', card: played, cost, energyAfter: state.energy });
   rt.log.push(`${state.player.name} plays ${played.name}`);
+  // Offensive effects land on `targetId` if it is still alive, else the weakest living enemy —
+  // recomputed per effect so a combo that kills its focus spills onto the next target (R-pack).
   for (const effect of played.effects) {
-    applyEffect(rt, effect, 'player');
+    applyEffect(rt, effect, state.player, resolveOffensiveTarget(state, targetId));
     if (checkTerminal(rt)) break;
   }
   if (played.exhaust) {
@@ -569,20 +631,30 @@ export function useItem(
   input: TurnBattleState,
   item: InventoryItem,
   rng: GameRng,
+  targetId?: string,
 ): TurnCommandResult {
   if (input.phase === 'decided') return reject(input, 'battle_decided');
   const rt = createRuntime(input, rng);
+  const state = rt.state;
   rt.events.push({ type: 'itemUsed', itemName: item.name });
-  rt.log.push(`${rt.state.player.name} uses ${item.name}`);
+  rt.log.push(`${state.player.name} uses ${item.name}`);
   if (item.kind === 'heal') {
-    applyEffect(rt, { kind: 'heal', amount: item.amount }, 'player');
+    applyEffect(rt, { kind: 'heal', amount: item.amount }, state.player, state.player);
   } else if (item.kind === 'shield') {
-    applyEffect(rt, { kind: 'block', amount: item.amount }, 'player');
+    applyEffect(rt, { kind: 'block', amount: item.amount }, state.player, state.player);
   } else if (item.kind === 'damage') {
-    applyEffect(rt, { kind: 'damage', amount: item.amount }, 'player');
+    applyEffect(
+      rt,
+      { kind: 'damage', amount: item.amount },
+      state.player,
+      resolveOffensiveTarget(state, targetId),
+    );
   } else if (item.kind === 'skip_attack') {
-    rt.state.intent = voidIntent(rt.state.intent, 'smoke_bomb');
-    rt.events.push({ type: 'intentVoided', reason: 'smoke_bomb' });
+    // Smoke bomb voids ONE enemy's telegraph ("skip one enemy attack"): the focus if alive, else
+    // the weakest — the same enemy the player is committing against this turn.
+    const target = resolveOffensiveTarget(state, targetId);
+    target.intent = voidIntent(target.intent, 'smoke_bomb');
+    rt.events.push({ type: 'intentVoided', sourceId: target.id, reason: 'smoke_bomb' });
   }
   checkTerminal(rt);
   return finish(rt);
@@ -600,11 +672,16 @@ export function endTurn(input: TurnBattleState, rng: GameRng): TurnCommandResult
     rt.events.push({ type: 'handDiscarded', count, discardCount: state.discardPile.length });
   }
   // Player Weak/Frail were spent across the card phase that just ended (B4).
-  tickDebuffs(rt, 'player', ['weak', 'frail']);
-  enemyBeat(rt);
+  tickDebuffs(rt, state.player, ['weak', 'frail']);
+  // Each living enemy beats in pack order; a mid-pack lethal on the player stops the rest.
+  for (const enemy of state.enemies) {
+    if (enemy.hp <= 0) continue;
+    enemyBeat(rt, enemy);
+    if (checkTerminal(rt)) break;
+  }
   if (state.phase !== 'decided') {
-    // Player Vulnerable was spent by the enemy hit that just resolved (B4).
-    tickDebuffs(rt, 'player', ['vulnerable']);
+    // Player Vulnerable persisted through every enemy hit this turn; it decays once, after them all (B4).
+    tickDebuffs(rt, state.player, ['vulnerable']);
     startPlayerTurn(rt);
   }
   return finish(rt);

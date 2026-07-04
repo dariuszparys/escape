@@ -74,12 +74,14 @@ export type CombatEvent =
   | { readonly type: 'reshuffled'; readonly count: number }
   | {
       readonly type: 'intentTelegraphed';
+      /** Which enemy is telegraphing — routes the panel/marker to its sprite in a pack (multi-enemy). */
+      readonly sourceId: string;
       readonly name: string;
       readonly telegraph: string;
       readonly kind: IntentKind;
       readonly magnitude: number;
     }
-  | { readonly type: 'intentVoided'; readonly reason: IntentVoidReason }
+  | { readonly type: 'intentVoided'; readonly sourceId: string; readonly reason: IntentVoidReason }
   | {
       readonly type: 'cardPlayed';
       readonly card: Card;
@@ -111,8 +113,12 @@ export type CombatEvent =
   | { readonly type: 'cardExhausted'; readonly card: Card; readonly exhaustCount: number }
   | { readonly type: 'handDiscarded'; readonly count: number; readonly discardCount: number }
   | { readonly type: 'itemUsed'; readonly itemName: string }
-  | { readonly type: 'enemyBeatStarted'; readonly name: string }
-  | { readonly type: 'enemyBeatFizzled'; readonly reason: IntentVoidReason }
+  | { readonly type: 'enemyBeatStarted'; readonly sourceId: string; readonly name: string }
+  | {
+      readonly type: 'enemyBeatFizzled';
+      readonly sourceId: string;
+      readonly reason: IntentVoidReason;
+    }
   | {
       readonly type: 'noPlayableCards';
       readonly reason: 'empty_hand' | 'unaffordable' | 'stunned';

@@ -70,8 +70,9 @@ function makeState(partial: Partial<TurnBattleState>, pattern = attackPattern())
     discardPile: [],
     exhaustPile: [],
     player: { id: 'player', name: 'You', hp: 30, maxHp: 30, armor: 0, block: 0, statuses: [] },
-    enemy: { id: 'foe', name: 'Foe', hp: 20, maxHp: 20, armor: 0, block: 0, statuses: [] },
-    intent,
+    enemies: [
+      { id: 'foe', name: 'Foe', hp: 20, maxHp: 20, armor: 0, block: 0, statuses: [], intent },
+    ],
     playerStunned: false,
     phase: 'player',
     outcome: null,
@@ -79,13 +80,19 @@ function makeState(partial: Partial<TurnBattleState>, pattern = attackPattern())
   };
 }
 
-function baseConfig(overrides: Partial<TurnEngineConfig> = {}): TurnEngineConfig {
+function baseConfig(
+  overrides: {
+    deck?: TurnEngineConfig['deck'];
+    player?: TurnEngineConfig['player'];
+    enemy?: { id: string; name: string; hp: number; maxHp: number; armor: number };
+    pattern?: IntentPattern;
+  } = {},
+): TurnEngineConfig {
+  const enemy = overrides.enemy ?? { id: 'foe', name: 'Foe', hp: 20, maxHp: 20, armor: 0 };
   return {
-    deck: Array.from({ length: 10 }, () => strike()),
-    player: { hp: 30, maxHp: 30, armor: 0 },
-    enemy: { id: 'foe', name: 'Foe', hp: 20, maxHp: 20, armor: 0 },
-    pattern: attackPattern(),
-    ...overrides,
+    deck: overrides.deck ?? Array.from({ length: 10 }, () => strike()),
+    player: overrides.player ?? { hp: 30, maxHp: 30, armor: 0 },
+    enemies: [{ ...enemy, pattern: overrides.pattern ?? attackPattern() }],
   };
 }
 
@@ -151,7 +158,7 @@ describe('createBattle (U1 core)', () => {
 
   test('AE3: a battle starts the enemy at block 0 with no opening modifier', () => {
     const result = createBattle(baseConfig(), new SequenceRng());
-    expect(result.state.enemy.block).toBe(0);
+    expect(result.state.enemies[0].block).toBe(0);
     expect(types(result.events)).not.toContain('blockGained');
   });
 });
@@ -192,7 +199,7 @@ describe('playCard (U1)', () => {
     playCard(state, hit.uid, new SequenceRng());
     expect(state.hand).toHaveLength(1);
     expect(state.energy).toBe(3);
-    expect(state.enemy.hp).toBe(20);
+    expect(state.enemies[0].hp).toBe(20);
   });
 
   test('draw effect pulls cards through the reshuffle rule (hook wiring)', () => {
@@ -410,25 +417,25 @@ describe('block, armor, and expiry (R19)', () => {
   test("enemy block expires at the enemy's own beat start", () => {
     const state = makeState({}, blockPattern());
     const first = endTurn(state, new SequenceRng());
-    expect(first.state.enemy.block).toBe(4);
+    expect(first.state.enemies[0].block).toBe(4);
     const second = endTurn(first.state, new SequenceRng());
     expect(eventOf(second.events, 'blockExpired').targetId).toBe('foe');
-    expect(second.state.enemy.block).toBe(4); // expired, then re-braced
+    expect(second.state.enemies[0].block).toBe(4); // expired, then re-braced
   });
 });
 
 describe('status ticks (R20)', () => {
   test('poison ticks at the afflicted turn start and expires when spent', () => {
     const state = makeState({}, blockPattern());
-    state.enemy.statuses = [{ type: 'poison', amount: 2, remainingTurns: 2 }];
+    state.enemies[0].statuses = [{ type: 'poison', amount: 2, remainingTurns: 2 }];
     const result = endTurn(state, new SequenceRng());
     const tick = eventOf(result.events, 'statusTicked');
     expect(tick.targetId).toBe('foe');
     expect(tick.hpAfter).toBe(18);
-    expect(result.state.enemy.statuses[0].remainingTurns).toBe(1);
+    expect(result.state.enemies[0].statuses[0].remainingTurns).toBe(1);
     const next = endTurn(result.state, new SequenceRng());
-    expect(next.state.enemy.hp).toBe(16);
-    expect(next.state.enemy.statuses).toHaveLength(0);
+    expect(next.state.enemies[0].hp).toBe(16);
+    expect(next.state.enemies[0].statuses).toHaveLength(0);
   });
 
   test('a lethal tick at player turn start is final: no input window opens', () => {
@@ -459,8 +466,8 @@ describe('stun (R21)', () => {
     const state = makeState({ hand: [stunCard] }, attackPattern(9));
     const played = playCard(state, stunCard.uid, new SequenceRng());
     expect(types(played.events)).toContain('intentVoided');
-    expect(played.state.intent.voided).toBe('stun');
-    expect(played.state.enemy.statuses).toHaveLength(0);
+    expect(played.state.enemies[0].intent.voided).toBe('stun');
+    expect(played.state.enemies[0].statuses).toHaveLength(0);
     const beat = endTurn(played.state, new SequenceRng());
     expect(types(beat.events)).toContain('enemyBeatFizzled');
     expect(types(beat.events)).not.toContain('enemyBeatStarted');
@@ -499,7 +506,7 @@ describe('terminal state (R18)', () => {
     const hit = strike();
     const spare = strike();
     const state = makeState({ hand: [hit, spare, guard()], energy: 2 });
-    state.enemy.hp = 4;
+    state.enemies[0].hp = 4;
     const result = playCard(state, hit.uid, new SequenceRng());
     expect(result.state.phase).toBe('decided');
     expect(result.state.outcome).toBe('victory');
@@ -523,7 +530,7 @@ describe('terminal state (R18)', () => {
       1,
     );
     const state = makeState({ hand: [combo] });
-    state.enemy.hp = 3;
+    state.enemies[0].hp = 3;
     const result = playCard(state, combo.uid, new SequenceRng());
     expect(result.state.outcome).toBe('victory');
     expect(types(result.events)).not.toContain('blockGained');
@@ -559,7 +566,7 @@ describe('items are free actions (R16)', () => {
   test('a smoke bomb voids the telegraph and the beat fizzles', () => {
     const state = makeState({}, attackPattern(9));
     const bombed = useItem(state, makeItem('smoke_bomb'), new SequenceRng());
-    expect(bombed.state.intent.voided).toBe('smoke_bomb');
+    expect(bombed.state.enemies[0].intent.voided).toBe('smoke_bomb');
     const beat = endTurn(bombed.state, new SequenceRng());
     expect(eventOf(beat.events, 'enemyBeatFizzled').reason).toBe('smoke_bomb');
     expect(beat.state.player.hp).toBe(30);
@@ -567,7 +574,7 @@ describe('items are free actions (R16)', () => {
 
   test('a bomb can reach lethal and decide the battle', () => {
     const state = makeState({});
-    state.enemy.hp = 10;
+    state.enemies[0].hp = 10;
     const result = useItem(state, makeItem('bomb'), new SequenceRng());
     expect(result.state.outcome).toBe('victory');
   });
@@ -621,7 +628,7 @@ describe('full-deck cycling (R1/R3)', () => {
       const state = makeState({ hand: [vamp] });
       state.player.hp = 20;
       const result = playCard(state, vamp.uid, new SequenceRng());
-      expect(result.state.enemy.hp).toBe(16);
+      expect(result.state.enemies[0].hp).toBe(16);
       expect(result.state.player.hp).toBe(24);
     } finally {
       dispose();

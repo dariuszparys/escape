@@ -47,8 +47,9 @@ function playVenomStrike(): void {
     discardPile: [],
     exhaustPile: [],
     player: { id: 'player', name: 'Player', hp: 20, maxHp: 20, armor: 0, block: 0, statuses: [] },
-    enemy: { id: 'enemy', name: 'Enemy', hp: 20, maxHp: 20, armor: 0, block: 0, statuses: [] },
-    intent,
+    enemies: [
+      { id: 'enemy', name: 'Enemy', hp: 20, maxHp: 20, armor: 0, block: 0, statuses: [], intent },
+    ],
     playerStunned: false,
     phase: 'player',
     outcome: null,

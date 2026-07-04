@@ -340,14 +340,16 @@ export class TurnBattleScene extends Phaser.Scene {
       {
         deck,
         player,
-        enemy: {
-          id: this.display.id,
-          name: this.display.name,
-          hp: this.display.hp,
-          maxHp: this.display.maxHp,
-          armor: this.display.armor,
-        },
-        pattern: this.display.pattern,
+        enemies: [
+          {
+            id: this.display.id,
+            name: this.display.name,
+            hp: this.display.hp,
+            maxHp: this.display.maxHp,
+            armor: this.display.armor,
+            pattern: this.display.pattern,
+          },
+        ],
         // swift_boots re-specified for the deck model (U12): +1 draw each turn.
         drawSize: run?.hasRelic('swift_boots') ? 6 : undefined,
       },
