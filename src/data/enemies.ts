@@ -30,7 +30,7 @@ export const ENEMIES: EnemyDef[] = [
   {
     id: 'rat',
     name: 'Rat',
-    texture: 'bat',
+    texture: 'rat',
     baseHp: 8,
     tier: 'weak',
     boss: false,
@@ -114,7 +114,7 @@ export const ENEMIES: EnemyDef[] = [
   {
     id: 'bandit',
     name: 'Bandit',
-    texture: 'skeleton',
+    texture: 'bandit',
     baseHp: 26,
     tier: 'medium',
     boss: false,
@@ -155,7 +155,7 @@ export const ENEMIES: EnemyDef[] = [
   {
     id: 'cultist',
     name: 'Cultist',
-    texture: 'bat',
+    texture: 'cultist',
     baseHp: 27,
     tier: 'medium',
     boss: false,
@@ -197,7 +197,7 @@ export const ENEMIES: EnemyDef[] = [
   {
     id: 'armored_goblin',
     name: 'Armored Goblin',
-    texture: 'slime',
+    texture: 'goblin',
     baseHp: 30,
     tier: 'medium',
     boss: false,
@@ -241,7 +241,7 @@ export const ENEMIES: EnemyDef[] = [
   {
     id: 'knight',
     name: 'Knight',
-    texture: 'skeleton',
+    texture: 'knight',
     baseHp: 40,
     tier: 'strong',
     boss: false,
@@ -287,7 +287,7 @@ export const ENEMIES: EnemyDef[] = [
   {
     id: 'necromancer',
     name: 'Necromancer',
-    texture: 'bat',
+    texture: 'necromancer',
     baseHp: 41,
     tier: 'strong',
     boss: false,
@@ -343,7 +343,7 @@ export const ENEMIES: EnemyDef[] = [
   {
     id: 'ogre',
     name: 'Ogre',
-    texture: 'slime',
+    texture: 'ogre',
     baseHp: 46,
     tier: 'strong',
     boss: false,
@@ -525,7 +525,7 @@ export const ELITES: EnemyDef[] = [
   {
     id: 'elite_berserker',
     name: 'The Berserker',
-    texture: 'skeleton',
+    texture: 'orc',
     baseHp: 54,
     tier: 'elite',
     boss: false,
@@ -573,7 +573,7 @@ export const ELITES: EnemyDef[] = [
   {
     id: 'elite_stalker',
     name: 'The Stalker',
-    texture: 'slime',
+    texture: 'gargoyle',
     baseHp: 50,
     tier: 'elite',
     boss: false,
@@ -606,7 +606,7 @@ export const ELITES: EnemyDef[] = [
   {
     id: 'elite_hexweaver',
     name: 'The Hexweaver',
-    texture: 'bat',
+    texture: 'witch',
     baseHp: 52,
     tier: 'elite',
     boss: false,
@@ -641,7 +641,7 @@ export const ELITES: EnemyDef[] = [
   {
     id: 'elite_bloodleech',
     name: 'The Bloodleech',
-    texture: 'slime',
+    texture: 'imp',
     baseHp: 53,
     tier: 'elite',
     boss: false,
@@ -678,7 +678,7 @@ export const ELITES: EnemyDef[] = [
   {
     id: 'elite_duelist',
     name: 'The Duelist',
-    texture: 'skeleton',
+    texture: 'wraith',
     baseHp: 49,
     tier: 'elite',
     boss: false,
@@ -766,7 +766,7 @@ export const SLICE_ENEMIES: SliceEnemyDef[] = [
   {
     id: 'slice_cultist',
     name: 'Ashen Cultist',
-    texture: 'bat',
+    texture: 'cultist',
     hp: 34,
     armor: 0,
     // Status pressure plus an interval special, exercising ticks and the boss-style telegraph.

@@ -160,6 +160,309 @@ const SKELETON = [
   '....WWW..WWW....',
 ];
 
+// ---------------------------------------------------------------- more enemies
+// A wider bestiary so each foe reads as its own creature instead of sharing one
+// of three silhouettes. Same 16px-wide, viewer-facing convention as slime/skeleton.
+
+const RAT_PAL: Palette = {
+  B: '#7a6a55', // fur
+  D: '#554736', // dark fur / feet
+  E: '#22202a', // eyes
+  T: '#c9b8a0', // ears / tail
+  P: '#e08a9a', // nose
+};
+
+const RAT = [
+  '................',
+  '................',
+  '....D......D....',
+  '...DBD....DBD...',
+  '...DBBBBBBBBD...',
+  '..TBBEBBBBEBBT..',
+  '..PBBBBBBBBBBP..',
+  '...BBBBBBBBBB...',
+  '...BBBBBBBBBB...',
+  '....B.B..B.B....',
+  '................',
+  '..........TTTT..',
+];
+
+const GOBLIN_PAL: Palette = {
+  G: '#6ba43a', // skin
+  D: '#3f6a22', // dark skin / feet
+  E: '#f1c40f', // eyes
+  T: '#e8e4d8', // teeth
+  R: '#8a5a2b', // leather
+  S: '#aab2bd', // dagger
+};
+
+const GOBLIN = [
+  '....G......G....',
+  '...GG......GG...',
+  '...GGG....GGG...',
+  '....GGGGGGGG....',
+  '...GGGGGGGGGG...',
+  '...GEGGGGGGEG...',
+  '...GGGDDGGGG....',
+  '....GGTTTTGG....',
+  '.....GGGGGG.....',
+  '....RRGGGGRR....',
+  '..S.RGGGGGGR....',
+  '..S..GGGGGG.....',
+  '.....GG..GG.....',
+  '....GG....GG....',
+  '...DD......DD...',
+];
+
+const OGRE_PAL: Palette = {
+  S: '#9a8a5a', // sallow skin
+  D: '#6b5d38', // dark skin / feet
+  E: '#f1c40f', // eyes
+  T: '#e8e4d8', // tusks
+};
+
+const OGRE = [
+  '.....SSSSSS.....',
+  '....SSSSSSSS....',
+  '....SDSSSSDS....',
+  '....SEESSEES....',
+  '....SSSSSSSS....',
+  '....STTSSTTS....',
+  '.....SSSSSS.....',
+  '...SSSSSSSSSS...',
+  '..SSSSSSSSSSSS..',
+  '..SSSSSSSSSSSS..',
+  '..SSSDSSSSDSSS..',
+  '...SSSSSSSSSS...',
+  '....SS....SS....',
+  '....SS....SS....',
+  '...DDD....DDD...',
+];
+
+const ORC_PAL: Palette = {
+  G: '#5a7a4a', // grey-green skin
+  D: '#3a5230', // dark skin / feet
+  E: '#e23b4e', // red eyes
+  T: '#e8e4d8', // tusks
+};
+
+const ORC = [
+  '.....GGGGGG.....',
+  '....GGGGGGGG....',
+  '....GDGGGGDG....',
+  '....GEEGGEEG....',
+  '....GGGGGGGG....',
+  '....GTGGGGTG....',
+  '.....GGGGGG.....',
+  '...GGGGGGGGGG...',
+  '..GGGGGGGGGGGG..',
+  '..GGDGGGGGGDGG..',
+  '...GGGGGGGGGG...',
+  '....GG....GG....',
+  '....GG....GG....',
+  '...DDD....DDD...',
+];
+
+const GARGOYLE_PAL: Palette = {
+  S: '#8a8f98', // stone
+  D: '#565b64', // dark stone / claws
+  E: '#e23b4e', // eyes
+  W: '#6b7079', // wings
+  H: '#3a4048', // horns
+};
+
+const GARGOYLE = [
+  '..H..........H..',
+  '..HH........HH..',
+  '...SSSS..SSSS...',
+  'W...SSSSSSSS...W',
+  'WW..SEESSEES..WW',
+  'WWW.SSSSSSSS.WWW',
+  'WWWWSDSSSSDSWWWW',
+  'WWW.SSSSSSSS.WWW',
+  '.WW.SSSSSSSS.WW.',
+  '....SSSSSSSS....',
+  '.....SS..SS.....',
+  '....DDD..DDD....',
+];
+
+const KNIGHT_PAL: Palette = {
+  A: '#aab2bd', // armor
+  D: '#5e6a78', // dark armor / feet
+  E: '#2a2f38', // visor slit
+  P: '#e23b4e', // plume
+  S: '#cdd3da', // sword
+  G: '#f1c40f', // shield emblem
+};
+
+const KNIGHT = [
+  '......PP........',
+  '.....AAAA.......',
+  '....AAAAAA......',
+  '....AEEEEA......',
+  '....AAAAAA...S..',
+  '.....AAAA....S..',
+  '...AAAAAAAA..S..',
+  '..DAAAAAAAAD.S..',
+  '..DAAGGGGAAD.S..',
+  '..DAAAAAAAD.....',
+  '...AAAAAAAA.....',
+  '...AAA..AAA.....',
+  '...AA....AA.....',
+  '..DDD....DDD....',
+];
+
+const CULTIST_PAL: Palette = {
+  R: '#6b2b3a', // robe
+  D: '#43121f', // dark robe / hem
+  E: '#f1c40f', // glowing eyes
+  H: '#2a2f38', // hood shadow
+  S: '#c9b8a0', // hands
+};
+
+const CULTIST = [
+  '......RRRR......',
+  '.....RRRRRR.....',
+  '....RRHHHHRR....',
+  '....RHEHHEHR....',
+  '....RRHHHHRR....',
+  '.....RRRRRR.....',
+  '....RRRRRRRR....',
+  '...RRRRRRRRRR...',
+  '...RRRSRRSRRR...',
+  '...RRRRRRRRRR...',
+  '...RDRRRRRRDR...',
+  '...RRRRRRRRRR...',
+  '....RRRRRRRR....',
+  '....DDD..DDD....',
+];
+
+const NECRO_PAL: Palette = {
+  R: '#3d2b5e', // robe
+  D: '#241a38', // dark robe / hem
+  E: '#39e6e0', // eyes
+  W: '#e8e4d8', // staff skull
+  S: '#8a5a2b', // staff
+  G: '#9b59ff', // gem
+};
+
+const NECROMANCER = [
+  '.....RRRR.....W.',
+  '....RRRRRR...WWW',
+  '....RRDDRR...WWW',
+  '....RDEEDR....W.',
+  '....RRDDRR....S.',
+  '.....RRRR.....S.',
+  '....RRRRRR....S.',
+  '...RRRRRRRR...S.',
+  '...RRRGGRRR...S.',
+  '...RRRRRRRR...S.',
+  '...RRRRRRRR.....',
+  '....RRRRRR......',
+  '....RRRRRR......',
+  '....DDD.DDD.....',
+];
+
+const WITCH_PAL: Palette = {
+  H: '#2a2338', // hat
+  G: '#7bbf5a', // skin
+  D: '#4a7a35', // dark skin / mouth
+  E: '#f1c40f', // eyes
+  R: '#5b2b6b', // robe
+  N: '#8a5a2b', // nose
+};
+
+const WITCH = [
+  '.......H........',
+  '......HH........',
+  '.....HHH........',
+  '....HHHHH.......',
+  '...HHHHHHH......',
+  '..HHHHHHHHH.....',
+  '.....GGGG.......',
+  '....GGGGGG......',
+  '....GEGGEG......',
+  '....GGNNGG......',
+  '....GDDDDG......',
+  '....RRRRRR......',
+  '...RRRRRRRR.....',
+  '...RRRRRRRR.....',
+  '....RRR.RRR.....',
+];
+
+const WRAITH_PAL: Palette = {
+  S: '#3a4358', // shroud
+  D: '#232838', // hood shadow
+  E: '#39e6e0', // eyes
+};
+
+const WRAITH = [
+  '.....SSSS.......',
+  '....SSSSSS......',
+  '....SDDDDS......',
+  '....SDEEDS......',
+  '....SSSSSS......',
+  '...SSSSSSSS.....',
+  '...SSSSSSSS.....',
+  '..SSSSSSSSSS....',
+  '..SSSSSSSSSS....',
+  '...SSSSSSSS.....',
+  '....SSSSSS......',
+  '.....S.SS.......',
+  '......S.S.......',
+  '.......S........',
+];
+
+const IMP_PAL: Palette = {
+  R: '#c0392b', // skin
+  D: '#7d1f14', // dark skin / feet
+  E: '#f1c40f', // eyes
+  W: '#4a1f2a', // wings
+  H: '#2a2533', // horns
+  F: '#ffffff', // fangs
+};
+
+const IMP = [
+  '...H......H.....',
+  '...RR....RR.....',
+  '....RRRRRR......',
+  '....REEERR......',
+  '....RRRRRR......',
+  '..W.RRFFRR.W....',
+  '..WWRRRRRRWW....',
+  '...WRRRRRRW.....',
+  '....RRRRRR......',
+  '....RR..RR......',
+  '...DD....DD.....',
+  '.........RRR....',
+];
+
+const BANDIT_PAL: Palette = {
+  S: '#c9a06a', // hood cloth
+  F: '#e8c79b', // face
+  E: '#22202a', // eyes
+  M: '#3a4150', // mask
+  L: '#5c3a1c', // leather
+  K: '#aab2bd', // knife
+};
+
+const BANDIT = [
+  '.....SSSS.......',
+  '....SSSSSS......',
+  '....SFFFFS......',
+  '....SEFFES......',
+  '....SMMMMS......',
+  '.....FFFF.......',
+  '....LLLLLL...K..',
+  '...LLLLLLLL..K..',
+  '...LLLLLLLL..K..',
+  '...LLLLLLLL.....',
+  '....LLLLLL......',
+  '....LL..LL......',
+  '...LL....LL.....',
+  '..LLL....LLL....',
+];
+
 // ---------------------------------------------------------------- bosses
 // Bosses are authored as a 12px left half and mirrored to 24px.
 
@@ -559,6 +862,19 @@ export function createAllTextures(scene: Phaser.Scene): void {
   px('slime', SLIME, SLIME_PAL);
   px('bat', BAT, BAT_PAL);
   px('skeleton', SKELETON, SKELETON_PAL);
+
+  px('rat', RAT, RAT_PAL);
+  px('goblin', GOBLIN, GOBLIN_PAL);
+  px('ogre', OGRE, OGRE_PAL);
+  px('orc', ORC, ORC_PAL);
+  px('gargoyle', GARGOYLE, GARGOYLE_PAL);
+  px('knight', KNIGHT, KNIGHT_PAL);
+  px('cultist', CULTIST, CULTIST_PAL);
+  px('necromancer', NECROMANCER, NECRO_PAL);
+  px('witch', WITCH, WITCH_PAL);
+  px('wraith', WRAITH, WRAITH_PAL);
+  px('imp', IMP, IMP_PAL);
+  px('bandit', BANDIT, BANDIT_PAL);
 
   px('boss_minotaur', MINOTAUR, MINOTAUR_PAL);
   px('boss_lich', LICH, LICH_PAL);
