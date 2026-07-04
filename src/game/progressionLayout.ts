@@ -8,6 +8,12 @@ export interface ProgressionPanelLayout {
   viewportW: number;
   viewportH: number;
   contentW: number;
+  archetypeHeadingY: number;
+  archetypeSummaryY: number;
+  archetypeRowsStartY: number;
+  archetypeRowH: number;
+  clearArchetypeButtonY: number;
+  archetypeDividerY: number;
   starterHeadingY: number;
   starterSummaryY: number;
   starterSummaryBottom: number;
@@ -44,16 +50,33 @@ const VIEWPORT_H = PANEL_H - PAD * 2;
 const SUMMARY_DISPLAY_LINES = 6;
 const SUMMARY_LINE_H = 17;
 const KIT_ROW_H = 88;
+const ARCHETYPE_ROW_H = 104;
 
-export function createProgressionPanelLayout(kitCount: number): ProgressionPanelLayout {
+export function createProgressionPanelLayout(
+  kitCount: number,
+  archetypeCount = 0,
+): ProgressionPanelLayout {
   const viewportX = PANEL_X + PAD;
   const viewportY = PANEL_Y + PAD;
   const viewportW = PANEL_W - PAD * 2 - SCROLLBAR_GUTTER;
   const contentW = viewportW;
-  const starterHeadingY = 0;
-  const starterSummaryY = 32;
+
+  // Section 1 (headline): ARCHETYPE — heading, one summary line, one row per archetype, then a
+  // "no archetype" clear button. Skipped entirely when archetypeCount is 0 (older callers/tests).
+  const archetypeHeadingY = 0;
+  const archetypeSummaryY = archetypeHeadingY + 30;
+  const archetypeRowsStartY = archetypeSummaryY + 30;
+  const clearArchetypeButtonY = archetypeRowsStartY + archetypeCount * ARCHETYPE_ROW_H + 22;
+  const archetypeSectionBottom = archetypeCount > 0 ? clearArchetypeButtonY + 22 : 0;
+  const archetypeDividerY = archetypeCount > 0 ? archetypeSectionBottom + 16 : 0;
+
+  // Section 2: STARTER VARIETY — begins below the archetype section (or at the top when absent).
+  const starterHeadingY = archetypeCount > 0 ? archetypeDividerY + 22 : 0;
+  const starterSummaryY = starterHeadingY + 32;
   const starterSummaryBottom = starterSummaryY + SUMMARY_DISPLAY_LINES * SUMMARY_LINE_H;
   const dividerY = starterSummaryBottom + 22;
+
+  // Section 3: STARTER KITS.
   const starterKitHeadingY = dividerY + 22;
   const kitRowsStartY = starterKitHeadingY + 42;
   const clearKitButtonY = kitRowsStartY + kitCount * KIT_ROW_H + 30;
@@ -69,11 +92,17 @@ export function createProgressionPanelLayout(kitCount: number): ProgressionPanel
     viewportW,
     viewportH: VIEWPORT_H,
     contentW,
+    archetypeHeadingY,
+    archetypeSummaryY,
+    archetypeRowsStartY,
+    archetypeRowH: ARCHETYPE_ROW_H,
+    clearArchetypeButtonY,
+    archetypeDividerY,
     starterHeadingY,
     starterSummaryY,
     starterSummaryBottom,
     unlockButtonX: contentW - 92,
-    unlockButtonY: 76,
+    unlockButtonY: starterHeadingY + 76,
     dividerY,
     starterKitHeadingY,
     kitRowsStartY,

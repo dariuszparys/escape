@@ -1,6 +1,7 @@
 import { MAX_INVENTORY } from '../config';
 import type { PendingPrep } from '../data/campfirePurchases';
 import { CARD_DEFS } from '../data/cards';
+import { ARCHETYPES } from '../data/archetypes';
 import { ITEM_DEFS } from '../data/items';
 import { STARTER_KITS } from '../data/starterKits';
 import type { DailyRecord } from '../daily';
@@ -27,6 +28,13 @@ function formatStarterKitSummary(progression?: MetaProgressionState): string | n
   return `Starter kit: ${activeKit.name} (${signatureName})`;
 }
 
+function activeArchetypeName(progression: MetaProgressionState): string {
+  const archetype = progression.activeArchetypeId
+    ? ARCHETYPES.find((candidate) => candidate.id === progression.activeArchetypeId)
+    : null;
+  return archetype?.name ?? 'none';
+}
+
 export function formatCampfireProgressionSummary(progression: MetaProgressionState): string {
   const activeKit = progression.activeStarterKitId
     ? STARTER_KITS.find((kit) => kit.id === progression.activeStarterKitId)
@@ -35,6 +43,7 @@ export function formatCampfireProgressionSummary(progression: MetaProgressionSta
     activeKit && progression.unlockedStarterKitIds.includes(activeKit.id) ? activeKit.name : 'none';
 
   return [
+    `Archetype: ${activeArchetypeName(progression)}`,
     `Starter variety: ${progression.starterCardVarietyUnlocked ? 'unlocked' : 'locked'}`,
     `Starter kits: ${progression.unlockedStarterKitIds.length}/${STARTER_KITS.length} unlocked`,
     `Active kit: ${activeKitName}`,
@@ -54,8 +63,10 @@ export function formatPendingPrepSummary(
     ? BONUS_STARTING_CARD_PICKS
     : DEFAULT_STARTING_CARD_PICKS;
   const starterKit = formatStarterKitSummary(progression);
+  const archetypeLine = progression ? `Archetype: ${activeArchetypeName(progression)}` : null;
 
   return [
+    ...(archetypeLine ? [archetypeLine] : []),
     `One-run prep: ${names.length > 0 ? names.join(', ') : 'none'} (${names.length}/${MAX_INVENTORY})`,
     `Opening picks: ${openingPicks} of ${openingChoices}`,
     ...(starterKit ? [starterKit] : []),

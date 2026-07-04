@@ -18,9 +18,26 @@ describe('campfire summary formatting', () => {
     });
 
     expect(summary).toBe(
-      ['Starter variety: unlocked', 'Starter kits: 2/3 unlocked', 'Active kit: Warden'].join('\n'),
+      [
+        'Archetype: none',
+        'Starter variety: unlocked',
+        'Starter kits: 2/3 unlocked',
+        'Active kit: Warden',
+      ].join('\n'),
     );
     expect(summary).not.toMatch(/Migration bonus|four opening card options/);
+  });
+
+  test('names the active archetype in the campfire overview', () => {
+    const summary = formatCampfireProgressionSummary({
+      starterCardVarietyUnlocked: false,
+      migrationBonusGranted: false,
+      unlockedStarterKitIds: [],
+      activeStarterKitId: null,
+      activeArchetypeId: 'necromancer',
+    });
+
+    expect(summary).toContain('Archetype: Necromancer');
   });
 
   test('formats empty pending prep for hub status', () => {
@@ -55,6 +72,7 @@ describe('campfire summary formatting', () => {
 
     expect(summary).toBe(
       [
+        'Archetype: none',
         'One-run prep: none (0/3)',
         'Opening picks: 2 of 4',
         'Starter kit: none selected',

@@ -4,6 +4,13 @@ import { stratumForDepth } from '../game/strata';
 export type CardType = 'attack' | 'block' | 'heal' | 'utility' | 'status';
 
 /**
+ * A player class identity. Selecting one on the Progression screen reshapes the whole run:
+ * the starting picks and every card reward/chest draw come from that archetype's pool
+ * (archetype cards + the shared neutral pool). `null` — no archetype — means neutral only.
+ */
+export type ArchetypeId = 'barbarian' | 'necromancer' | 'ranger';
+
+/**
  * Everything a combatant can carry. `poison`/`burn` tick damage at turn start; `stun` skips a
  * turn; `vulnerable`/`weak`/`frail` are timed damage/block modifiers; `strength` is a permanent
  * (per-battle), additive damage buff. The modifier statuses resolve through `combat.ts`'s
@@ -46,6 +53,11 @@ export interface CardDef {
   description: string;
   effects: CardEffect[];
   starterKitOnly?: boolean;
+  /**
+   * Archetype gate: a tagged card only enters the draw/pick pool when its archetype is the
+   * active one (see `cardPoolForArchetype`). Untagged cards are neutral — always available.
+   */
+  archetype?: ArchetypeId;
   /** Engine-routed pile flag (KTD1): a played exhaust card joins `exhaustPile` instead of the Discard Pile for the rest of the battle. Pure routing — no per-target resolution semantics. */
   exhaust?: boolean;
 }
@@ -455,9 +467,316 @@ export const CARD_DEFS: CardDef[] = [
     exhaust: true,
     effects: [{ kind: 'damage', amount: 12 }],
   },
+  // --- Archetype pools (2026-07-04). Each card is gated to one archetype and only enters the
+  // draw/pick pool when that archetype is active; the neutral pool never sees them, so neutral
+  // runs (and the runSignature golden) are unaffected. All reuse existing effect kinds, so no
+  // engine/tooltip work. They sit roughly on-power with their neutral tier peers — identity, not
+  // power creep — since an archetype run also draws the whole neutral pool.
+
+  // Barbarian — rage & might: Strength scaling and big reckless hits.
+  {
+    id: 'cleave',
+    name: 'Cleave',
+    type: 'attack',
+    tier: 1,
+    cost: 1,
+    color: 0xa93226,
+    archetype: 'barbarian',
+    // The class basic: it swings AND plants the first point of Strength, so the barbarian's scaling
+    // starts from turn one. Distinct from Strike (leads raw) — neither dominates the other.
+    description: 'Deal 5, gain 1 Strength',
+    effects: [
+      { kind: 'damage', amount: 5 },
+      { kind: 'strength', amount: 1 },
+    ],
+  },
+  {
+    id: 'warpath',
+    name: 'Warpath',
+    type: 'utility',
+    tier: 2,
+    cost: 1,
+    color: 0xd35400,
+    archetype: 'barbarian',
+    // A strength-builder that also swings hard — unlike neutral Empower, it never wastes a turn on
+    // pure setup, and it recurs through the reshuffle so it ramps over a long fight.
+    description: 'Deal 6, gain 1 Strength',
+    effects: [
+      { kind: 'damage', amount: 6 },
+      { kind: 'strength', amount: 1 },
+    ],
+  },
+  {
+    id: 'frenzy',
+    name: 'Frenzy',
+    type: 'attack',
+    tier: 2,
+    cost: 2,
+    color: 0xc0392b,
+    archetype: 'barbarian',
+    // Three hits plus a point of Strength: every built point lands three times, and it shreds
+    // partial block. The Strength rider is also what keeps it from dominating single-hit Heavy Strike.
+    description: 'Deal 3 three times, gain 1 Strength',
+    effects: [
+      { kind: 'damage', amount: 3 },
+      { kind: 'damage', amount: 3 },
+      { kind: 'damage', amount: 3 },
+      { kind: 'strength', amount: 1 },
+    ],
+  },
+  {
+    id: 'rampage',
+    name: 'Rampage',
+    type: 'attack',
+    tier: 3,
+    cost: 2,
+    color: 0xa93226,
+    archetype: 'barbarian',
+    description: 'Deal 9, gain 2 Strength',
+    effects: [
+      { kind: 'damage', amount: 9 },
+      { kind: 'strength', amount: 2 },
+    ],
+  },
+  {
+    id: 'bloodlust',
+    name: 'Bloodlust',
+    type: 'attack',
+    tier: 3,
+    cost: 1,
+    color: 0xe74c3c,
+    archetype: 'barbarian',
+    // A rage nova: a real hit that also spikes Strength, rationed by Exhaust so it cannot be
+    // recycled every reshuffle. Leads on damage where neutral War Cry leads on raw Strength.
+    description: 'Deal 6, gain 2 Strength. Exhaust',
+    exhaust: true,
+    effects: [
+      { kind: 'damage', amount: 6 },
+      { kind: 'strength', amount: 2 },
+    ],
+  },
+  {
+    id: 'savage_blow',
+    name: 'Savage Blow',
+    type: 'attack',
+    tier: 3,
+    cost: 2,
+    color: 0xc0392b,
+    archetype: 'barbarian',
+    // A once-per-battle finisher; Exhaust keeps it from anchoring a turtle.
+    description: 'Deal 16. Exhaust',
+    exhaust: true,
+    effects: [{ kind: 'damage', amount: 16 }],
+  },
+
+  // Necromancer — rot & drain: poison/burn damage-over-time and life-steal sustain.
+  {
+    id: 'wither',
+    name: 'Wither',
+    type: 'status',
+    tier: 1,
+    cost: 1,
+    color: 0x7d3c98,
+    archetype: 'necromancer',
+    description: 'Deal 2, poison 2 for 2 turns',
+    effects: [
+      { kind: 'damage', amount: 2 },
+      { kind: 'status', status: 'poison', amount: 2, duration: 2 },
+    ],
+  },
+  {
+    id: 'siphon_life',
+    name: 'Siphon Life',
+    type: 'utility',
+    tier: 2,
+    cost: 1,
+    color: 0x884ea0,
+    archetype: 'necromancer',
+    // The drain that makes the attrition gauntlet survivable — chip damage that pays HP back.
+    description: 'Deal 4, restore 3 HP',
+    effects: [
+      { kind: 'damage', amount: 4 },
+      { kind: 'heal', amount: 3 },
+    ],
+  },
+  {
+    id: 'blight',
+    name: 'Blight',
+    type: 'status',
+    tier: 2,
+    cost: 1,
+    color: 0xaf601a,
+    archetype: 'necromancer',
+    // Burn leans on a bigger up-front bite than neutral Poison Dagger's slower poison — the two
+    // trade raw-vs-DoT rather than one dominating the other.
+    description: 'Deal 4, burn 2 for 2 turns',
+    effects: [
+      { kind: 'damage', amount: 4 },
+      { kind: 'status', status: 'burn', amount: 2, duration: 2 },
+    ],
+  },
+  {
+    id: 'ossify',
+    name: 'Ossify',
+    type: 'block',
+    tier: 2,
+    cost: 1,
+    color: 0x6c3483,
+    archetype: 'necromancer',
+    // Bone armor: the necromancer's defensive beat, with a sliver of self-repair.
+    description: 'Gain 7 block, restore 2 HP',
+    effects: [
+      { kind: 'block', amount: 7 },
+      { kind: 'heal', amount: 2 },
+    ],
+  },
+  {
+    id: 'plague',
+    name: 'Plague',
+    type: 'status',
+    tier: 3,
+    cost: 1,
+    color: 0x6c3483,
+    archetype: 'necromancer',
+    // The heavy rot clock: nine total poison over three turns, ignoring block. Rewards the slow
+    // fights the class already sustains through.
+    description: 'Deal 2, poison 3 for 3 turns',
+    effects: [
+      { kind: 'damage', amount: 2 },
+      { kind: 'status', status: 'poison', amount: 3, duration: 3 },
+    ],
+  },
+  {
+    id: 'soul_leech',
+    name: 'Soul Leech',
+    type: 'attack',
+    tier: 3,
+    cost: 2,
+    color: 0x7d3c98,
+    archetype: 'necromancer',
+    description: 'Deal 8, restore 4 HP',
+    effects: [
+      { kind: 'damage', amount: 8 },
+      { kind: 'heal', amount: 4 },
+    ],
+  },
+
+  // Ranger — precision & tempo: multi-hit volleys, card draw, and marking prey Vulnerable.
+  {
+    id: 'quickshot',
+    name: 'Quick Shot',
+    type: 'attack',
+    tier: 1,
+    cost: 1,
+    color: 0x1e8449,
+    archetype: 'ranger',
+    // A cantrip attack — cheap chip that replaces itself, the class's tempo basic.
+    description: 'Deal 4, draw 1',
+    effects: [
+      { kind: 'damage', amount: 4 },
+      { kind: 'draw', amount: 1 },
+    ],
+  },
+  {
+    id: 'mark_prey',
+    name: 'Mark Prey',
+    type: 'status',
+    tier: 1,
+    cost: 1,
+    color: 0x239b56,
+    archetype: 'ranger',
+    // The class setup basic: a cheap marking shot whose lingering Vulnerable boosts every follow-up
+    // this fight. At tier 1 it seeds the ranger's whole mark-then-volley chain from the opening hand.
+    description: 'Deal 3, apply Vulnerable (2 turns)',
+    effects: [
+      { kind: 'damage', amount: 3 },
+      { kind: 'status', status: 'vulnerable', amount: 1, duration: 2 },
+    ],
+  },
+  {
+    id: 'volley',
+    name: 'Volley',
+    type: 'attack',
+    tier: 2,
+    cost: 2,
+    color: 0x1e8449,
+    archetype: 'ranger',
+    // A pinning spray: three arrows that cash in the Mark's Vulnerable on every hit and leave the
+    // target Vulnerable for follow-ups. The Vulnerable rider (not raw) is what keeps it a genuine
+    // sidegrade to single-hit Heavy Strike and draw-carrying Riving Cut rather than a strict upgrade.
+    description: 'Deal 3 three times, apply Vulnerable (1 turn)',
+    effects: [
+      { kind: 'damage', amount: 3 },
+      { kind: 'damage', amount: 3 },
+      { kind: 'damage', amount: 3 },
+      { kind: 'status', status: 'vulnerable', amount: 1, duration: 1 },
+    ],
+  },
+  {
+    id: 'evasion',
+    name: 'Evasion',
+    type: 'utility',
+    tier: 2,
+    cost: 1,
+    color: 0x117a65,
+    archetype: 'ranger',
+    description: 'Gain 6 block, draw 1',
+    effects: [
+      { kind: 'block', amount: 6 },
+      { kind: 'draw', amount: 1 },
+    ],
+  },
+  {
+    id: 'called_shot',
+    name: 'Called Shot',
+    type: 'attack',
+    tier: 3,
+    cost: 2,
+    color: 0x196f3d,
+    archetype: 'ranger',
+    // A precise heavy hit that refunds energy to keep the turn rolling — the tempo nuke, distinct
+    // from Rapid Fire's card draw so neither dominates the other.
+    description: 'Deal 10, gain 1 energy',
+    effects: [
+      { kind: 'damage', amount: 10 },
+      { kind: 'energy', amount: 1 },
+    ],
+  },
+  {
+    id: 'rapid_fire',
+    name: 'Rapid Fire',
+    type: 'attack',
+    tier: 3,
+    cost: 2,
+    color: 0x1e8449,
+    archetype: 'ranger',
+    // The capstone volley: three scaling hits that also refill the hand to keep the tempo going.
+    description: 'Deal 4 three times, draw 1',
+    effects: [
+      { kind: 'damage', amount: 4 },
+      { kind: 'damage', amount: 4 },
+      { kind: 'damage', amount: 4 },
+      { kind: 'draw', amount: 1 },
+    ],
+  },
 ];
 
-const STANDARD_CARD_DEFS = CARD_DEFS.filter((card) => !card.starterKitOnly);
+/**
+ * The neutral pool: cards with no archetype tag and not starter-kit-only. This is the exact
+ * set random draws used before archetypes existed, so a neutral (no-archetype) run is
+ * byte-identical to today — the `runSignature` golden and the dominance gates stay put.
+ */
+const STANDARD_CARD_DEFS = CARD_DEFS.filter((card) => !card.starterKitOnly && !card.archetype);
+
+/**
+ * The draw/pick pool for a run: the neutral pool, plus the active archetype's cards. `null`
+ * (no archetype) yields the neutral pool alone. Archetype cards are appended after the neutral
+ * ones so a null run keeps the original ordering.
+ */
+export function cardPoolForArchetype(archetype: ArchetypeId | null): CardDef[] {
+  if (!archetype) return STANDARD_CARD_DEFS;
+  return [...STANDARD_CARD_DEFS, ...CARD_DEFS.filter((card) => card.archetype === archetype)];
+}
 
 export function makeCard(def: CardDef): Card {
   return { ...def, uid: nextUid++ };
@@ -495,8 +814,16 @@ function deepTierWeights(depth: number): [number, number, number] {
   return [0, tier2, 10 - tier2];
 }
 
-/** Random card, tier odds shifting with dungeon depth and continuing to climb across strata. */
-export function randomCard(rng: GameRng, depth: number): Card {
+/**
+ * Random card, tier odds shifting with dungeon depth and continuing to climb across strata.
+ * `archetype` widens the pool to that class's cards; `null` (the default) draws neutral only,
+ * preserving the pre-archetype RNG draw order exactly.
+ */
+export function randomCard(
+  rng: GameRng,
+  depth: number,
+  archetype: ArchetypeId | null = null,
+): Card {
   const t =
     depth <= 3
       ? pickWeighted(rng, [8, 2, 0])
@@ -505,7 +832,7 @@ export function randomCard(rng: GameRng, depth: number): Card {
         : depth <= 9
           ? pickWeighted(rng, [2, 5, 3])
           : pickWeighted(rng, deepTierWeights(depth));
-  const pool = STANDARD_CARD_DEFS.filter((c) => c.tier === t);
+  const pool = cardPoolForArchetype(archetype).filter((c) => c.tier === t);
   return makeCard(rng.pick(pool));
 }
 

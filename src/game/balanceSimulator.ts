@@ -1,5 +1,5 @@
 import { MAX_DEPTH } from '../config';
-import { Card, CARD_DEFS, cardEffectAmount, makeCard } from '../data/cards';
+import { Card, CARD_DEFS, cardEffectAmount, makeCard, type ArchetypeId } from '../data/cards';
 import { hasStatus, modifiedDamage, statusValue } from './combat';
 import { type PendingPrep } from '../data/campfirePurchases';
 import {
@@ -101,6 +101,7 @@ export interface BalanceScenario {
   starterCardVarietyUnlocked?: boolean;
   unlockedStarterKitIds?: StarterKitId[];
   activeStarterKitId?: StarterKitId | null;
+  activeArchetypeId?: ArchetypeId | null;
 }
 
 export interface EncounterBucketSummary {
@@ -274,6 +275,7 @@ function createScenarioRun(seed: number, scenario: BalanceScenario): RunState {
     migrationBonusGranted: false,
     unlockedStarterKitIds: scenario.unlockedStarterKitIds ?? [],
     activeStarterKitId: scenario.activeStarterKitId ?? null,
+    activeArchetypeId: scenario.activeArchetypeId ?? null,
   });
 
   chooseStartingCards(run);
@@ -308,8 +310,14 @@ export function applySimulatedPostBattleRewards(
   const gold = awardEnemyGold(run, rng, depth);
   if (isElite) awardEliteBonusGold(run, gold);
   const offers = isElite
-    ? rollVictoryCardOffers(rng, depth, ELITE_CARD_OFFER_COUNT, ELITE_TIER_BIAS_DEPTH)
-    : rollVictoryCardOffers(rng, depth);
+    ? rollVictoryCardOffers(
+        rng,
+        depth,
+        ELITE_CARD_OFFER_COUNT,
+        ELITE_TIER_BIAS_DEPTH,
+        run.archetypeId,
+      )
+    : rollVictoryCardOffers(rng, depth, undefined, undefined, run.archetypeId);
   chooseRewardCard(run, offers);
 }
 

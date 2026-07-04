@@ -7,13 +7,27 @@ import {
 
 describe('progression screen layout', () => {
   test('keeps starter-kit heading below wrapped starter summary', () => {
-    const layout = createProgressionPanelLayout(3);
+    const layout = createProgressionPanelLayout(3, 3);
 
     expect(layout.starterKitHeadingY - layout.starterSummaryBottom).toBeGreaterThanOrEqual(24);
   });
 
-  test('uses scrolling when progression content is taller than the panel viewport', () => {
+  test('stacks the archetype section above starter variety when archetypes are present', () => {
+    const layout = createProgressionPanelLayout(3, 3);
+
+    expect(layout.archetypeHeadingY).toBeLessThan(layout.starterHeadingY);
+    expect(layout.clearArchetypeButtonY).toBeLessThan(layout.archetypeDividerY);
+    expect(layout.archetypeDividerY).toBeLessThan(layout.starterHeadingY);
+  });
+
+  test('omits the archetype section for legacy no-archetype callers', () => {
     const layout = createProgressionPanelLayout(3);
+
+    expect(layout.starterHeadingY).toBe(0);
+  });
+
+  test('uses scrolling when progression content is taller than the panel viewport', () => {
+    const layout = createProgressionPanelLayout(3, 3);
 
     expect(layout.maxScrollOffset).toBeGreaterThan(0);
   });
@@ -25,7 +39,7 @@ describe('progression screen layout', () => {
   });
 
   test('positions the scrollbar thumb within its track', () => {
-    const layout = createProgressionPanelLayout(3);
+    const layout = createProgressionPanelLayout(3, 3);
     const thumb = createScrollbarThumbLayout(layout, layout.maxScrollOffset);
 
     expect(thumb.visible).toBe(true);

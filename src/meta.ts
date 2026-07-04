@@ -8,15 +8,29 @@ import { CAMPFIRE_BARGAINS } from './data/campfireBargains';
 import type { CampfireCurseId } from './data/campfireBargains';
 import { CAMPFIRE_PURCHASES, createDefaultPendingPrep } from './data/campfirePurchases';
 import { STARTER_KITS, type StarterKitId } from './data/starterKits';
+import { ARCHETYPES } from './data/archetypes';
+import type { ArchetypeId } from './data/cards';
 
 export const META_STORAGE_KEY = 'escape.meta.v1';
 export const META_ECONOMY_VERSION = 2;
+
+/** The selectable player archetype ids, derived from the one canonical `ARCHETYPES` list so a new
+ * archetype can never be added there yet silently rejected here by save normalization. */
+export const ARCHETYPE_IDS: ArchetypeId[] = ARCHETYPES.map((archetype) => archetype.id);
+const ARCHETYPE_ID_SET = new Set<string>(ARCHETYPE_IDS);
 
 export interface MetaProgressionState {
   starterCardVarietyUnlocked: boolean;
   migrationBonusGranted: boolean;
   unlockedStarterKitIds: StarterKitId[];
   activeStarterKitId: StarterKitId | null;
+  /**
+   * The archetype whose cards shape the next normal run, or null/undefined for the neutral
+   * (standard) pool. Optional so it reads as an additive field: pre-archetype saves and older
+   * test fixtures normalize/default to the neutral pool. The normalizer always writes it, so
+   * runtime state carries a concrete value.
+   */
+  activeArchetypeId?: ArchetypeId | null;
 }
 
 export interface MetaState extends CampfirePurchaseState {
@@ -43,7 +57,12 @@ function createDefaultProgressionState(): MetaProgressionState {
     migrationBonusGranted: false,
     unlockedStarterKitIds: [],
     activeStarterKitId: null,
+    activeArchetypeId: null,
   };
+}
+
+function normalizeArchetypeId(value: unknown): ArchetypeId | null {
+  return typeof value === 'string' && ARCHETYPE_ID_SET.has(value) ? (value as ArchetypeId) : null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -119,6 +138,7 @@ function normalizeProgression(value: unknown): MetaProgressionState {
     migrationBonusGranted,
     unlockedStarterKitIds,
     activeStarterKitId,
+    activeArchetypeId: normalizeArchetypeId(value.activeArchetypeId),
   };
 }
 
@@ -128,6 +148,7 @@ function createMigratedProgressionState(grantsStarterBonus: boolean): MetaProgre
     migrationBonusGranted: grantsStarterBonus,
     unlockedStarterKitIds: [],
     activeStarterKitId: null,
+    activeArchetypeId: null,
   };
 }
 

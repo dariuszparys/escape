@@ -16,6 +16,7 @@ import { Card, makeCard, CARD_DEFS } from '../data/cards';
 import { EnemyInstance, spawnBoss, spawnElite, spawnEnemy } from '../data/enemies';
 import { InventoryItem, makeItem, randomItemIdForDepth } from '../data/items';
 import { STARTER_KITS } from '../data/starterKits';
+import { ARCHETYPES } from '../data/archetypes';
 import { makeStartRoom, makeNextRoom, RoomData, type RoomEvent } from '../dungeon/rooms';
 import { makeCardView } from '../gfx/cardview';
 import { createDeckPanel } from '../gfx/deckPanel';
@@ -404,6 +405,29 @@ export class DungeonScene extends Phaser.Scene {
     switch (room.event) {
       case 'start': {
         const run = getRun();
+        if (run.archetypeId) {
+          const archetype = ARCHETYPES.find((candidate) => candidate.id === run.archetypeId);
+          if (archetype) {
+            const banner = this.add
+              .text(
+                origin.x + ROOM_W / 2,
+                origin.y + 70,
+                `${archetype.name} — ${archetype.tagline}`,
+                {
+                  fontFamily: 'monospace',
+                  fontSize: '15px',
+                  fontStyle: 'bold',
+                  color: '#ffd76a',
+                  align: 'center',
+                  stroke: '#16121e',
+                  strokeThickness: 4,
+                },
+              )
+              .setOrigin(0.5)
+              .setDepth(6);
+            objs.push(banner);
+          }
+        }
         if (run.starterKitId) {
           const kit = STARTER_KITS.find((candidate) => candidate.id === run.starterKitId);
           const signature = kit

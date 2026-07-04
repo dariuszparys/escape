@@ -1,4 +1,4 @@
-import { Card, randomCard } from '../data/cards';
+import { Card, randomCard, type ArchetypeId } from '../data/cards';
 import { InventoryItem, makeItem, randomItemIdForDepth } from '../data/items';
 import { randomRelic } from '../data/relics';
 import { RunState } from '../state';
@@ -35,7 +35,7 @@ export function awardPotionItem(run: RunState, item: InventoryItem): FloorPotion
 export function rollChestReward(run: RunState, rng: GameRng, depth: number): RewardResult {
   const roll = rng.frac();
   if (roll < 0.5) {
-    const card = randomCard(rng, depth);
+    const card = randomCard(rng, depth, run.archetypeId);
     const impact = previewRewardImpact({
       collection: run.cardCollection,
       change: { kind: 'add', card },
@@ -109,10 +109,11 @@ export function rollVictoryCardOffers(
   depth: number,
   count = 3,
   tierBiasDepth = 0,
+  archetype: ArchetypeId | null = null,
 ): Card[] {
   const offers: Card[] = [];
   for (let attempts = 0; offers.length < count && attempts < 24; attempts++) {
-    const card = randomCard(rng, depth + tierBiasDepth);
+    const card = randomCard(rng, depth + tierBiasDepth, archetype);
     if (offers.some((offer) => offer.id === card.id)) continue;
     offers.push(card);
   }

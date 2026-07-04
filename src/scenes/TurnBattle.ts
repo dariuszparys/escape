@@ -1381,8 +1381,14 @@ export class TurnBattleScene extends Phaser.Scene {
 
     const offers =
       this.encounterKind === 'elite'
-        ? rollVictoryCardOffers(this.rng, run.depth, ELITE_CARD_OFFER_COUNT, ELITE_TIER_BIAS_DEPTH)
-        : rollVictoryCardOffers(this.rng, run.depth);
+        ? rollVictoryCardOffers(
+            this.rng,
+            run.depth,
+            ELITE_CARD_OFFER_COUNT,
+            ELITE_TIER_BIAS_DEPTH,
+            run.archetypeId,
+          )
+        : rollVictoryCardOffers(this.rng, run.depth, undefined, undefined, run.archetypeId);
     const spacing = Math.min(CARD_W + 24, (GAME_W - 80) / Math.max(offers.length, 1));
     const startX = GAME_W / 2 - ((offers.length - 1) * spacing) / 2;
     for (const [index, card] of offers.entries()) {
