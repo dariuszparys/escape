@@ -18,7 +18,7 @@ export interface IntentPattern {
   special?: { entry: IntentEntry; interval: number };
 }
 
-export type IntentKind = 'attack' | 'block' | 'status' | 'heal' | 'unknown';
+export type IntentKind = 'attack' | 'block' | 'status' | 'heal' | 'buff' | 'unknown';
 
 /** Why a telegraphed intent was negated before its beat (R21 / smoke bomb). */
 export type IntentVoidReason = 'stun' | 'smoke_bomb';
@@ -102,21 +102,30 @@ export function clearVoidedIntent(state: IntentState): IntentState {
 
 /**
  * Derive the truthful telegraph view from an entry's effects (R5). Kind priority
- * is damage > block > status > heal; magnitude is the summed raw amount of the
- * winning kind, so the shown number always matches what the beat resolves.
+ * is damage > block > status > buff > heal; magnitude is the summed raw amount of
+ * the winning kind, so the shown number always matches what the beat resolves.
+ *
+ * `strengthBonus` folds the actor's Strength into an attack's telegraphed magnitude —
+ * applied once per damage sub-hit, matching resolution — so a ritual-buffed enemy hit
+ * never under-reports what it will deal (honest telegraph even under scaling).
  */
-export function intentView(entry: IntentEntry): IntentView {
+export function intentView(entry: IntentEntry, strengthBonus = 0): IntentView {
   const total = (kind: CardEffect['kind']): number =>
     entry.effects
       .filter((effect) => effect.kind === kind)
       .reduce((sum, effect) => sum + effect.amount, 0);
   const base = { name: entry.name, telegraph: entry.telegraph };
   const damage = total('damage');
-  if (damage > 0) return { ...base, kind: 'attack', magnitude: damage };
+  if (damage > 0) {
+    const hits = entry.effects.filter((effect) => effect.kind === 'damage').length;
+    return { ...base, kind: 'attack', magnitude: damage + Math.max(0, strengthBonus) * hits };
+  }
   const block = total('block');
   if (block > 0) return { ...base, kind: 'block', magnitude: block };
   const status = total('status');
   if (status > 0) return { ...base, kind: 'status', magnitude: status };
+  const strength = total('strength');
+  if (strength > 0) return { ...base, kind: 'buff', magnitude: strength };
   const heal = total('heal');
   if (heal > 0) return { ...base, kind: 'heal', magnitude: heal };
   return { ...base, kind: 'unknown', magnitude: 0 };

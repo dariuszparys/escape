@@ -91,6 +91,27 @@ current battle, joining neither the Draw Pile nor the Discard Pile. It returns
 with the full collection at the next battle start. Exhaust is battle-scoped,
 never permanent deck removal.
 
+### Status Effects
+
+Timed or permanent modifiers a combatant carries during a Card Battle, resolved through the
+Combat Effect Handler Registry. Two families: **damage-over-time** — `poison` and `burn` tick
+their listed amount straight to HP (ignoring block) at the afflicted's turn start; and
+**modifiers** — `vulnerable` (takes ×1.5 damage), `weak` (deals ×0.75 damage), `frail` (gains
+×0.75 block), and `strength` (permanent additive damage per hit). All damage math runs through a
+single resolver (`combat.ts` `modifiedDamage`) in a fixed order — `+strength`, `×weak`,
+`×vulnerable`, then armor and block subtract — so the number a card deals, the block it depletes,
+and the telegraph shown never disagree. Modifier debuffs count down at the end of the afflicted
+side's action; `strength` never decays and is capped per battle.
+
+### Strength and the Ritual
+
+`strength` is the game's scaling axis. A player builds it with cards like Empower (it recurs
+through the reshuffled collection, so it ramps over a long fight) up to a hard cap; certain
+single-hit elites and bosses instead run a **ritual** — a telegraphed move that permanently raises
+their own Strength, growing their whole kit every cycle. A ritual is a race-or-interrupt decision:
+out-damage it, or void the ritual beat with a stun/smoke bomb — turtling only feeds it. Telegraphed
+magnitudes fold the actor's Strength in, so a ritual-buffed hit always reads honestly.
+
 ### Enemy Intent
 
 The enemy's telegraphed next action — type and raw magnitude, unadjusted for

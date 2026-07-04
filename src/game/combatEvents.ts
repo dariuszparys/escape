@@ -53,6 +53,15 @@ export type CombatEvent =
       readonly hpAfter: number;
       readonly remainingTurns: number;
     }
+  | {
+      // A timed modifier debuff (vulnerable/weak/frail) counting down by one at the end of the
+      // afflicted side's action (B4). Silent — no HP change, no damage pop — the HUD just
+      // decrements or drops it. Distinct from `statusTicked`, which is a DoT dealing HP damage.
+      readonly type: 'statusFaded';
+      readonly targetId: string;
+      readonly status: StatusEffectType;
+      readonly remainingTurns: number;
+    }
   | { readonly type: 'stunned'; readonly targetId: string }
   | { readonly type: 'energyChanged'; readonly energy: number; readonly max: number }
   | {

@@ -114,7 +114,9 @@ describe('elite encounter class (U5/R2)', () => {
 });
 
 describe('intent patterns (U9, R5/R6)', () => {
-  const RESOLVABLE_KINDS = ['damage', 'block', 'heal', 'status'];
+  // `strength` (self-buff ritual) joined the legal enemy effect kinds with the combat-depth
+  // rework — single-hit bruisers/bosses ramp with it; multi-hit enemies deliberately do not.
+  const RESOLVABLE_KINDS = ['damage', 'block', 'heal', 'status', 'strength'];
   const all = [...ENEMIES, ...BOSSES];
 
   test('every enemy and boss carries a non-empty intent cycle', () => {
@@ -169,7 +171,7 @@ describe('elite intent patterns (U5, R2)', () => {
   // is legal here but must stay absent from that block's allowlist, since it is an
   // engine-routed rider consumed by turnEngine's shuffleIntoDrawPile hook, not a
   // per-target combat resolution kind like damage/block/heal/status.
-  const RESOLVABLE_KINDS = ['damage', 'block', 'heal', 'status', 'shuffleCurse'];
+  const RESOLVABLE_KINDS = ['damage', 'block', 'heal', 'status', 'shuffleCurse', 'strength'];
 
   test('every elite carries a non-empty intent cycle', () => {
     for (const def of ELITES) {
@@ -246,9 +248,11 @@ describe('elite intent patterns (U5, R2)', () => {
 
 describe('depth-scaled intent damage (U13/R10)', () => {
   test('the bonus climbs through the first stratum and keeps climbing gently past it', () => {
+    // Weak tier (depths 1-3) stays gentle; the medium tier on gets a flat +2 "punch" so fights
+    // cost real HP and a stratum accumulates attrition (combat-depth rebaseline).
     expect(intentBonusForDepth(2)).toBe(1);
-    expect(intentBonusForDepth(6)).toBe(3);
-    expect(intentBonusForDepth(10)).toBe(5);
+    expect(intentBonusForDepth(6)).toBe(5);
+    expect(intentBonusForDepth(10)).toBe(7);
     expect(intentBonusForDepth(30)).toBeGreaterThan(intentBonusForDepth(10));
     expect(intentBonusForDepth(30)).toBeLessThan(intentBonusForDepth(10) + 20);
   });
@@ -343,14 +347,14 @@ describe('U4 medium/strong pattern rebuild (R1)', () => {
     test('necromancer: interval 4 against a 4-entry cycle', () => {
       expect(namesOverTurns(defById('necromancer').pattern, 9)).toEqual([
         'Soul Rot',
+        'Withering Hex', // now sits before Dark Bolt so its Vulnerable lands on it
         'Dark Bolt',
-        'Withering Hex',
         'Reap', // turn 4: special fires
         'Bone Ward', // cycle resumes at the entry it would have played next
         'Soul Rot',
-        'Dark Bolt',
-        'Reap', // turn 8
         'Withering Hex',
+        'Reap', // turn 8
+        'Dark Bolt',
       ]);
     });
 
@@ -399,6 +403,7 @@ describe('U4 medium/strong pattern rebuild (R1)', () => {
         [
           { kind: 'status', status: 'poison', amount: 3, duration: 3 }, // Blood Sigil: no damage, untouched
           { kind: 'status', status: 'burn', amount: 3, duration: 2 },
+          { kind: 'status', status: 'weak', amount: 1, duration: 1 },
         ],
       ]);
     });
@@ -429,6 +434,7 @@ describe('U4 medium/strong pattern rebuild (R1)', () => {
         [
           { kind: 'block', amount: 6 },
           { kind: 'damage', amount: 10 }, // Guarded Cut: 7 -> 10
+          { kind: 'status', status: 'frail', amount: 1, duration: 1 },
         ],
         [
           { kind: 'damage', amount: 7 }, // Riposte Flurry: tie broken in favor of the first hit, 4 -> 7
@@ -443,11 +449,12 @@ describe('U4 medium/strong pattern rebuild (R1)', () => {
       const empowered = empowerPattern(defById('necromancer').pattern, 3);
       expect(empowered.cycle.map((entry) => entry.effects)).toEqual([
         [{ kind: 'status', status: 'poison', amount: 4, duration: 2 }], // Soul Rot: no damage, untouched
-        [{ kind: 'damage', amount: 13 }], // Dark Bolt: 10 -> 13
         [
-          { kind: 'damage', amount: 8 }, // Withering Hex: 5 -> 8
+          { kind: 'damage', amount: 8 }, // Withering Hex: 5 -> 8 (now before Dark Bolt so its Vulnerable lands)
           { kind: 'status', status: 'burn', amount: 3, duration: 2 },
+          { kind: 'status', status: 'vulnerable', amount: 1, duration: 2 },
         ],
+        [{ kind: 'damage', amount: 13 }], // Dark Bolt: 10 -> 13
         [
           { kind: 'block', amount: 5 }, // Bone Ward: no damage, untouched
           { kind: 'status', status: 'poison', amount: 3, duration: 2 },

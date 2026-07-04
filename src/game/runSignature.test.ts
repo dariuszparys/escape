@@ -9,13 +9,12 @@ import { RngDrawDigest, runSignature } from './runSignature';
  */
 const GOLDEN_SEED = 7;
 const GOLDEN_SIGNATURE =
-  // Re-goldened for U12 (numeric rebaseline): tuned medium/strong/boss/elite HP
-  // and damage, the stratum-1 room-weight table, and the deep-stratum HP/damage
-  // slopes + a dedicated deep room-weight table all change which room events and
-  // battle outcomes occur for a fixed seed, shifting downstream draw order/count.
-  // Intentional determinism change (harder combat → longer/more battles for the
-  // same seed), not a regression.
-  'v=1|boss=1|gate=1|death=-|stratum=1|enc=3|embers=4|draws=254|hash=9ea75460';
+  // Re-goldened for the combat-depth rework (2026-07-04). Intentional determinism change, not a
+  // regression: the new modifier statuses (Strength/Vulnerable/Weak/Frail), the rebuilt
+  // enemy/card content, the +2 attrition punch (intentBonusForDepth), and the rewritten
+  // competent play + dilution-aware curation policies all change which cards are played and
+  // which battles are won for a fixed seed, shifting downstream draw order and count.
+  'v=1|boss=1|gate=1|death=-|stratum=1|enc=0|embers=3|draws=127|hash=627f37ab';
 
 describe('RngDrawDigest', () => {
   test('samples draw order and count, not just the value set (the load-bearing property)', () => {
@@ -73,13 +72,13 @@ describe('runSignature', () => {
   });
 
   test('a death and a bank produce stable, distinct signatures', () => {
-    // Under the roguelike-hard rebaseline (U12), seed 16 dies pre-boss; seed 1
-    // banks a victory — the gate must not collapse these.
-    const death = runSignature(16);
-    const bank = runSignature(1);
+    // Under the combat-depth rebaseline, seed 1 dies; seed 2 banks a victory — the gate must not
+    // collapse these.
+    const death = runSignature(1);
+    const bank = runSignature(2);
 
-    expect(death).toBe(runSignature(16));
-    expect(bank).toBe(runSignature(1));
+    expect(death).toBe(runSignature(1));
+    expect(bank).toBe(runSignature(2));
     expect(death).not.toBe(bank);
     expect(death.startsWith('v=0|')).toBe(true);
     expect(bank.startsWith('v=1|')).toBe(true);
