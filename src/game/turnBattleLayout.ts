@@ -33,10 +33,9 @@ export interface TurnBattleRect {
 }
 
 export interface TurnBattleLayout {
-  /** Enemy name + sprite + HP bar, top center. */
+  /** The enemy band across the top: one to three foes laid out in a row, each with
+   * its own name/HP/intent (multi-enemy). Left of the item column. */
   enemyZone: TurnBattleRect;
-  /** Enemy telegraph panel, directly under the enemy zone. */
-  intentPanel: TurnBattleRect;
   /** Hero sprite + HP bar + block badge, left column. */
   playerZone: TurnBattleRect;
   /** Announcement anchor (reshuffle / no-plays / stunned), center. */
@@ -71,14 +70,13 @@ export function rectsOverlap(a: TurnBattleRect, b: TurnBattleRect): boolean {
  *
  * Guarantees (covered by the colocated tests): every region lies fully inside
  * the `GAME_W` x `GAME_H` screen; the labelled regions are pairwise
- * non-overlapping; the center stack reads top-to-bottom as enemy -> intent ->
- * announcement -> play zone with readable gaps; and the hand strip, end-turn
- * button, and discard badge stay out of one another's way.
+ * non-overlapping; the enemy band sits above the announcement and play zone with
+ * readable gaps; and the hand strip, end-turn button, and discard badge stay out
+ * of one another's way.
  */
 export function getTurnBattleLayout(): TurnBattleLayout {
   return {
-    enemyZone: { x: GAME_W / 2 - 110, y: 26, w: 220, h: 190 },
-    intentPanel: { x: GAME_W / 2 - 140, y: 222, w: 280, h: 46 },
+    enemyZone: { x: 24, y: 24, w: 560, h: 250 },
     playerZone: { x: 24, y: 320, w: 180, h: 130 },
     announcement: { x: GAME_W / 2 - 190, y: 276, w: 380, h: 26 },
     playZone: { x: GAME_W / 2 - 44, y: 316, w: 88, h: SCALED_CARD_H },
@@ -99,6 +97,19 @@ export function getTurnBattleLayout(): TurnBattleLayout {
  * The returned array is ordered strictly left-to-right; `y` is always the
  * vertical center of `handArea`.
  */
+/**
+ * Center x for each of `count` enemies, spread evenly across the enemy band.
+ * One enemy sits at the band's center; a pack fans out with equal margins so
+ * every foe (and its HP bar / intent) has room. `count` is clamped to >= 1.
+ */
+export function enemyAnchorsX(count: number): number[] {
+  const band = getTurnBattleLayout().enemyZone;
+  const n = Math.max(1, count);
+  if (n === 1) return [band.x + band.w / 2];
+  const step = band.w / n;
+  return Array.from({ length: n }, (_, i) => band.x + step * (i + 0.5));
+}
+
 export function handSlotPositions(count: number): { x: number; y: number }[] {
   if (count <= 0) {
     return [];

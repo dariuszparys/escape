@@ -831,7 +831,7 @@ export class DungeonScene extends Phaser.Scene {
     // fight-trigger condition gates it — so this narrowing is exhaustive in practice.
     const data: RunBattleSceneData = {
       mode: 'run',
-      enemy: this.built.enemy,
+      enemies: [this.built.enemy],
       rng: this.gameRng,
       encounterKind:
         this.room.event === 'boss' ? 'boss' : this.room.event === 'elite' ? 'elite' : 'normal',

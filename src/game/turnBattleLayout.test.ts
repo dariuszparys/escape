@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { GAME_H, GAME_W } from '../config';
 import {
+  enemyAnchorsX,
   getTurnBattleLayout,
   handSlotPositions,
   HAND_CARD_SCALE,
@@ -19,7 +20,6 @@ function allRegions(): TurnBattleRect[] {
   return [
     layout.playerZone,
     layout.enemyZone,
-    layout.intentPanel,
     layout.announcement,
     layout.playZone,
     layout.itemRow,
@@ -65,10 +65,10 @@ describe('turn battle layout metrics', () => {
     }
   });
 
-  test('the center stack reads intent -> announcement -> play zone with readable gaps', () => {
-    const { intentPanel, announcement, playZone } = getTurnBattleLayout();
+  test('the enemy band sits above announcement -> play zone with readable gaps', () => {
+    const { enemyZone, announcement, playZone } = getTurnBattleLayout();
 
-    expect(announcement.y - (intentPanel.y + intentPanel.h)).toBeGreaterThanOrEqual(4);
+    expect(announcement.y - (enemyZone.y + enemyZone.h)).toBeGreaterThanOrEqual(0);
     expect(playZone.y - (announcement.y + announcement.h)).toBeGreaterThanOrEqual(4);
   });
 
@@ -83,6 +83,29 @@ describe('turn battle layout metrics', () => {
 
     expect(rectsOverlap(endTurnButton, handArea)).toBe(false);
     expect(rectsOverlap(discardPile, handArea)).toBe(false);
+  });
+});
+
+describe('enemyAnchorsX', () => {
+  test('a solo enemy sits at the enemy band center', () => {
+    const { enemyZone } = getTurnBattleLayout();
+    expect(enemyAnchorsX(1)).toEqual([enemyZone.x + enemyZone.w / 2]);
+  });
+
+  test.each([2, 3])('a pack of %i is ordered, symmetric, and inside the band', (count) => {
+    const { enemyZone } = getTurnBattleLayout();
+    const xs = enemyAnchorsX(count);
+    expect(xs).toHaveLength(count);
+    for (let i = 1; i < xs.length; i += 1) expect(xs[i]).toBeGreaterThan(xs[i - 1]);
+    // Every anchor lies within the band.
+    for (const x of xs) {
+      expect(x).toBeGreaterThanOrEqual(enemyZone.x);
+      expect(x).toBeLessThanOrEqual(enemyZone.x + enemyZone.w);
+    }
+    // Symmetric around the band center.
+    const center = enemyZone.x + enemyZone.w / 2;
+    expect(xs[0] - enemyZone.x).toBeCloseTo(enemyZone.x + enemyZone.w - xs[xs.length - 1], 6);
+    expect(center).toBeCloseTo((xs[0] + xs[xs.length - 1]) / 2, 6);
   });
 });
 
