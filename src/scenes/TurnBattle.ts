@@ -133,6 +133,28 @@ interface SliceDebugHandle {
 
 const MONO = 'monospace';
 
+/** Always-on-top depth for the hover tooltips (mirrors cardTooltip's TOOLTIP_DEPTH). */
+const ITEM_TOOLTIP_DEPTH = 500;
+
+/** Which generated sprite stands in for a combat item's icon (R-declutter: icons replace text). */
+function itemTexture(item: InventoryItem): string {
+  switch (item.id) {
+    case 'small_potion':
+      return 'potion';
+    case 'large_potion':
+      return 'potion_large';
+    case 'iron_armor':
+      return 'armor';
+    case 'smoke_bomb':
+      return 'smoke_bomb';
+    case 'bomb':
+      return 'bomb';
+    default:
+      // Fall back by kind so an unmapped item still shows something sensible.
+      return item.kind === 'shield' ? 'armor' : item.kind === 'damage' ? 'bomb' : 'potion';
+  }
+}
+
 /**
  * The Slay-the-Spire-style battle screen (U6). Render and input only: every
  * rule lives in the turn engine, every visual step is replayed by the
@@ -203,9 +225,8 @@ export class TurnBattleScene extends Phaser.Scene {
   private endTurnBg!: Phaser.GameObjects.Graphics;
   private endTurnZone!: Phaser.GameObjects.Zone;
   private endTurnPulse: Phaser.Tweens.Tween | null = null;
-  private logText!: Phaser.GameObjects.Text;
-  private logLines: string[] = [];
-  private itemButtons: Phaser.GameObjects.Text[] = [];
+  private itemViews: { icon: Phaser.GameObjects.Image }[] = [];
+  private itemTooltip: Phaser.GameObjects.Container | null = null;
   private pilePanel: Phaser.GameObjects.Container | null = null;
   /** The rules-text tooltip for whichever card is currently hovered (hand or reward), if any (U11). */
   private activeTooltip: Phaser.GameObjects.Container | null = null;
@@ -260,8 +281,8 @@ export class TurnBattleScene extends Phaser.Scene {
     this.handViews = new Map();
     this.committedUids = new Set();
     this.shownStatuses = { player: new Map(), enemy: new Map() };
-    this.logLines = [];
-    this.itemButtons = [];
+    this.itemViews = [];
+    this.itemTooltip = null;
     this.pilePanel = null;
     this.activeTooltip = null;
     this.endTurnPulse = null;
@@ -282,7 +303,7 @@ export class TurnBattleScene extends Phaser.Scene {
     this.createPlayerZone();
     this.createIntentPanel();
     this.createAnnouncement();
-    this.createLogPanel();
+    this.createTurnCounter();
     this.createEnergyAndPiles();
     this.createEndTurnButton();
     this.createItemButtons();
@@ -339,6 +360,7 @@ export class TurnBattleScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.closePilePanel();
       this.hideCardTooltip();
+      this.hideItemTooltip();
       stopAllMusic(this.game);
       startAmbience(this.game);
     });
@@ -355,10 +377,9 @@ export class TurnBattleScene extends Phaser.Scene {
   /** Common post-command bookkeeping: adopt the new truth, queue its replay, log it. */
   private acceptResult(result: TurnCommandResult): void {
     this.engineState = result.state;
-    this.appendLog(result.log);
     this.queue.enqueue(toSteps(result.events));
     this.refreshHandAffordability();
-    this.refreshItemButtons();
+    this.refreshItemIcons();
   }
 
   private pressCard(uid: number): void {
@@ -420,8 +441,8 @@ export class TurnBattleScene extends Phaser.Scene {
     this.acceptResult(result);
   }
 
-  private pressItem(item: InventoryItem, button: Phaser.GameObjects.Text): void {
-    this.pressAck(button);
+  private pressItem(item: InventoryItem, icon: Phaser.GameObjects.Image): void {
+    this.pressAck(icon);
     if (this.beatActive && !this.queue.idle) {
       this.queue.accelerate();
       return;
@@ -686,7 +707,9 @@ export class TurnBattleScene extends Phaser.Scene {
   }
 
   /** Same-frame press acknowledgment (R7): the element visibly reacts before any rules run. */
-  private pressAck(target: Phaser.GameObjects.Container | Phaser.GameObjects.Text): void {
+  private pressAck(
+    target: Phaser.GameObjects.Container | Phaser.GameObjects.Text | Phaser.GameObjects.Image,
+  ): void {
     const base = target.scale;
     target.setScale(base * 0.93);
     this.tweens.add({ targets: target, scale: base, duration: 90 });
@@ -725,16 +748,10 @@ export class TurnBattleScene extends Phaser.Scene {
     });
   }
 
-  private appendLog(lines: string[]): void {
-    this.logLines.push(...lines.filter((line) => line.length > 0));
-    this.logLines = this.logLines.slice(-13);
-    this.logText.setText(this.logLines.join('\n'));
-  }
-
   // ------------------------------------------------------------- hand views
 
   private makeHandCardView(card: Card): HandView {
-    const container = makeCardView(this, card, 0, 0);
+    const container = makeCardView(this, card, 0, 0, 1, false);
     const badge = this.add.graphics();
     badge.fillStyle(0x16121e, 1);
     badge.fillCircle(-CARD_W / 2 + 14, -CARD_H / 2 + 14, 13);
@@ -1062,25 +1079,17 @@ export class TurnBattleScene extends Phaser.Scene {
       .setAlpha(0);
   }
 
-  private createLogPanel(): void {
-    const panel = this.layout.logPanel;
-    const g = this.add.graphics();
-    g.fillStyle(0x16121e, 0.7);
-    g.fillRoundedRect(panel.x, panel.y, panel.w, panel.h, 6);
-    g.lineStyle(1, 0x3a3544, 1);
-    g.strokeRoundedRect(panel.x, panel.y, panel.w, panel.h, 6);
-    this.turnText = this.add.text(panel.x + 10, panel.y + 8, 'TURN 1', {
+  /**
+   * The battle log is gone (R-declutter): the turn model is transparent enough
+   * that the play-by-play scroll no longer earned its column. Only the turn
+   * counter it used to host survives, relocated to the top-left corner.
+   */
+  private createTurnCounter(): void {
+    this.turnText = this.add.text(28, 30, 'TURN 1', {
       fontFamily: MONO,
-      fontSize: '12px',
+      fontSize: '13px',
       fontStyle: 'bold',
       color: '#f1c40f',
-    });
-    this.logText = this.add.text(panel.x + 10, panel.y + 26, '', {
-      fontFamily: MONO,
-      fontSize: '9px',
-      color: '#b8b0c8',
-      lineSpacing: 2,
-      wordWrap: { width: panel.w - 20, useAdvancedWrap: true },
     });
   }
 
@@ -1207,30 +1216,72 @@ export class TurnBattleScene extends Phaser.Scene {
   }
 
   private createItemButtons(): void {
-    this.refreshItemButtons();
+    const row = this.layout.itemRow;
+    this.add
+      .text(row.x + row.w / 2, row.y, 'ITEMS', {
+        fontFamily: MONO,
+        fontSize: '10px',
+        fontStyle: 'bold',
+        color: '#b8b0c8',
+      })
+      .setOrigin(0.5);
+    this.refreshItemIcons();
   }
 
-  private refreshItemButtons(): void {
-    for (const button of this.itemButtons) button.destroy();
-    this.itemButtons = [];
+  /**
+   * Free-action items as hover-only icons (R-declutter): the generated sprite
+   * carries each item's identity, the tooltip carries its name + effect. Replaces
+   * the old column of wrapped green text that crowded the right edge.
+   */
+  private refreshItemIcons(): void {
+    for (const view of this.itemViews) view.icon.destroy();
+    this.itemViews = [];
+    this.hideItemTooltip();
     const row = this.layout.itemRow;
+    const cx = row.x + row.w / 2;
     for (const [index, item] of this.items.entries()) {
-      const button = this.add
-        .text(row.x + row.w / 2, row.y + 20 + index * 38, `${item.name}\n${item.description}`, {
-          fontFamily: MONO,
-          fontSize: '9px',
-          fontStyle: 'bold',
-          color: '#5fe07a',
-          backgroundColor: '#1c2a1e',
-          padding: { x: 6, y: 4 },
-          align: 'center',
-          wordWrap: { width: row.w - 16, useAdvancedWrap: true },
-        })
-        .setOrigin(0.5)
+      const icon = this.add
+        .image(cx, row.y + 30 + index * 48, itemTexture(item))
+        .setScale(2.4)
         .setInteractive({ useHandCursor: true });
-      button.on('pointerdown', () => this.pressItem(item, button));
-      this.itemButtons.push(button);
+      icon.on('pointerover', () => this.showItemTooltip(item, icon));
+      icon.on('pointerout', () => this.hideItemTooltip());
+      icon.on('pointerdown', () => this.pressItem(item, icon));
+      this.itemViews.push({ icon });
     }
+  }
+
+  /** Name + effect panel for a hovered item, anchored just left of its icon. */
+  private showItemTooltip(item: InventoryItem, icon: Phaser.GameObjects.Image): void {
+    this.hideItemTooltip();
+    const w = 150;
+    const pad = 8;
+    const name = this.add.text(pad, pad, item.name, {
+      fontFamily: MONO,
+      fontSize: '12px',
+      fontStyle: 'bold',
+      color: '#5fe07a',
+    });
+    const desc = this.add.text(pad, pad + name.height + 4, item.description, {
+      fontFamily: MONO,
+      fontSize: '10px',
+      color: '#d8d2e4',
+      wordWrap: { width: w - pad * 2, useAdvancedWrap: true },
+    });
+    const h = pad * 2 + name.height + 4 + desc.height;
+    const bg = this.add.graphics();
+    bg.fillStyle(0x111019, 0.96);
+    bg.fillRoundedRect(0, 0, w, h, 8);
+    bg.lineStyle(2, 0xcab98a, 0.85);
+    bg.strokeRoundedRect(0, 0, w, h, 8);
+    const x = icon.x - icon.displayWidth / 2 - 12 - w;
+    const y = Phaser.Math.Clamp(icon.y - h / 2, 14, GAME_H - h - 14);
+    this.itemTooltip = this.add.container(x, y, [bg, name, desc]).setDepth(ITEM_TOOLTIP_DEPTH);
+  }
+
+  private hideItemTooltip(): void {
+    this.itemTooltip?.destroy();
+    this.itemTooltip = null;
   }
 
   private refreshAllBars(): void {
@@ -1392,7 +1443,7 @@ export class TurnBattleScene extends Phaser.Scene {
     const spacing = Math.min(CARD_W + 24, (GAME_W - 80) / Math.max(offers.length, 1));
     const startX = GAME_W / 2 - ((offers.length - 1) * spacing) / 2;
     for (const [index, card] of offers.entries()) {
-      const view = makeCardView(this, card, startX + index * spacing, 258, 0.92);
+      const view = makeCardView(this, card, startX + index * spacing, 258, 0.92, false);
       view.setDepth(401);
       view.setInteractive({ useHandCursor: true });
       view.on('pointerover', () => {
@@ -1538,8 +1589,8 @@ export class TurnBattleScene extends Phaser.Scene {
       endTurn: () => this.pressEndTurn(),
       useItem: (index: number) => {
         const item = this.items[index];
-        const button = this.itemButtons[index];
-        if (item && button) this.pressItem(item, button);
+        const view = this.itemViews[index];
+        if (item && view) this.pressItem(item, view.icon);
       },
       accelerate: () => this.queue.accelerate(),
       skipAll: () => this.queue.skipAll(),

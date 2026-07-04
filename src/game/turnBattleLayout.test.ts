@@ -17,7 +17,6 @@ const FLOAT_TOLERANCE = 0.51;
 function allRegions(): TurnBattleRect[] {
   const layout = getTurnBattleLayout();
   return [
-    layout.logPanel,
     layout.playerZone,
     layout.enemyZone,
     layout.intentPanel,
@@ -57,7 +56,7 @@ describe('turn battle layout metrics', () => {
     }
   });
 
-  test('the twelve labelled regions are pairwise non-overlapping', () => {
+  test('the labelled regions are pairwise non-overlapping', () => {
     const regions = allRegions();
     for (let i = 0; i < regions.length; i += 1) {
       for (let j = i + 1; j < regions.length; j += 1) {

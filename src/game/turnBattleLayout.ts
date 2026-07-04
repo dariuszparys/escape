@@ -37,9 +37,7 @@ export interface TurnBattleLayout {
   enemyZone: TurnBattleRect;
   /** Enemy telegraph panel, directly under the enemy zone. */
   intentPanel: TurnBattleRect;
-  /** Battle log, left column. */
-  logPanel: TurnBattleRect;
-  /** Hero sprite + HP bar + block badge, left, under the log. */
+  /** Hero sprite + HP bar + block badge, left column. */
   playerZone: TurnBattleRect;
   /** Announcement anchor (reshuffle / no-plays / stunned), center. */
   announcement: TurnBattleRect;
@@ -72,7 +70,7 @@ export function rectsOverlap(a: TurnBattleRect, b: TurnBattleRect): boolean {
  * Fixed screen geometry for the turn-based battle scene.
  *
  * Guarantees (covered by the colocated tests): every region lies fully inside
- * the `GAME_W` x `GAME_H` screen; the twelve labelled regions are pairwise
+ * the `GAME_W` x `GAME_H` screen; the labelled regions are pairwise
  * non-overlapping; the center stack reads top-to-bottom as enemy -> intent ->
  * announcement -> play zone with readable gaps; and the hand strip, end-turn
  * button, and discard badge stay out of one another's way.
@@ -81,11 +79,10 @@ export function getTurnBattleLayout(): TurnBattleLayout {
   return {
     enemyZone: { x: GAME_W / 2 - 110, y: 26, w: 220, h: 190 },
     intentPanel: { x: GAME_W / 2 - 140, y: 222, w: 280, h: 46 },
-    logPanel: { x: 24, y: 92, w: 180, h: 180 },
     playerZone: { x: 24, y: 320, w: 180, h: 130 },
     announcement: { x: GAME_W / 2 - 190, y: 276, w: 380, h: 26 },
     playZone: { x: GAME_W / 2 - 44, y: 316, w: 88, h: SCALED_CARD_H },
-    itemRow: { x: GAME_W - 120, y: 300, w: 112, h: 150 },
+    itemRow: { x: GAME_W - 116, y: 110, w: 108, h: 320 },
     endTurnButton: { x: GAME_W - 104, y: GAME_H - 172, w: 100, h: 60 },
     energyBadge: { x: 12, y: GAME_H - 184, w: 88, h: 88 },
     drawPile: { x: 12, y: GAME_H - 84, w: 88, h: 72 },

@@ -12,13 +12,22 @@ const TYPE_LABEL: Record<string, string> = {
   status: 'STAT',
 };
 
-/** Render a card as a container centered on (x, y). */
+/**
+ * Render a card as a container centered on (x, y).
+ *
+ * `showDescription` draws the rules blurb on the card face. Combat surfaces
+ * (the hand fan and the victory reward row) pass `false` and rely on the hover
+ * tooltip instead, so long rules text never overflows a shrunk card — the face
+ * stays a clean name/value/type glance. Contexts without hover (the dungeon's
+ * starting-card picker) keep the default `true`.
+ */
 export function makeCardView(
   scene: Phaser.Scene,
   card: Card,
   x: number,
   y: number,
   scale = 1,
+  showDescription = true,
 ): Phaser.GameObjects.Container {
   const w = CARD_W;
   const h = CARD_H;
@@ -57,15 +66,19 @@ export function makeCardView(
     })
     .setOrigin(0.5);
 
-  const desc = scene.add
-    .text(0, h / 2 - 18, card.description, {
-      fontFamily: 'monospace',
-      fontSize: '9px',
-      color: '#b8b0c8',
-    })
-    .setOrigin(0.5);
+  const parts: Phaser.GameObjects.GameObject[] = [g, name, value, type];
+  if (showDescription) {
+    const desc = scene.add
+      .text(0, h / 2 - 18, card.description, {
+        fontFamily: 'monospace',
+        fontSize: '9px',
+        color: '#b8b0c8',
+      })
+      .setOrigin(0.5);
+    parts.push(desc);
+  }
 
-  const c = scene.add.container(x, y, [g, name, value, type, desc]);
+  const c = scene.add.container(x, y, parts);
   c.setSize(w, h);
   c.setScale(scale);
   return c;

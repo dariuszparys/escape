@@ -328,6 +328,75 @@ const POTION = [
   '......GGGG......',
 ];
 
+const POTION_LARGE_PAL: Palette = {
+  C: '#8a5a2b',
+  G: '#bcd8e8',
+  P: '#5fe07a',
+};
+
+const POTION_LARGE = [
+  '................',
+  '.......CC.......',
+  '.......CC.......',
+  '......GGGG......',
+  '.....GGGGGG.....',
+  '....GGPPPPGG....',
+  '...GPPPPPPPPG...',
+  '...GPPPPPPPPG...',
+  '...GPPPPPPPPG...',
+  '...GPPPPPPPPG...',
+  '....GPPPPPPG....',
+  '.....GPPPPG.....',
+  '......GGGG......',
+];
+
+const BOMB_PAL: Palette = {
+  B: '#2a2833',
+  H: '#5d5670',
+  F: '#8a5a2b',
+  S: '#f1c40f',
+  R: '#e23b4e',
+};
+
+const BOMB = [
+  '................',
+  '.............S..',
+  '............SR..',
+  '...........FS...',
+  '..........F.....',
+  '.........F......',
+  '........BB......',
+  '......BBBBBB....',
+  '.....BBBBBBBB...',
+  '....BBBBBBBBBB..',
+  '....BBHBBBBBBB..',
+  '....BBBBBBBBBB..',
+  '.....BBBBBBBB...',
+  '......BBBBBB....',
+  '................',
+];
+
+const SMOKE_PAL: Palette = {
+  S: '#8a8494',
+  D: '#4a4658',
+  W: '#d8d4e0',
+};
+
+const SMOKE_BOMB = [
+  '................',
+  '....W...WW......',
+  '...WWW.WWWW.W...',
+  '..WW.WWWWWWWW...',
+  '...WWWWWWWW.W...',
+  '....WW.WWW......',
+  '......SSSS......',
+  '.....SDDDDS.....',
+  '.....SDDDDS.....',
+  '.....SDDDDS.....',
+  '......SSSS......',
+  '................',
+];
+
 const ARMOR_PAL: Palette = {
   S: '#aab2bd',
   D: '#5e6a78',
@@ -498,6 +567,9 @@ export function createAllTextures(scene: Phaser.Scene): void {
   px('chest_closed', CHEST_CLOSED, CHEST_PAL);
   px('chest_open', CHEST_OPEN, CHEST_PAL);
   px('potion', POTION, POTION_PAL);
+  px('potion_large', POTION_LARGE, POTION_LARGE_PAL);
+  px('bomb', BOMB, BOMB_PAL);
+  px('smoke_bomb', SMOKE_BOMB, SMOKE_PAL);
   px('armor', ARMOR, ARMOR_PAL);
   px('spikes', SPIKES, SPIKES_PAL);
   px('heart', HEART, HEART_PAL);
