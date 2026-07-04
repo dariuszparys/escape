@@ -1,5 +1,7 @@
 import type { MetaProgressionState } from '../meta';
-import { CARD_DEFS } from '../data/cards';
+import { CARD_DEFS, type ArchetypeId } from '../data/cards';
+import { ARCHETYPES, archetypeDef } from '../data/archetypes';
+import { ARCHETYPE_STARTING_CARD_IDS } from './startingCards';
 import { STARTER_KITS, type StarterKitId } from '../data/starterKits';
 
 export const STARTER_CARD_VARIETY_UNLOCK_COST = 4;
@@ -159,6 +161,57 @@ export function formatStarterKitProgressionLine(state: ProgressionState, kitId: 
         : `locked - ${kit.cost} Embers`;
 
   return `${kit.name}: ${status} | ${signature.name}: ${signature.description} | ${kit.archetype}`;
+}
+
+/**
+ * Select (or clear) the active archetype for the next normal run. Archetypes are a free, horizontal
+ * playstyle choice — no Ember cost and no unlock gate — so this only validates the id and swaps it.
+ * `null` clears back to the neutral (standard) card pool.
+ */
+export function setActiveArchetype(
+  state: ProgressionState,
+  archetypeId: ArchetypeId | null,
+): ProgressionResult {
+  if (archetypeId !== null && !ARCHETYPES.some((archetype) => archetype.id === archetypeId)) {
+    return { ok: false, reason: 'Unknown archetype.', state };
+  }
+
+  return {
+    ok: true,
+    state: {
+      ...state,
+      progression: {
+        ...state.progression,
+        activeArchetypeId: archetypeId,
+      },
+    },
+  };
+}
+
+/** The display names of an archetype's opening-pick cards, for the Progression row. */
+function archetypePickNames(archetypeId: ArchetypeId): string[] {
+  return ARCHETYPE_STARTING_CARD_IDS[archetypeId].map((cardId) => {
+    const card = CARD_DEFS.find((candidate) => candidate.id === cardId);
+    return card?.name ?? cardId;
+  });
+}
+
+export function formatArchetypeProgressionLine(
+  state: ProgressionState,
+  archetypeId: ArchetypeId,
+): string {
+  const def = archetypeDef(archetypeId);
+  const active = state.progression.activeArchetypeId === archetypeId;
+  const status = active ? 'active - shapes next normal run' : 'select for next normal run';
+  return `${def.name} (${def.tagline}): ${status} | ${def.description} | Opens with: ${archetypePickNames(archetypeId).join(', ')}`;
+}
+
+export function formatArchetypeSelectionSummary(state: ProgressionState): string {
+  const active = state.progression.activeArchetypeId;
+  const line = active
+    ? `Archetype: ${archetypeDef(active).name} - every card draw is ${archetypeDef(active).name}-flavored.`
+    : 'Archetype: none - standard cards only. Pick one to reshape the whole run.';
+  return line;
 }
 
 export function formatStarterCardProgressionSummary(state: ProgressionState): string {

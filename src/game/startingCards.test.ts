@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'vitest';
-import { startingCardIdsForChoiceCount, startingCardIdsForRun } from './startingCards';
+import {
+  ARCHETYPE_STARTING_CARD_IDS,
+  startingCardIdsForChoiceCount,
+  startingCardIdsForRun,
+} from './startingCards';
 
 describe('startingCardIdsForChoiceCount', () => {
   test('defaults to the three-card opening offer', () => {
@@ -37,5 +41,42 @@ describe('startingCardIdsForChoiceCount', () => {
         isDaily: true,
       }),
     ).toEqual(['slash', 'guard', 'quick_jab']);
+  });
+
+  test('offers the archetype pick pool when an archetype is active', () => {
+    expect(
+      startingCardIdsForRun({
+        startingCardChoices: 3,
+        archetypeId: 'barbarian',
+        isDaily: false,
+      }),
+    ).toEqual(ARCHETYPE_STARTING_CARD_IDS.barbarian.slice(0, 3));
+
+    expect(
+      startingCardIdsForRun({
+        startingCardChoices: 4,
+        archetypeId: 'ranger',
+        isDaily: false,
+      }),
+    ).toEqual([...ARCHETYPE_STARTING_CARD_IDS.ranger]);
+  });
+
+  test('daily runs ignore the active archetype (kept comparable)', () => {
+    expect(
+      startingCardIdsForRun({
+        startingCardChoices: 4,
+        archetypeId: 'necromancer',
+        isDaily: true,
+      }),
+    ).toEqual(['slash', 'guard', 'quick_jab']);
+  });
+
+  test('startingCardIdsForChoiceCount honors an explicit archetype pool', () => {
+    expect(startingCardIdsForChoiceCount(4, 'necromancer')).toEqual([
+      ...ARCHETYPE_STARTING_CARD_IDS.necromancer,
+    ]);
+    expect(startingCardIdsForChoiceCount(3, 'necromancer')).toEqual(
+      ARCHETYPE_STARTING_CARD_IDS.necromancer.slice(0, 3),
+    );
   });
 });

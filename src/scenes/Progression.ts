@@ -5,8 +5,11 @@ import {
   STARTER_CARD_VARIETY_UNLOCK_COST,
   buyStarterCardVarietyUnlock,
   buyStarterKitUnlock,
+  formatArchetypeProgressionLine,
+  formatArchetypeSelectionSummary,
   formatStarterCardProgressionSummary,
   formatStarterKitProgressionLine,
+  setActiveArchetype,
   setActiveStarterKit,
 } from '../game/progression';
 import {
@@ -16,6 +19,8 @@ import {
   type ProgressionPanelLayout,
 } from '../game/progressionLayout';
 import { STARTER_KITS, type StarterKitId } from '../data/starterKits';
+import { ARCHETYPES } from '../data/archetypes';
+import type { ArchetypeId } from '../data/cards';
 import { getMeta, setMeta } from '../meta';
 
 const TEXT_STYLE = {
@@ -80,7 +85,7 @@ export class ProgressionScene extends Phaser.Scene {
     this.scrollContent = undefined;
     this.scrollbar = undefined;
     const meta = getMeta();
-    const layout = createProgressionPanelLayout(STARTER_KITS.length);
+    const layout = createProgressionPanelLayout(STARTER_KITS.length, ARCHETYPES.length);
     this.layout = layout;
     this.scrollOffset = clampScrollOffset(this.scrollOffset, layout.maxScrollOffset);
 
@@ -122,6 +127,46 @@ export class ProgressionScene extends Phaser.Scene {
     content.setMask(maskShape.createGeometryMask());
     this.dynamic.add(content);
     this.scrollContent = content;
+
+    content.add(
+      this.add.text(0, layout.archetypeHeadingY, 'ARCHETYPE', {
+        ...TEXT_STYLE,
+        fontSize: '18px',
+        fontStyle: 'bold',
+        color: '#f1c40f',
+      }),
+    );
+    content.add(
+      this.add.text(0, layout.archetypeSummaryY, formatArchetypeSelectionSummary(meta), {
+        ...TEXT_STYLE,
+        fontSize: '12px',
+        color: '#d8d2e4',
+        fixedWidth: layout.contentW - 22,
+        wordWrap: { width: layout.contentW - 22, useAdvancedWrap: true },
+        lineSpacing: 5,
+      }),
+    );
+
+    for (const [index, archetype] of ARCHETYPES.entries()) {
+      this.addArchetypeRow(
+        archetype.id,
+        layout.archetypeRowsStartY + index * layout.archetypeRowH,
+        content,
+        layout,
+      );
+    }
+
+    this.addClearArchetypeButton(content, layout);
+
+    const archetypeDivider = this.add.graphics();
+    archetypeDivider.lineStyle(1, 0x6f687c, 0.55);
+    archetypeDivider.lineBetween(
+      0,
+      layout.archetypeDividerY,
+      layout.contentW - 22,
+      layout.archetypeDividerY,
+    );
+    content.add(archetypeDivider);
 
     content.add(
       this.add.text(0, layout.starterHeadingY, 'STARTER VARIETY', {
@@ -301,6 +346,62 @@ export class ProgressionScene extends Phaser.Scene {
     );
   }
 
+  private addArchetypeRow(
+    archetypeId: ArchetypeId,
+    y: number,
+    container: Phaser.GameObjects.Container,
+    layout: ProgressionPanelLayout,
+  ): void {
+    const meta = getMeta();
+
+    const rowBg = this.add.graphics();
+    rowBg.fillStyle(0x0f0d15, 0.68);
+    rowBg.fillRect(0, y - 12, layout.contentW - 22, layout.archetypeRowH - 12);
+    rowBg.lineStyle(1, 0x3f394d, 0.55);
+    rowBg.strokeRect(0, y - 12, layout.contentW - 22, layout.archetypeRowH - 12);
+    container.add(rowBg);
+
+    container.add(
+      this.add.text(14, y, formatArchetypeProgressionLine(meta, archetypeId), {
+        ...TEXT_STYLE,
+        fontSize: '12px',
+        color: '#d8d2e4',
+        fixedWidth: layout.kitTextW,
+        wordWrap: { width: layout.kitTextW, useAdvancedWrap: true },
+        lineSpacing: 4,
+      }),
+    );
+
+    const active = meta.progression.activeArchetypeId === archetypeId;
+    this.addTextButton(
+      layout.kitButtonX,
+      y + 34,
+      active ? '[ ACTIVE ]' : '[ SELECT ]',
+      !active,
+      () => this.selectArchetype(archetypeId),
+      '14px',
+      container,
+      true,
+    );
+  }
+
+  private addClearArchetypeButton(
+    container: Phaser.GameObjects.Container,
+    layout: ProgressionPanelLayout,
+  ): void {
+    const active = getMeta().progression.activeArchetypeId != null;
+    this.addTextButton(
+      layout.contentW / 2 - 11,
+      layout.clearArchetypeButtonY,
+      active ? '[ NO ARCHETYPE NEXT RUN ]' : '[ NO ARCHETYPE SELECTED ]',
+      active,
+      () => this.selectArchetype(null),
+      '14px',
+      container,
+      true,
+    );
+  }
+
   private addClearKitButton(
     container: Phaser.GameObjects.Container,
     layout: ProgressionPanelLayout,
@@ -469,6 +570,21 @@ export class ProgressionScene extends Phaser.Scene {
   private selectStarterKit(kitId: StarterKitId | null): void {
     const meta = getMeta();
     const result = setActiveStarterKit(meta, kitId);
+    if (!result.ok) return;
+
+    const updated = setMeta({
+      ...meta,
+      embers: result.state.embers,
+      progression: result.state.progression,
+    });
+    this.game.events.emit('meta-update', updated);
+    playSfx(this, 'purchase');
+    this.redraw();
+  }
+
+  private selectArchetype(archetypeId: ArchetypeId | null): void {
+    const meta = getMeta();
+    const result = setActiveArchetype(meta, archetypeId);
     if (!result.ok) return;
 
     const updated = setMeta({

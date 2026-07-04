@@ -69,6 +69,7 @@ describe('meta state', () => {
         migrationBonusGranted: true,
         unlockedStarterKitIds: [],
         activeStarterKitId: null,
+        activeArchetypeId: null,
       },
       pendingPrep: {
         itemIds: [],
@@ -100,6 +101,7 @@ describe('meta state', () => {
         migrationBonusGranted: true,
         unlockedStarterKitIds: [],
         activeStarterKitId: null,
+        activeArchetypeId: null,
       },
       pendingPrep: {
         itemIds: ['small_potion'],
@@ -149,6 +151,7 @@ describe('meta state', () => {
       migrationBonusGranted: false,
       unlockedStarterKitIds: [],
       activeStarterKitId: null,
+      activeArchetypeId: null,
     });
   });
 
@@ -176,6 +179,7 @@ describe('meta state', () => {
       migrationBonusGranted: false,
       unlockedStarterKitIds: ['duelist', 'warden'],
       activeStarterKitId: null,
+      activeArchetypeId: null,
     });
   });
 
@@ -255,6 +259,7 @@ describe('meta state', () => {
         migrationBonusGranted: false,
         unlockedStarterKitIds: ['duelist'],
         activeStarterKitId: 'duelist',
+        activeArchetypeId: null,
       },
       pendingPrep: {
         itemIds: ['small_potion'],
@@ -300,6 +305,7 @@ describe('meta state', () => {
         migrationBonusGranted: false,
         unlockedStarterKitIds: ['warden'],
         activeStarterKitId: null,
+        activeArchetypeId: null,
       },
       pendingPrep: {
         itemIds: ['bomb'],
@@ -336,6 +342,7 @@ describe('meta state', () => {
         migrationBonusGranted: false,
         unlockedStarterKitIds: [],
         activeStarterKitId: null,
+        activeArchetypeId: null,
       },
       pendingPrep: {
         itemIds: ['bomb'],
@@ -354,6 +361,7 @@ describe('meta state', () => {
         migrationBonusGranted: false,
         unlockedStarterKitIds: [],
         activeStarterKitId: null,
+        activeArchetypeId: null,
       },
       pendingPrep: {
         itemIds: ['bomb'],

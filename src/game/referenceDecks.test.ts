@@ -116,3 +116,103 @@ describe('reference-deck anchor (competent, built decks)', () => {
     expect(defensive.winRate).toBeLessThan(lean.winRate);
   });
 });
+
+/**
+ * Archetype viability + honesty guard (player-archetypes feature). These are competently-BUILT
+ * archetype decks — each archetype's signature cards plus the neutral support a real archetype run
+ * also draws — run through the same competent policy.
+ *
+ * This is deliberately NOT the difficulty anchor (LEAN/SCALING above own that with their strict
+ * HP-band + 0.5 floor). Its job is narrower and specific to the new content:
+ *   1. FUNCTIONAL — every archetype reliably clears the easy fight, so no archetype opens dead.
+ *   2. HONEST — no archetype fabricates difficulty via a turn-cap stalemate; the anti-stalemate
+ *      racing rule must keep holding for the new cards (this is the load-bearing assertion).
+ *   3. WINNABLE — every archetype still wins the hard fights at a floor, so none is a trap pick.
+ *   4. NOT UNFAIR — HP cost on a win stays under the spike ceiling.
+ *
+ * The hard-fight floor is lower than neutral's 0.5 BY DESIGN: the sim's lethal/attack policy only
+ * reads DIRECT damage, so it under-pilots the DoT (Necromancer) and mark/multi-hit (Ranger) engines
+ * — a human sequencing plague-then-race or mark-then-nuke wins far more. The strength-based
+ * Barbarian, which the policy pilots well, lands near neutral win rates (spot-checked below).
+ * Reference decks are deterministic (fixed seeds), so these floors are stable tripwires, not flaky.
+ * Measured 2026-07-04 at 300 fights/cell.
+ */
+const ARCHETYPE_DECKS = {
+  Barbarian: [
+    'cleave',
+    'warpath',
+    'frenzy',
+    'rampage',
+    'bloodlust',
+    'empower',
+    'guard',
+    'iron_wall',
+    'heavy_strike',
+    'minor_heal',
+  ],
+  Necromancer: [
+    'blight',
+    'plague',
+    'siphon_life',
+    'soul_leech',
+    'poison_dagger',
+    'bash',
+    'thunder',
+    'heavy_strike',
+    'guard',
+    'minor_heal',
+  ],
+  Ranger: [
+    'mark_prey',
+    'volley',
+    'called_shot',
+    'rapid_fire',
+    'quickshot',
+    'thunder',
+    'heavy_strike',
+    'sunder',
+    'evasion',
+    'minor_heal',
+  ],
+} as const;
+
+const ARCHETYPE_HARD_FIGHT_FLOOR = 0.3; // min measured across archetypes is ~0.34 (Necromancer boss)
+
+describe('archetype reference decks (functional, honest, winnable)', () => {
+  for (const [name, deck] of Object.entries(ARCHETYPE_DECKS)) {
+    test(`${name}: clears the easy fight, never stalemates, and stays winnable on the hard fights`, () => {
+      const byLabel = Object.fromEntries(
+        FIGHTS.map((f) => [f.label, simulateReferenceDeck(deck, f.spawn, f.depth, 300)] as const),
+      );
+
+      expect(byLabel['medium@5'].winRate, `${name} clears medium@5`).toBeGreaterThanOrEqual(0.9);
+
+      for (const label of ['strong@8', 'elite@6', 'boss@10'] as const) {
+        const s = byLabel[label];
+        expect(s.winRate, `${name} ${label} winnable`).toBeGreaterThanOrEqual(
+          ARCHETYPE_HARD_FIGHT_FLOOR,
+        );
+        // The honesty teeth: the new cards must never loop a fight to the turn cap.
+        expect(s.cappedRate, `${name} ${label} no stalemate`).toBeLessThanOrEqual(0.05);
+        // Not unfairly spiky — a win never costs more than the whole pool would allow.
+        expect(s.avgHpLostOnWin, `${name} ${label} HP-cost ceiling`).toBeLessThanOrEqual(
+          HP_COST_MAX,
+        );
+      }
+    });
+  }
+
+  test('the strength-based Barbarian, which the policy pilots well, reaches near-neutral win rates', () => {
+    // Anchors the claim in the block comment: the lower hard-fight floor is a policy limitation for
+    // DoT/mark decks, not a sign archetypes are weak. A sim-friendly archetype clears the 0.5 bar.
+    for (const [depth, spawn] of [
+      [8, spawnEnemy],
+      [10, spawnBoss],
+    ] as const) {
+      const s = simulateReferenceDeck(ARCHETYPE_DECKS.Barbarian, spawn, depth, 300);
+      expect(s.winRate, `Barbarian @${depth} reaches the neutral floor`).toBeGreaterThanOrEqual(
+        0.5,
+      );
+    }
+  });
+});

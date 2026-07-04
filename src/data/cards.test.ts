@@ -4,9 +4,11 @@ import {
   Card,
   CardDef,
   CardEffect,
+  cardPoolForArchetype,
   makeCard,
   randomCard,
   randomCardOfTier,
+  type ArchetypeId,
 } from './cards';
 import { SequenceRng } from '../game/test-rng';
 import { createIntentState, IntentPattern, telegraphIntent } from '../game/intentPatterns';
@@ -47,6 +49,49 @@ describe('randomCard deep-stratum tier weights', () => {
     const b = randomCard(new SequenceRng([0.42, 0.3]), 33);
     expect(a.tier).toBe(b.tier);
     expect(a.id).toBe(b.id);
+  });
+});
+
+describe('archetype card pools', () => {
+  const ARCHETYPES: ArchetypeId[] = ['barbarian', 'necromancer', 'ranger'];
+
+  test('the neutral pool (null) excludes every archetype-tagged card', () => {
+    const pool = cardPoolForArchetype(null);
+    expect(pool.every((card) => !card.archetype)).toBe(true);
+    // Also excludes starter-kit signatures, matching the pre-archetype standard pool.
+    expect(pool.every((card) => !card.starterKitOnly)).toBe(true);
+  });
+
+  test('an archetype pool adds ONLY that archetype’s cards to the neutral pool', () => {
+    for (const archetype of ARCHETYPES) {
+      const pool = cardPoolForArchetype(archetype);
+      const own = CARD_DEFS.filter((card) => card.archetype === archetype);
+      expect(own.length).toBeGreaterThan(0);
+      // Every one of this archetype's cards is present...
+      for (const card of own) expect(pool).toContain(card);
+      // ...and no OTHER archetype's cards leak in.
+      expect(pool.some((card) => card.archetype && card.archetype !== archetype)).toBe(false);
+    }
+  });
+
+  test('random draws stay neutral without an archetype and can surface archetype cards with one', () => {
+    const archetypeIds = new Set(
+      CARD_DEFS.filter((card) => card.archetype === 'barbarian').map((card) => card.id),
+    );
+    // Neutral draws never surface an archetype card, at any depth.
+    for (let seed = 0; seed < 200; seed++) {
+      const roll = (seed % 20) / 20;
+      const card = randomCard(new SequenceRng([roll, roll]), 7);
+      expect(card.archetype).toBeUndefined();
+    }
+    // A barbarian draw CAN surface a barbarian card (sweep the within-tier pick).
+    let sawBarbarian = false;
+    for (let i = 0; i < 40 && !sawBarbarian; i++) {
+      const pick = i / 40;
+      const card = randomCard(new SequenceRng([0.5, pick]), 7, 'barbarian');
+      if (archetypeIds.has(card.id)) sawBarbarian = true;
+    }
+    expect(sawBarbarian).toBe(true);
   });
 });
 

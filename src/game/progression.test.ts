@@ -2,8 +2,11 @@ import { describe, expect, test } from 'vitest';
 import {
   buyStarterCardVarietyUnlock,
   buyStarterKitUnlock,
+  formatArchetypeProgressionLine,
+  formatArchetypeSelectionSummary,
   formatStarterCardProgressionSummary,
   formatStarterKitProgressionLine,
+  setActiveArchetype,
   setActiveStarterKit,
   type ProgressionState,
 } from './progression';
@@ -247,5 +250,51 @@ describe('starter card progression', () => {
       reason: 'Unknown starter kit.',
       state,
     });
+  });
+});
+
+describe('archetype selection', () => {
+  const base = (): ProgressionState => ({
+    embers: 5,
+    progression: {
+      starterCardVarietyUnlocked: false,
+      migrationBonusGranted: false,
+      unlockedStarterKitIds: [],
+      activeStarterKitId: null,
+      activeArchetypeId: null,
+    },
+  });
+
+  test('selects an archetype for free (no ember cost, no unlock gate)', () => {
+    const result = setActiveArchetype(base(), 'barbarian');
+    expect(result.ok).toBe(true);
+    expect(result.state.embers).toBe(5);
+    expect(result.state.progression.activeArchetypeId).toBe('barbarian');
+  });
+
+  test('clears back to the neutral pool with null', () => {
+    const active = base();
+    active.progression.activeArchetypeId = 'ranger';
+    const result = setActiveArchetype(active, null);
+    expect(result.ok).toBe(true);
+    expect(result.state.progression.activeArchetypeId).toBeNull();
+  });
+
+  test('rejects an unknown archetype and leaves state untouched', () => {
+    const state = base();
+    expect(setActiveArchetype(state, 'necrolord' as never)).toEqual({
+      ok: false,
+      reason: 'Unknown archetype.',
+      state,
+    });
+  });
+
+  test('summaries reflect the active archetype', () => {
+    expect(formatArchetypeSelectionSummary(base())).toContain('Archetype: none');
+    const active = base();
+    active.progression.activeArchetypeId = 'necromancer';
+    expect(formatArchetypeSelectionSummary(active)).toContain('Necromancer');
+    expect(formatArchetypeProgressionLine(active, 'necromancer')).toContain('active');
+    expect(formatArchetypeProgressionLine(active, 'barbarian')).toContain('Opens with');
   });
 });

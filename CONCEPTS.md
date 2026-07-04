@@ -176,6 +176,24 @@ A durable Ember unlock that can add one selected signature card to a normal run.
 Only one Starter Kit can be active for the next normal descent, and Daily
 Descents ignore Starter Kits.
 
+### Archetype
+
+A player class — Barbarian, Necromancer, or Ranger — selected for free on the
+Progression screen. Selecting one reshapes the whole run's card identity rather
+than adding a single card: the opening picks come from that archetype's pick
+pool, and every card reward/chest draw is rolled from the archetype's cards
+**plus** the shared neutral pool. With no archetype selected the pool is neutral
+only — the standard cards and nothing else. Archetype cards carry an `archetype`
+tag and never appear in a neutral (or enemy) draw, so the neutral game — and its
+determinism golden — is unchanged. The fixed starting deck body (2 Strike, 2
+Guard) stays neutral across archetypes so the picks can be fully thematic without
+leaving a deck defensively broken. Barbarian scales Strength and swings big;
+Necromancer stacks poison/burn damage-over-time and life-drain sustain; Ranger
+marks prey Vulnerable and sprays multi-hit volleys with card draw. Daily Descents
+ignore Archetype selection so attempts stay comparable. Only one archetype is
+active for the next normal descent; the selection persists like Starter Kit
+choice.
+
 ## Endless Descent
 
 ### Stratum

@@ -42,6 +42,7 @@ export function applyPendingPrepToRun(
     : DEFAULT_STARTING_CARD_PICKS;
   run.startingCardsTaken = 0;
   run.starterKitId = starterKit?.id ?? null;
+  run.archetypeId = progression?.activeArchetypeId ?? null;
   run.scoutCharges = pendingPrep.scoutFlame ? 1 : 0;
   run.curseIds = [...curseIds];
 

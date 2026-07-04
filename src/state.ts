@@ -1,5 +1,5 @@
 import { MAX_ARMOR, MAX_INVENTORY, PLAYER_MAX_HP } from './config';
-import { Card } from './data/cards';
+import { Card, type ArchetypeId } from './data/cards';
 import type { CampfireCurseId } from './data/campfireBargains';
 import { InventoryItem, makeItem } from './data/items';
 import { RelicId, Relic } from './data/relics';
@@ -30,6 +30,8 @@ export class RunState {
   startingCardPicks = DEFAULT_STARTING_CARD_PICKS;
   startingCardsTaken = 0;
   starterKitId: StarterKitId | null = null;
+  /** The active archetype for this run (null = neutral pool). Drives starting picks and reward draws. */
+  archetypeId: ArchetypeId | null = null;
   scoutCharges = 0;
   curseIds: CampfireCurseId[] = [];
   bossDefeated = false;
