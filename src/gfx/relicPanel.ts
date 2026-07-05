@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import type { Relic } from '../data/relics';
+import { createPanel } from './panel';
+import { FONT_FAMILY, TEXT_COLOR, bodyStyle } from './theme';
 
 /**
  * In-run relic inspector — lists owned relics with full descriptions.
@@ -15,33 +17,15 @@ export function createRelicPanel(
 ): Phaser.GameObjects.Container {
   const width = 420;
   const height = 348;
-  const panel = scene.add.container(x, y).setDepth(300);
-
-  const bg = scene.add.graphics();
-  bg.fillStyle(0x111019, 0.96);
-  bg.fillRoundedRect(-width / 2, -height / 2, width, height, 8);
-  bg.lineStyle(2, 0xcab98a, 0.85);
-  bg.strokeRoundedRect(-width / 2, -height / 2, width, height, 8);
-  panel.add(bg);
-
-  panel.add(
-    scene.add
-      .text(0, -height / 2 + 28, title, {
-        fontFamily: 'monospace',
-        fontSize: '24px',
-        fontStyle: 'bold',
-        color: '#f1c40f',
-      })
-      .setOrigin(0.5),
-  );
+  const panel = createPanel(scene, x, y, { width, height, title });
 
   if (relics.length === 0) {
     panel.add(
       scene.add
         .text(0, -10, 'No relics yet.\nFind them in chests, elite fights, and boss rooms.', {
-          fontFamily: 'monospace',
+          fontFamily: FONT_FAMILY,
           fontSize: '12px',
-          color: '#b8b0c8',
+          color: TEXT_COLOR.muted,
           align: 'center',
           lineSpacing: 6,
         })
@@ -55,9 +39,9 @@ export function createRelicPanel(
           -height / 2 + 58,
           `${relics.length} relic${relics.length === 1 ? '' : 's'} — passive bonuses for this run.`,
           {
-            fontFamily: 'monospace',
+            fontFamily: FONT_FAMILY,
             fontSize: '10px',
-            color: '#b8b0c8',
+            color: TEXT_COLOR.muted,
             align: 'center',
           },
         )
@@ -73,31 +57,28 @@ export function createRelicPanel(
       panel.add(chip);
       panel.add(
         scene.add.text(-width / 2 + 40, rowY - 8, relic.name, {
-          fontFamily: 'monospace',
+          fontFamily: FONT_FAMILY,
           fontSize: '12px',
           fontStyle: 'bold',
-          color: '#f5edd8',
+          color: TEXT_COLOR.primary,
         }),
       );
       const desc =
         relic.description.length > 52 ? `${relic.description.slice(0, 51)}…` : relic.description;
       panel.add(
-        scene.add.text(-width / 2 + 40, rowY + 8, desc, {
-          fontFamily: 'monospace',
-          fontSize: '10px',
-          color: '#b8b0c8',
-        }),
+        scene.add.text(-width / 2 + 40, rowY + 8, desc, bodyStyle('10px', TEXT_COLOR.muted)),
       );
     }
 
     if (relics.length > visible.length) {
       panel.add(
         scene.add
-          .text(0, height / 2 - 38, `+${relics.length - visible.length} more relics`, {
-            fontFamily: 'monospace',
-            fontSize: '11px',
-            color: '#6a6478',
-          })
+          .text(
+            0,
+            height / 2 - 38,
+            `+${relics.length - visible.length} more relics`,
+            bodyStyle('11px', TEXT_COLOR.faint),
+          )
           .setOrigin(0.5),
       );
     }
@@ -105,11 +86,7 @@ export function createRelicPanel(
 
   panel.add(
     scene.add
-      .text(0, height / 2 - 18, closeHint, {
-        fontFamily: 'monospace',
-        fontSize: '12px',
-        color: '#b8b0c8',
-      })
+      .text(0, height / 2 - 18, closeHint, bodyStyle('12px', TEXT_COLOR.muted))
       .setOrigin(0.5),
   );
 
