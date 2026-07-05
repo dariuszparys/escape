@@ -8,7 +8,7 @@ import { getMeta, setMeta } from '../meta';
 import { getRun } from '../state';
 import { formatRelicSummary, relicDef } from '../data/relics';
 import { applyContractCompletions, evaluateNewContracts } from '../game/contracts';
-import { contractDef } from '../data/contracts';
+import { CONTRACT_DEFS, contractDef } from '../data/contracts';
 import { shouldResolveProgressionRewards } from '../game/runCompletion';
 
 export class EndScene extends Phaser.Scene {
@@ -75,6 +75,8 @@ export class EndScene extends Phaser.Scene {
       depth: run.depth,
       relicCount: run.relics.length,
       elitesDefeated: run.elitesDefeated,
+      enemiesDefeated: run.enemiesDefeated,
+      stratum: run.stratum,
     });
     if (completions.length === 0) return [];
     setMeta(applyContractCompletions(meta, completions));
@@ -100,6 +102,8 @@ export class EndScene extends Phaser.Scene {
             )
             .join('\n')
         : '';
+    const completedContractCount = getMeta().progression.completedContractIds?.length ?? 0;
+    const contractProgressLine = `Contracts: ${completedContractCount}/${CONTRACT_DEFS.length} complete`;
     const relicLine =
       run.relics.length > 0
         ? `Relics collected:\n${formatRelicSummary(run.relics)}`
@@ -141,6 +145,7 @@ export class EndScene extends Phaser.Scene {
             `Escaped with ${run.hp}/${run.maxHp} HP and ${run.cardCollection.length} cards.`,
             emberLine,
             contractLine,
+            contractProgressLine,
             relicLine,
           ]
             .filter(Boolean)
@@ -173,6 +178,7 @@ export class EndScene extends Phaser.Scene {
             `The dungeon claims another soul in room ${run.depth}.`,
             emberLine,
             contractLine,
+            contractProgressLine,
             relicLine,
           ]
             .filter(Boolean)
