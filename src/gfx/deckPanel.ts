@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { Card } from '../data/cards';
 import { cardCost } from '../game/turnEngine';
+import { createPanel } from './panel';
+import { FONT_FAMILY, TEXT_COLOR, bodyStyle } from './theme';
 
 function cardTypeTag(card: Card): string {
   return card.type === 'attack'
@@ -31,25 +33,7 @@ export function createDeckPanel(
   );
   const width = 420;
   const height = 348;
-  const panel = scene.add.container(x, y).setDepth(300);
-
-  const bg = scene.add.graphics();
-  bg.fillStyle(0x111019, 0.96);
-  bg.fillRoundedRect(-width / 2, -height / 2, width, height, 8);
-  bg.lineStyle(2, 0xcab98a, 0.85);
-  bg.strokeRoundedRect(-width / 2, -height / 2, width, height, 8);
-  panel.add(bg);
-
-  panel.add(
-    scene.add
-      .text(0, -height / 2 + 28, title, {
-        fontFamily: 'monospace',
-        fontSize: '24px',
-        fontStyle: 'bold',
-        color: '#f1c40f',
-      })
-      .setOrigin(0.5),
-  );
+  const panel = createPanel(scene, x, y, { width, height, title });
 
   panel.add(
     scene.add
@@ -58,9 +42,9 @@ export function createDeckPanel(
         -height / 2 + 58,
         `${entries.length} cards — your whole collection is your battle deck.`,
         {
-          fontFamily: 'monospace',
+          fontFamily: FONT_FAMILY,
           fontSize: '10px',
-          color: '#b8b0c8',
+          color: TEXT_COLOR.muted,
           align: 'center',
         },
       )
@@ -76,11 +60,7 @@ export function createDeckPanel(
         -width / 2 + 22,
         rowY,
         `${String(index + 1).padStart(2, ' ')}. ${name} ${cardTypeTag(card)}  ${cardCost(card)}⚡ T${card.tier}`,
-        {
-          fontFamily: 'monospace',
-          fontSize: '11px',
-          color: '#f5edd8',
-        },
+        bodyStyle('11px', TEXT_COLOR.primary),
       ),
     );
   }
@@ -88,22 +68,19 @@ export function createDeckPanel(
   if (entries.length > visibleEntries.length) {
     panel.add(
       scene.add
-        .text(0, height / 2 - 38, `+${entries.length - visibleEntries.length} more cards`, {
-          fontFamily: 'monospace',
-          fontSize: '11px',
-          color: '#6a6478',
-        })
+        .text(
+          0,
+          height / 2 - 38,
+          `+${entries.length - visibleEntries.length} more cards`,
+          bodyStyle('11px', TEXT_COLOR.faint),
+        )
         .setOrigin(0.5),
     );
   }
 
   panel.add(
     scene.add
-      .text(0, height / 2 - 18, '[C] close', {
-        fontFamily: 'monospace',
-        fontSize: '12px',
-        color: '#b8b0c8',
-      })
+      .text(0, height / 2 - 18, '[C] close', bodyStyle('12px', TEXT_COLOR.muted))
       .setOrigin(0.5),
   );
 
