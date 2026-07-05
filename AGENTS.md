@@ -20,6 +20,7 @@ hosts the game container. `dist/` is build output and should not be edited by ha
 - `npm install`: install dependencies from `package-lock.json`.
 - `npm run dev`: start the Vite development server, usually at `http://localhost:5173`.
 - `npm run build`: run `tsc --noEmit` and produce the static bundle in `dist/`.
+- `npm run typecheck`: fast type-only gate (`tsc --noEmit`) without building the bundle.
 - `npm run preview`: serve the production build locally for a final smoke test.
 
 Run commands from the repository root.
