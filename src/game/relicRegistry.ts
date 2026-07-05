@@ -40,7 +40,7 @@ export function relicBattleSetup(relicIds: readonly RelicId[]): RelicBattleSetup
         break;
       default: {
         const _exhaustive: never = id;
-        throw new Error(`Unhandled relic battle setup: ${_exhaustive}`);
+        throw new Error(`Unhandled relic battle setup: ${String(_exhaustive)}`);
       }
     }
   }

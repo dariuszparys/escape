@@ -86,7 +86,7 @@ export function evaluateContract(id: ContractId, run: ContractRunSnapshot): bool
       return run.stratum >= 2;
     default: {
       const _exhaustive: never = id;
-      throw new Error(`Unhandled contract: ${_exhaustive}`);
+      throw new Error(`Unhandled contract: ${String(_exhaustive)}`);
     }
   }
 }

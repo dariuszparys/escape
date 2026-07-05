@@ -1724,7 +1724,8 @@ export class TurnBattleScene extends Phaser.Scene {
       panel.setSize(190, 170);
       panel.setInteractive(
         new Phaser.Geom.Rectangle(-95, -70, 190, 170),
-        Phaser.Geom.Rectangle.Contains,
+        (hitArea: Phaser.Geom.Rectangle, x: number, y: number) =>
+          Phaser.Geom.Rectangle.Contains(hitArea, x, y),
       );
       panel.on('pointerdown', () => {
         const run = getRun();

@@ -135,7 +135,7 @@ export class CampfireScene extends Phaser.Scene {
     });
   }
 
-  private redraw(): void {
+  private redraw = (): void => {
     this.dynamic.removeAll(true);
     const meta = getMeta();
     const dailyRecord = loadDailyRecord();
@@ -228,7 +228,7 @@ export class CampfireScene extends Phaser.Scene {
     this.addActionButton(142, '[ PROGRESSION ]', () => this.scene.start('Progression'));
     this.addActionButton(378, '[ DESCEND ]', () => this.startRun());
     this.addActionButton(596, '[ DAILY DESCENT ]', () => this.startDailyRun());
-  }
+  };
 
   private addActionButton(x: number, label: string, onPointerDown: () => void): void {
     const button = this.add

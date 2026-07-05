@@ -81,9 +81,9 @@ describe('contracts', () => {
     });
     expect(completion).toBeDefined();
 
-    const updated = applyContractCompletions(meta, [completion!, completion!]);
+    const updated = applyContractCompletions(meta, [completion, completion]);
 
-    expect(updated.embers).toBe(meta.embers + completion!.emberReward);
+    expect(updated.embers).toBe(meta.embers + completion.emberReward);
     expect(updated.progression.completedContractIds?.length).toBe(
       (meta.progression.completedContractIds?.length ?? 0) + 1,
     );

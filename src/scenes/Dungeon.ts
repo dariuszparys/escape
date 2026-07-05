@@ -617,7 +617,7 @@ export class DungeonScene extends Phaser.Scene {
       }
       default: {
         const _exhaustive: never = room.event;
-        throw new Error(`buildRoom: unhandled room event ${_exhaustive}`);
+        throw new Error(`buildRoom: unhandled room event ${String(_exhaustive)}`);
       }
     }
 
