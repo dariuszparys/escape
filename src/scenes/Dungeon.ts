@@ -9,7 +9,6 @@ import {
   ROOM_ROWS,
   ROOM_W,
   TILE,
-  TRAP_DAMAGE,
   VISION_RADIUS,
 } from '../config';
 import { Card, makeCard, CARD_DEFS } from '../data/cards';
@@ -43,7 +42,8 @@ import {
   type RestActionMode,
 } from '../game/restEconomy';
 import { commitDelve, resolveBank } from '../game/delve';
-import { calculateEmberReward } from '../game/metaRewards';
+import { gateSummary } from '../game/gateSummary';
+import { applyTrapDamage } from '../game/hazards';
 import { applyPoisonedRoomEntryDamage } from '../game/scenarioRules';
 import { stratumForDepth } from '../game/strata';
 import { getRun } from '../state';
@@ -1168,14 +1168,14 @@ export class DungeonScene extends Phaser.Scene {
       for (const rect of this.built.spikeRects) {
         if (!rect.contains(px, py + 12)) continue;
         this.invulnUntil = time + 900;
-        run.hp -= TRAP_DAMAGE;
-        this.floatText(px, py - 50, `-${TRAP_DAMAGE}`, '#ff5544');
+        const trap = applyTrapDamage(run);
+        this.floatText(px, py - 50, `-${trap.amount}`, '#ff5544');
         this.cameras.main.shake(150, 0.008);
         this.player.setTint(0xff5544);
         this.time.delayedCall(250, () => this.player.clearTint());
         this.hud();
         playSfx(this, 'trap');
-        if (run.hp <= 0) {
+        if (trap.died) {
           this.scene.stop('Hud');
           this.scene.start('End', { victory: false });
           return;
@@ -1500,19 +1500,7 @@ export class DungeonScene extends Phaser.Scene {
     this.player.setVelocity(0, 0);
     this.player.anims.stop();
 
-    const stratum = stratumForDepth(run.depth);
-    const reward = calculateEmberReward({
-      depth: run.depth,
-      enemiesDefeated: run.enemiesDefeated,
-      gold: run.gold,
-      escaped: true,
-      convertGold: !run.isDaily,
-    });
-    const bankLine = run.isDaily
-      ? `Bank: end the delve at depth ${run.depth} (no Ember conversion in Daily)`
-      : `Bank: convert ${run.gold} Gold → ${reward.convertedEmbers} Ember${
-          reward.convertedEmbers === 1 ? '' : 's'
-        } (+${reward.escapeEmbers} escape)`;
+    const { stratum, bankLine } = gateSummary(run);
 
     const cx = this.origin.x + ROOM_W / 2;
     const cy = this.origin.y + ROOM_H / 2;
