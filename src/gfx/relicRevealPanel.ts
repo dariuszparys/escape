@@ -19,7 +19,8 @@ export function createRelicRevealPanel(
   dim.fillRect(-GAME_W, -GAME_H, GAME_W * 2, GAME_H * 2);
   dim.setInteractive(
     new Phaser.Geom.Rectangle(-GAME_W, -GAME_H, GAME_W * 2, GAME_H * 2),
-    Phaser.Geom.Rectangle.Contains,
+    (hitArea: Phaser.Geom.Rectangle, x: number, y: number) =>
+      Phaser.Geom.Rectangle.Contains(hitArea, x, y),
   );
   dim.on('pointerdown', onDismiss);
   panel.add(dim);

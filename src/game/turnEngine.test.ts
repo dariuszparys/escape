@@ -327,7 +327,7 @@ describe('draw and reshuffle (R23)', () => {
     expect(result.state.drawPile).toHaveLength(1);
     expect(result.state.discardPile).toHaveLength(0);
     // Counts stay truthful throughout the sequence (R4).
-    const last = drawn[drawn.length - 1] as Extract<CombatEvent, { type: 'cardDrawn' }>;
+    const last = drawn[drawn.length - 1];
     expect(last.handCount).toBe(5);
     expect(last.drawCount).toBe(1);
     expect(last.discardCount).toBe(0);
@@ -695,7 +695,7 @@ describe('full-deck cycling (R1/R3)', () => {
   });
 
   test('shuffleCurse (U5 hexer plumbing) inserts a card into the Draw Pile via the engine hook', () => {
-    const hex = card('Curse Weaving', [{ kind: 'shuffleCurse', amount: 1 } as CardEffect], 1);
+    const hex = card('Curse Weaving', [{ kind: 'shuffleCurse', amount: 1 }], 1);
     const state = makeState({
       hand: [hex],
       drawPile: [strike(), strike(), strike()],

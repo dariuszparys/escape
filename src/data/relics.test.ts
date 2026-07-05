@@ -18,7 +18,7 @@ function makePredictableRng(index: number): GameRng {
       return 0;
     },
     pick<T>(items: readonly T[]): T {
-      return items[Math.min(index, items.length - 1)]!;
+      return items[Math.min(index, items.length - 1)];
     },
   };
 }

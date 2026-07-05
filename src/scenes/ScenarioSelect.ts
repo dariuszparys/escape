@@ -209,17 +209,17 @@ export class ScenarioSelectScene extends Phaser.Scene {
     this.dynamic.add(button);
   }
 
-  private selectPrevious(): void {
+  private selectPrevious = (): void => {
     const current = SCENARIOS.findIndex((scenario) => scenario.id === this.selectedId);
     this.selectedId = SCENARIOS[Math.max(0, current - 1)].id;
     this.redraw();
-  }
+  };
 
-  private selectNext(): void {
+  private selectNext = (): void => {
     const current = SCENARIOS.findIndex((scenario) => scenario.id === this.selectedId);
     this.selectedId = SCENARIOS[Math.min(SCENARIOS.length - 1, current + 1)].id;
     this.redraw();
-  }
+  };
 
   private confirmScenario(): void {
     const seed = new URLSearchParams(window.location.search).get('seed') ?? String(Math.random());

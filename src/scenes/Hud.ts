@@ -48,7 +48,7 @@ export class HudScene extends Phaser.Scene {
     this.relicTooltip = createRelicTooltip(this, relic, anchorX, anchorY - 8);
   }
 
-  private redraw(): void {
+  private redraw = (): void => {
     this.hideRelicTooltip();
     this.dynamic.removeAll(true);
     const run = getRun();
@@ -208,7 +208,8 @@ export class HudScene extends Phaser.Scene {
         chip.setSize(28, 16);
         chip.setInteractive(
           new Phaser.Geom.Rectangle(0, 0, 28, 16),
-          Phaser.Geom.Rectangle.Contains,
+          (hitArea: Phaser.Geom.Rectangle, x: number, y: number) =>
+            Phaser.Geom.Rectangle.Contains(hitArea, x, y),
         );
         chip.on('pointerover', () => this.showRelicTooltip(relic, chipX, chipY));
         chip.on('pointerout', () => this.hideRelicTooltip());
@@ -237,5 +238,5 @@ export class HudScene extends Phaser.Scene {
         })
         .setOrigin(1, 0.5),
     );
-  }
+  };
 }

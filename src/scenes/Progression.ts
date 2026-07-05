@@ -83,7 +83,7 @@ export class ProgressionScene extends Phaser.Scene {
     bg.fillRect(0, 548, GAME_W, GAME_H - 548);
   }
 
-  private redraw(): void {
+  private redraw = (): void => {
     this.dynamic.removeAll(true);
     this.scrollContent = undefined;
     this.scrollbar = undefined;
@@ -233,7 +233,7 @@ export class ProgressionScene extends Phaser.Scene {
     this.addClearRelicButton(content, layout);
 
     this.addScrollbar(layout);
-  }
+  };
 
   private addBackButton(): void {
     const button = this.add
@@ -524,31 +524,31 @@ export class ProgressionScene extends Phaser.Scene {
     );
   }
 
-  private handleWheel(
+  private handleWheel = (
     pointer: Phaser.Input.Pointer,
     _currentlyOver: Phaser.GameObjects.GameObject[],
     _deltaX: number,
     deltaY: number,
-  ): void {
+  ): void => {
     if (!this.isPointInsidePanel(pointer.x, pointer.y)) return;
     this.scrollBy(deltaY > 0 ? 46 : -46);
-  }
+  };
 
-  private handlePointerMove(pointer: Phaser.Input.Pointer): void {
+  private handlePointerMove = (pointer: Phaser.Input.Pointer): void => {
     if (!this.draggingScrollbar) return;
     this.scrollToScrollbarPointer(pointer.y);
-  }
+  };
 
-  private stopScrollbarDrag(): void {
+  private stopScrollbarDrag = (): void => {
     this.draggingScrollbar = false;
-  }
+  };
 
-  private handleKeyDown(event: KeyboardEvent): void {
+  private handleKeyDown = (event: KeyboardEvent): void => {
     if (event.key === 'ArrowUp') this.scrollBy(-40);
     if (event.key === 'ArrowDown') this.scrollBy(40);
     if (event.key === 'PageUp') this.scrollBy(-180);
     if (event.key === 'PageDown') this.scrollBy(180);
-  }
+  };
 
   private scrollBy(delta: number): void {
     if (!this.layout || !this.scrollContent) return;
