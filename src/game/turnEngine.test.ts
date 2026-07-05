@@ -80,6 +80,7 @@ function makeState(partial: Partial<TurnBattleState>, pattern = attackPattern())
     retainBlockCap: 0,
     poisonBonus: 0,
     enemyKillDraw: 0,
+    preventPlayerBlock: false,
     ...partial,
   };
 }
@@ -90,6 +91,7 @@ function baseConfig(
     player?: TurnEngineConfig['player'];
     enemy?: { id: string; name: string; hp: number; maxHp: number; armor: number };
     pattern?: IntentPattern;
+    preventPlayerBlock?: boolean;
   } = {},
 ): TurnEngineConfig {
   const enemy = overrides.enemy ?? { id: 'foe', name: 'Foe', hp: 20, maxHp: 20, armor: 0 };
@@ -97,6 +99,7 @@ function baseConfig(
     deck: overrides.deck ?? Array.from({ length: 10 }, () => strike()),
     player: overrides.player ?? { hp: 30, maxHp: 30, armor: 0 },
     enemies: [{ ...enemy, pattern: overrides.pattern ?? attackPattern() }],
+    preventPlayerBlock: overrides.preventPlayerBlock,
   };
 }
 
@@ -631,6 +634,27 @@ describe('items are free actions (R16)', () => {
     const state = makeState({});
     const result = useItem(state, makeItem('iron_armor'), new SequenceRng());
     expect(result.state.player.block).toBe(5);
+  });
+
+  test('preventPlayerBlock makes player block cards and shield items grant zero block', () => {
+    const state = makeState({ hand: [guard()], preventPlayerBlock: true });
+    const guarded = playCard(state, state.hand[0].uid, new SequenceRng());
+    expect(guarded.state.player.block).toBe(0);
+    expect(eventOf(guarded.events, 'blockGained').amount).toBe(0);
+
+    const armored = useItem(guarded.state, makeItem('iron_armor'), new SequenceRng());
+    expect(armored.state.player.block).toBe(0);
+    expect(eventOf(armored.events, 'blockGained').amount).toBe(0);
+  });
+
+  test('preventPlayerBlock does not stop enemy block intents', () => {
+    const result = createBattle(
+      baseConfig({ pattern: blockPattern(), preventPlayerBlock: true }),
+      new SequenceRng(),
+    );
+
+    expect(result.state.enemies[0].block).toBe(4);
+    expect(eventOf(result.events, 'blockGained').targetId).toBe('foe');
   });
 
   test('a smoke bomb voids the telegraph and the beat fizzles', () => {

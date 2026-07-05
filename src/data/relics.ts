@@ -179,9 +179,12 @@ export function randomRelic(
   rng: GameRng,
   ownedIds: ReadonlySet<RelicId>,
   poolIds: ReadonlySet<RelicId>,
+  predicate: (relic: RelicDef) => boolean = () => true,
 ): Relic | null {
   if (ownedIds.size >= MAX_RELICS_PER_RUN) return null;
-  const available = RELIC_DEFS.filter((relic) => poolIds.has(relic.id) && !ownedIds.has(relic.id));
+  const available = RELIC_DEFS.filter(
+    (relic) => poolIds.has(relic.id) && !ownedIds.has(relic.id) && predicate(relic),
+  );
   if (available.length === 0) return null;
   return makeRelic(rng.pick(available).id);
 }
@@ -192,9 +195,12 @@ export function rollRelicOffers(
   ownedIds: ReadonlySet<RelicId>,
   poolIds: ReadonlySet<RelicId>,
   count = 3,
+  predicate: (relic: RelicDef) => boolean = () => true,
 ): Relic[] {
   if (ownedIds.size >= MAX_RELICS_PER_RUN) return [];
-  const available = RELIC_DEFS.filter((relic) => poolIds.has(relic.id) && !ownedIds.has(relic.id));
+  const available = RELIC_DEFS.filter(
+    (relic) => poolIds.has(relic.id) && !ownedIds.has(relic.id) && predicate(relic),
+  );
   const offers: Relic[] = [];
   const remaining = [...available];
   for (let i = 0; i < count && remaining.length > 0; i++) {

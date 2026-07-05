@@ -7,6 +7,7 @@ import { BootScene } from './scenes/Boot';
 import { TitleScene } from './scenes/Title';
 import { CampfireScene } from './scenes/Campfire';
 import { ProgressionScene } from './scenes/Progression';
+import { ScenarioSelectScene } from './scenes/ScenarioSelect';
 import { DungeonScene } from './scenes/Dungeon';
 import { TurnBattleScene } from './scenes/TurnBattle';
 import { HudScene } from './scenes/Hud';
@@ -35,6 +36,7 @@ const game = new Phaser.Game({
     TitleScene,
     CampfireScene,
     ProgressionScene,
+    ScenarioSelectScene,
     DungeonScene,
     TurnBattleScene,
     HudScene,

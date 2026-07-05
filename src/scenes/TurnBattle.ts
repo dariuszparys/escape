@@ -17,6 +17,7 @@ import { PresentationQueue, PresentationStep } from '../game/presentationQueue';
 import { ensureRelicBehaviorsWired } from '../game/relicBehaviors';
 import { relicBattleSetup, relicGoldBonusLabel } from '../game/relicRegistry';
 import { previewRewardImpact } from '../game/rewardImpact';
+import { isScenarioAllowedRelic, shouldPreventPlayerBlock } from '../game/scenarioRules';
 import {
   awardEliteBonusGold,
   awardEnemyGold,
@@ -387,6 +388,7 @@ export class TurnBattleScene extends Phaser.Scene {
         retainBlockCap: setup.retainBlockCap,
         poisonBonus: setup.poisonBonus,
         enemyKillDraw: setup.enemyKillDraw,
+        preventPlayerBlock: run ? shouldPreventPlayerBlock(run.scenarioId) : false,
       },
       this.rng,
     );
@@ -1638,7 +1640,9 @@ export class TurnBattleScene extends Phaser.Scene {
     const totalGold = gold + eliteBonus + relicEliteGold;
 
     if (this.encounterKind === 'boss' && !run.atRelicCap) {
-      const bossRelic = randomRelic(this.rng, new Set(run.relicIds), run.relicPool);
+      const bossRelic = randomRelic(this.rng, new Set(run.relicIds), run.relicPool, (candidate) =>
+        isScenarioAllowedRelic(candidate, run.scenarioId),
+      );
       if (bossRelic && run.addRelic(bossRelic)) {
         this.combatPop(this.heroSprite, `Boss relic: ${bossRelic.name}`, '#f1c40f');
       }
@@ -1646,7 +1650,9 @@ export class TurnBattleScene extends Phaser.Scene {
 
     const relicOffers =
       this.encounterKind === 'elite' && !run.atRelicCap
-        ? rollRelicOffers(this.rng, new Set(run.relicIds), run.relicPool, 3)
+        ? rollRelicOffers(this.rng, new Set(run.relicIds), run.relicPool, 3, (candidate) =>
+            isScenarioAllowedRelic(candidate, run.scenarioId),
+          )
         : [];
     if (relicOffers.length > 0) {
       this.showRelicVictoryOverlay(relicOffers, totalGold, luckyLabel);
@@ -1780,8 +1786,16 @@ export class TurnBattleScene extends Phaser.Scene {
             ELITE_CARD_OFFER_COUNT,
             ELITE_TIER_BIAS_DEPTH,
             run.archetypeId,
+            run.scenarioId,
           )
-        : rollVictoryCardOffers(this.rng, run.depth, undefined, undefined, run.archetypeId);
+        : rollVictoryCardOffers(
+            this.rng,
+            run.depth,
+            undefined,
+            undefined,
+            run.archetypeId,
+            run.scenarioId,
+          );
     const spacing = Math.min(CARD_W + 24, (GAME_W - 80) / Math.max(offers.length, 1));
     const startX = GAME_W / 2 - ((offers.length - 1) * spacing) / 2;
     for (const [index, card] of offers.entries()) {

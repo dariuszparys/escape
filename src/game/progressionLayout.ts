@@ -20,12 +20,8 @@ export interface ProgressionPanelLayout {
   unlockButtonX: number;
   unlockButtonY: number;
   dividerY: number;
-  starterKitHeadingY: number;
-  kitRowsStartY: number;
-  kitRowH: number;
-  kitTextW: number;
-  kitButtonX: number;
-  clearKitButtonY: number;
+  rowTextW: number;
+  rowButtonX: number;
   relicDividerY: number;
   relicHeadingY: number;
   relicSummaryY: number;
@@ -56,12 +52,10 @@ const SCROLLBAR_GUTTER = 22;
 const VIEWPORT_H = PANEL_H - PAD * 2;
 const SUMMARY_DISPLAY_LINES = 6;
 const SUMMARY_LINE_H = 17;
-const KIT_ROW_H = 88;
 const RELIC_ROW_H = 72;
 const ARCHETYPE_ROW_H = 104;
 
 export function createProgressionPanelLayout(
-  kitCount: number,
   archetypeCount = 0,
   relicCount = 0,
 ): ProgressionPanelLayout {
@@ -85,11 +79,8 @@ export function createProgressionPanelLayout(
   const starterSummaryBottom = starterSummaryY + SUMMARY_DISPLAY_LINES * SUMMARY_LINE_H;
   const dividerY = starterSummaryBottom + 22;
 
-  // Section 3: STARTER KITS.
-  const starterKitHeadingY = dividerY + 22;
-  const kitRowsStartY = starterKitHeadingY + 42;
-  const clearKitButtonY = kitRowsStartY + kitCount * KIT_ROW_H + 30;
-  const relicDividerY = clearKitButtonY + 32;
+  // Section 3: RELICS.
+  const relicDividerY = dividerY + 22;
   const relicHeadingY = relicDividerY + 22;
   const relicSummaryY = relicHeadingY + 32;
   const relicUnlockButtonY = relicSummaryY + 52;
@@ -119,12 +110,8 @@ export function createProgressionPanelLayout(
     unlockButtonX: contentW - 92,
     unlockButtonY: starterHeadingY + 76,
     dividerY,
-    starterKitHeadingY,
-    kitRowsStartY,
-    kitRowH: KIT_ROW_H,
-    kitTextW: contentW - 154,
-    kitButtonX: contentW - 72,
-    clearKitButtonY,
+    rowTextW: contentW - 154,
+    rowButtonX: contentW - 72,
     relicDividerY,
     relicHeadingY,
     relicSummaryY,

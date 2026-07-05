@@ -1,7 +1,5 @@
 import Phaser from 'phaser';
 import { GAME_H, GAME_W } from '../config';
-import { applyPendingPrepToRun } from '../game/campfirePrep';
-import { PhaserGameRng } from '../game/rng';
 import { dailyKey, dailySeed, loadDailyRecord } from '../daily';
 import { loadRunChronicle } from '../chronicle';
 import {
@@ -10,7 +8,7 @@ import {
   formatDailyRecordLine,
   formatPendingPrepSummary,
 } from '../game/campfireSummary';
-import { getMeta, setMeta } from '../meta';
+import { getMeta } from '../meta';
 import { newRun } from '../state';
 
 const TEXT_STYLE = {
@@ -249,13 +247,7 @@ export class CampfireScene extends Phaser.Scene {
   }
 
   private startRun(): void {
-    const seed = new URLSearchParams(window.location.search).get('seed') ?? String(Math.random());
-    const run = newRun(seed);
-    const meta = getMeta();
-    const rng = new PhaserGameRng(new Phaser.Math.RandomDataGenerator([seed, 'prep']));
-    const clearedPrep = applyPendingPrepToRun(run, meta.pendingPrep, meta.progression, rng);
-    setMeta({ ...meta, pendingPrep: clearedPrep });
-    this.scene.start('Dungeon');
+    this.scene.start('ScenarioSelect');
   }
 
   private startDailyRun(): void {

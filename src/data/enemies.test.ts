@@ -13,6 +13,7 @@ import {
   spawnEncounter,
   spawnEnemy,
   spawnMinionPack,
+  spawnScenarioEncounter,
   toEngineEnemies,
 } from './enemies';
 import { SequenceRng } from '../game/test-rng';
@@ -574,5 +575,46 @@ describe('multi-enemy packs (spawnEncounter)', () => {
         expect(entry.effects.length).toBeGreaterThan(0);
       }
     }
+  });
+});
+
+describe('scenario encounter spawning', () => {
+  test('Enemies Are Doubled turns normal rooms into two full normal enemies', () => {
+    const pack = spawnScenarioEncounter(new SequenceRng([0, 0.5]), 5, 'normal', 'enemies_doubled');
+
+    expect(pack).toHaveLength(2);
+    for (const member of pack) {
+      expect(MINIONS.some((def) => def.id === member.def.id)).toBe(false);
+      expect(member.hp).toBe(enemyHpForDepth(member.def.baseHp, 5));
+    }
+  });
+
+  test('doubled normals do not use the minion-pack budget branch', () => {
+    const pack = spawnScenarioEncounter(
+      new SequenceRng([0.9, 0.9, 0.1]),
+      5,
+      'normal',
+      'enemies_doubled',
+    );
+
+    expect(pack).toHaveLength(2);
+    expect(pack.every((member) => MINIONS.some((def) => def.id === member.def.id))).toBe(false);
+  });
+
+  test('non-doubled normal scenarios keep the existing spawnEncounter shape', () => {
+    const pack = spawnScenarioEncounter(new SequenceRng([0.9, 0.9, 0]), 5, 'normal', null);
+
+    expect(pack).toHaveLength(2);
+    expect(pack.every((member) => MINIONS.some((def) => def.id === member.def.id))).toBe(true);
+  });
+
+  test('Enemies Are Doubled does not duplicate elites or bosses', () => {
+    const elite = spawnScenarioEncounter(new SequenceRng([0]), 5, 'elite', 'enemies_doubled');
+    const boss = spawnScenarioEncounter(new SequenceRng([0]), 10, 'boss', 'enemies_doubled');
+
+    expect(elite).toHaveLength(1);
+    expect(elite[0].def.tier).toBe('elite');
+    expect(boss).toHaveLength(1);
+    expect(boss[0].def.boss).toBe(true);
   });
 });

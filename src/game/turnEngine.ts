@@ -78,6 +78,7 @@ export interface TurnBattleState {
   retainBlockCap: number;
   poisonBonus: number;
   enemyKillDraw: number;
+  preventPlayerBlock?: boolean;
 }
 
 export interface TurnEngineConfig {
@@ -99,6 +100,7 @@ export interface TurnEngineConfig {
   retainBlockCap?: number;
   poisonBonus?: number;
   enemyKillDraw?: number;
+  preventPlayerBlock?: boolean;
 }
 
 export type TurnCommandRejection =
@@ -176,6 +178,7 @@ function cloneState(state: TurnBattleState): TurnBattleState {
     retainBlockCap: state.retainBlockCap,
     poisonBonus: state.poisonBonus,
     enemyKillDraw: state.enemyKillDraw,
+    preventPlayerBlock: state.preventPlayerBlock,
   };
 }
 
@@ -324,6 +327,8 @@ function applyEffect(
   if (effect.kind === 'damage') {
     const absorbed = Math.min(beforeTargetBlock, resolvedDamage);
     targetM.roundBlock = beforeTargetBlock - absorbed;
+  } else if (effect.kind === 'block' && state.preventPlayerBlock && actor.id === state.player.id) {
+    actorM.roundBlock = beforeActorBlock;
   }
   writeBack(actorM, actor);
   writeBack(targetM, target);
@@ -632,6 +637,7 @@ export function createBattle(config: TurnEngineConfig, rng: GameRng): TurnComman
     retainBlockCap: config.retainBlockCap ?? 0,
     poisonBonus: config.poisonBonus ?? 0,
     enemyKillDraw: config.enemyKillDraw ?? 0,
+    preventPlayerBlock: config.preventPlayerBlock === true,
   };
   const rt: EngineRuntime = { state, events: [], log: [], rng };
   startPlayerTurn(rt);

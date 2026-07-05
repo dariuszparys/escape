@@ -5,14 +5,12 @@ import { type PendingPrep } from '../data/campfirePurchases';
 import {
   EnemyInstance,
   getEnemyTierForDepth,
-  spawnBoss,
-  spawnElite,
-  spawnEncounter,
+  spawnScenarioEncounter,
   toEngineEnemies,
 } from '../data/enemies';
 import { InventoryItem, type InventoryItemDef, makeItem } from '../data/items';
 import { makeRelic, type RelicId } from '../data/relics';
-import type { StarterKitId } from '../data/starterKits';
+import type { ScenarioId } from '../data/scenarios';
 import { isEliteEligibleDepth, rollRoomEvent, type RoomEvent } from '../dungeon/rooms';
 import { RunState } from '../state';
 import { applyPendingPrepToRun } from './campfirePrep';
@@ -33,6 +31,11 @@ import {
   rollVictoryCardOffers,
 } from './rewards';
 import { GameRng } from './rng';
+import {
+  applyPoisonedRoomEntryDamage,
+  shouldAwardProgressionRewards,
+  shouldPreventPlayerBlock,
+} from './scenarioRules';
 import { startingCardIdsForRun } from './startingCards';
 import { isStratumBoundary, stratumForDepth } from './strata';
 import {
@@ -100,12 +103,11 @@ function shouldDelve(strategy: DelveStrategy, stratumCleared: number, maxStrata:
 }
 
 export interface BalanceScenario {
+  playerScenarioId?: ScenarioId | null;
   prepItemIds?: InventoryItemDef['id'][];
   extraStartingChoice?: boolean;
   scoutFlame?: boolean;
   starterCardVarietyUnlocked?: boolean;
-  unlockedStarterKitIds?: StarterKitId[];
-  activeStarterKitId?: StarterKitId | null;
   activeArchetypeId?: ArchetypeId | null;
   /** Relics granted directly at run start — the knob that lets the harness measure win-rate
    * impact for relics that aren't in the starter pool (bypasses the meta relic-path/unlock
@@ -278,14 +280,19 @@ function makePendingPrep(scenario: BalanceScenario): PendingPrep {
 
 function createScenarioRun(seed: number, scenario: BalanceScenario): RunState {
   const run = new RunState(String(seed), `sim-${seed}`);
+  run.scenarioId = scenario.playerScenarioId ?? null;
   const prep = makePendingPrep(scenario);
-  applyPendingPrepToRun(run, prep, {
-    ...createDefaultProgressionState(),
-    starterCardVarietyUnlocked: scenario.starterCardVarietyUnlocked === true,
-    unlockedStarterKitIds: scenario.unlockedStarterKitIds ?? [],
-    activeStarterKitId: scenario.activeStarterKitId ?? null,
-    activeArchetypeId: scenario.activeArchetypeId ?? null,
-  });
+  applyPendingPrepToRun(
+    run,
+    prep,
+    {
+      ...createDefaultProgressionState(),
+      starterCardVarietyUnlocked: scenario.starterCardVarietyUnlocked === true,
+      activeArchetypeId: scenario.activeArchetypeId ?? null,
+    },
+    undefined,
+    run.scenarioId,
+  );
 
   for (const relicId of scenario.startingRelicIds ?? []) {
     run.addRelic(makeRelic(relicId));
@@ -329,8 +336,9 @@ export function applySimulatedPostBattleRewards(
         ELITE_CARD_OFFER_COUNT,
         ELITE_TIER_BIAS_DEPTH,
         run.archetypeId,
+        run.scenarioId,
       )
-    : rollVictoryCardOffers(rng, depth, undefined, undefined, run.archetypeId);
+    : rollVictoryCardOffers(rng, depth, undefined, undefined, run.archetypeId, run.scenarioId);
   chooseRewardCard(run, offers);
 }
 
@@ -695,6 +703,7 @@ export function simulateBattle(
       retainBlockCap: setup.retainBlockCap,
       poisonBonus: setup.poisonBonus,
       enemyKillDraw: setup.enemyKillDraw,
+      preventPlayerBlock: shouldPreventPlayerBlock(run.scenarioId),
     },
     rng,
   );
@@ -810,11 +819,33 @@ export function simulateRun(
   for (let depth = 2; ; depth++) {
     run.depth = depth;
     const atBoss = isStratumBoundary(depth);
+    run.onRoomEntered();
+    const poison = applyPoisonedRoomEntryDamage(run, rng);
+    if (poison.died) {
+      return {
+        victory: false,
+        reachedBoss: reachedBoss || atBoss,
+        clearedFirstGate: bossesCleared >= 1,
+        deathDepth: depth,
+        stratumReached: stratumForDepth(depth),
+        encounters,
+        eliteEligible,
+        eliteEncounters,
+        eliteWins,
+        convertedEmbers: 0,
+        tierFights,
+      };
+    }
     maybeUseDungeonPotion(run, atBoss);
 
     if (atBoss) {
       reachedBoss = true;
-      const battle = simulateBattle(run, spawnBoss(rng, depth), rng, emphasis);
+      const battle = simulateBattle(
+        run,
+        spawnScenarioEncounter(rng, depth, 'boss', run.scenarioId),
+        rng,
+        emphasis,
+      );
       if (!battle.won) {
         return {
           victory: false,
@@ -847,7 +878,7 @@ export function simulateRun(
           eliteEligible,
           eliteEncounters,
           eliteWins,
-          convertedEmbers: convert(run.gold),
+          convertedEmbers: shouldAwardProgressionRewards(run.scenarioId) ? convert(run.gold) : 0,
           tierFights,
         };
       }
@@ -860,7 +891,12 @@ export function simulateRun(
 
     if (event === 'elite') {
       eliteEncounters++;
-      const battle = simulateBattle(run, spawnElite(rng, depth), rng, emphasis);
+      const battle = simulateBattle(
+        run,
+        spawnScenarioEncounter(rng, depth, 'elite', run.scenarioId),
+        rng,
+        emphasis,
+      );
       if (!battle.won) {
         return {
           victory: false,
@@ -886,7 +922,12 @@ export function simulateRun(
       encounters++;
       const tier = getEnemyTierForDepth(depth) as StandardTier;
       tierFights[tier].total++;
-      const battle = simulateBattle(run, spawnEncounter(rng, depth), rng, emphasis);
+      const battle = simulateBattle(
+        run,
+        spawnScenarioEncounter(rng, depth, 'normal', run.scenarioId),
+        rng,
+        emphasis,
+      );
       if (!battle.won) {
         return {
           victory: false,

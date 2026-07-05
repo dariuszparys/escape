@@ -47,8 +47,6 @@ describe('applyPendingPrepToRun', () => {
       {
         starterCardVarietyUnlocked: true,
         migrationBonusGranted: false,
-        unlockedStarterKitIds: [],
-        activeStarterKitId: null,
       },
     );
 
@@ -71,8 +69,6 @@ describe('applyPendingPrepToRun', () => {
       {
         starterCardVarietyUnlocked: true,
         migrationBonusGranted: true,
-        unlockedStarterKitIds: [],
-        activeStarterKitId: null,
       },
     );
 
@@ -80,47 +76,116 @@ describe('applyPendingPrepToRun', () => {
     expect(run.startingCardPicks).toBe(3);
   });
 
-  test('adds an active starter kit signature card before the opening draft', () => {
-    const run = new RunState('seed', 'run-kit');
+  test('Escape the Dungeon applies archetype only and preserves pending prep', () => {
+    const run = new RunState('seed', 'run-escape');
+    run.scenarioId = 'escape_the_dungeon';
+    const pending = {
+      itemIds: ['small_potion', 'bomb'],
+      extraStartingChoice: true,
+      scoutFlame: true,
+      curseIds: ['blood_oath' as const],
+      pendingRelicRoll: true,
+    };
 
-    applyPendingPrepToRun(
+    const result = applyPendingPrepToRun(
       run,
-      {
-        itemIds: [],
-        extraStartingChoice: false,
-        scoutFlame: false,
-        curseIds: [],
-      },
+      pending,
       {
         starterCardVarietyUnlocked: true,
         migrationBonusGranted: false,
-        unlockedStarterKitIds: ['duelist'],
-        activeStarterKitId: 'duelist',
+        activeArchetypeId: 'ranger',
+        relicPathUnlocked: true,
+        unlockedRelicIds: ['spark_coil'],
+        activeStartingRelicId: 'swift_boots',
       },
+      undefined,
+      'escape_the_dungeon',
     );
 
-    expect(run.starterKitId).toBe('duelist');
-    expect(run.cardCollection.map((card) => card.id)).toEqual([
-      'strike',
-      'strike',
-      'guard',
-      'guard',
-      'riposte',
-    ]);
-    expect(run.cardCollection.map((card) => card.id)).toEqual([
-      'strike',
-      'strike',
-      'guard',
-      'guard',
-      'riposte',
-    ]);
-    expect(run.startingCardsTaken).toBe(0);
-    expect(run.startingCardChoices).toBe(4);
+    expect(result).toEqual(pending);
+    expect(run.archetypeId).toBe('ranger');
+    expect(run.startingCardChoices).toBe(3);
     expect(run.startingCardPicks).toBe(2);
+    expect(run.inventory).toHaveLength(0);
+    expect(run.scoutCharges).toBe(0);
+    expect(run.curseIds).toEqual([]);
+    expect(run.hp).toBe(run.maxHp);
+    expect(run.relics).toHaveLength(0);
+    expect(run.relicPool.has('spark_coil')).toBe(false);
+    expect(run.cardCollection.map((card) => card.id)).toEqual([
+      'strike',
+      'strike',
+      'guard',
+      'guard',
+    ]);
   });
 
-  test('keeps current starting deck behavior when no starter kit is active', () => {
-    const run = new RunState('seed', 'run-no-kit');
+  test('hard scenarios apply full progression prep and clear it', () => {
+    const run = new RunState('seed', 'run-hard-scenario');
+    run.scenarioId = 'lost_left_arm';
+
+    const cleared = applyPendingPrepToRun(
+      run,
+      {
+        itemIds: ['small_potion'],
+        extraStartingChoice: true,
+        scoutFlame: true,
+        curseIds: [],
+        pendingRelicRoll: false,
+      },
+      {
+        starterCardVarietyUnlocked: true,
+        migrationBonusGranted: false,
+        activeArchetypeId: 'barbarian',
+        relicPathUnlocked: true,
+        unlockedRelicIds: ['spark_coil'],
+        activeStartingRelicId: 'swift_boots',
+      },
+      undefined,
+      'lost_left_arm',
+    );
+
+    expect(cleared).toEqual(createDefaultPendingPrep());
+    expect(run.archetypeId).toBe('barbarian');
+    expect(run.startingCardChoices).toBe(4);
+    expect(run.startingCardPicks).toBe(3);
+    expect(run.inventory.map((item) => item.id)).toEqual(['small_potion']);
+    expect(run.scoutCharges).toBe(1);
+    expect(run.relicIds).toEqual(['swift_boots']);
+    expect(run.relicPool.has('spark_coil')).toBe(true);
+  });
+
+  test('Left Arm full prep filters shield items and block-only starting relics', () => {
+    const run = new RunState('seed', 'run-left-arm-prep');
+    run.scenarioId = 'lost_left_arm';
+
+    applyPendingPrepToRun(
+      run,
+      {
+        itemIds: ['iron_armor', 'small_potion'],
+        extraStartingChoice: false,
+        scoutFlame: false,
+        curseIds: [],
+        pendingRelicRoll: false,
+      },
+      {
+        starterCardVarietyUnlocked: false,
+        migrationBonusGranted: false,
+        relicPathUnlocked: true,
+        unlockedRelicIds: ['stone_heart'],
+        activeStartingRelicId: 'stone_heart',
+      },
+      undefined,
+      'lost_left_arm',
+    );
+
+    expect(run.inventory.map((item) => item.id)).toEqual(['small_potion']);
+    expect(run.relicIds).toEqual([]);
+    expect(run.cardCollection.map((card) => card.id)).not.toContain('guard');
+  });
+
+  test('pads the starting deck with the fixed basic body', () => {
+    const run = new RunState('seed', 'run-basic-pad');
 
     applyPendingPrepToRun(
       run,
@@ -133,13 +198,9 @@ describe('applyPendingPrepToRun', () => {
       {
         starterCardVarietyUnlocked: true,
         migrationBonusGranted: false,
-        unlockedStarterKitIds: ['warden'],
-        activeStarterKitId: null,
       },
     );
 
-    expect(run.starterKitId).toBeNull();
-    // R15 pad: every run opens with the basics, kit or not.
     expect(run.cardCollection.map((card) => card.id)).toEqual([
       'strike',
       'strike',
@@ -147,35 +208,6 @@ describe('applyPendingPrepToRun', () => {
       'guard',
     ]);
     expect(run.startingCardsTaken).toBe(0);
-  });
-
-  test('ignores an active starter kit that is not unlocked', () => {
-    const run = new RunState('seed', 'run-stale-kit');
-
-    applyPendingPrepToRun(
-      run,
-      {
-        itemIds: [],
-        extraStartingChoice: false,
-        scoutFlame: false,
-        curseIds: [],
-      },
-      {
-        starterCardVarietyUnlocked: true,
-        migrationBonusGranted: false,
-        unlockedStarterKitIds: ['duelist'],
-        activeStarterKitId: 'hexbinder',
-      },
-    );
-
-    expect(run.starterKitId).toBeNull();
-    // R15 pad: every run opens with the basics, kit or not.
-    expect(run.cardCollection.map((card) => card.id)).toEqual([
-      'strike',
-      'strike',
-      'guard',
-      'guard',
-    ]);
   });
 
   test('applies Blood Oath to max HP and current HP for the next run', () => {

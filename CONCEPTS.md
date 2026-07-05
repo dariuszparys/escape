@@ -166,8 +166,18 @@ A single dungeon attempt with temporary state such as health, card collection
 
 ### Normal Run
 
-A non-daily descent that can use Campfire preparation and the active Starter Kit
-selection.
+A non-daily descent that routes through Scenario selection and can use Campfire
+preparation according to the chosen Scenario.
+
+### Scenario
+
+A normal-run premise selected before the dungeon starts. Scenario choice replaces
+the plain Descend handoff for normal runs: Escape the Dungeon is the clean/default
+premise, while hard Scenarios add a run rule such as poisoned room entry, no
+block, or doubled normal encounters. Daily Descents stay separate from Scenarios.
+Escape the Dungeon keeps the selected Archetype but suppresses post-run
+progression rewards; hard Scenarios use eligible Campfire preparation and award
+normal progression rewards.
 
 ### Daily Descent
 
@@ -196,12 +206,6 @@ Banked at a Gate.
 An Ember unlock that broadens the opening card choices for normal runs without
 changing the number of cards picked.
 
-### Starter Kit
-
-A durable Ember unlock that can add one selected signature card to a normal run.
-Only one Starter Kit can be active for the next normal descent, and Daily
-Descents ignore Starter Kits.
-
 ### Archetype
 
 A player class — Barbarian, Necromancer, or Ranger — selected for free on the
@@ -217,8 +221,7 @@ leaving a deck defensively broken. Barbarian scales Strength and swings big;
 Necromancer stacks poison/burn damage-over-time and life-drain sustain; Ranger
 marks prey Vulnerable and sprays multi-hit volleys with card draw. Daily Descents
 ignore Archetype selection so attempts stay comparable. Only one archetype is
-active for the next normal descent; the selection persists like Starter Kit
-choice.
+active for future normal descents until the player changes it.
 
 ## Endless Descent
 

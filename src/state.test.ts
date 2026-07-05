@@ -4,6 +4,18 @@ import { makeRelic } from './data/relics';
 import { RunState } from './state';
 
 describe('RunState.removeCard', () => {
+  test('stores a selected normal-run scenario independently from daily metadata', () => {
+    const run = new RunState('seed');
+
+    run.scenarioId = 'im_poisoned';
+    run.isDaily = true;
+    run.dailyKey = '2026-07-05';
+
+    expect(run.scenarioId).toBe('im_poisoned');
+    expect(run.isDaily).toBe(true);
+    expect(run.dailyKey).toBe('2026-07-05');
+  });
+
   test('removes an existing card from the collection', () => {
     const run = new RunState();
     run.cardCollection = [

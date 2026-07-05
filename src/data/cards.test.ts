@@ -58,8 +58,9 @@ describe('archetype card pools', () => {
   test('the neutral pool (null) excludes every archetype-tagged card', () => {
     const pool = cardPoolForArchetype(null);
     expect(pool.every((card) => !card.archetype)).toBe(true);
-    // Also excludes starter-kit signatures, matching the pre-archetype standard pool.
-    expect(pool.every((card) => !card.starterKitOnly)).toBe(true);
+    expect(pool.map((card) => card.id)).toEqual(
+      expect.arrayContaining(['riposte', 'field_dressing', 'cinder_hex']),
+    );
   });
 
   test('an archetype pool adds ONLY that archetype’s cards to the neutral pool', () => {
@@ -139,8 +140,7 @@ describe('card costs (U8, R2/R6)', () => {
       ),
     });
     const cost = (c: CardDef) => (c.exhaust ? 1 : 0); // exhaust is a downside
-    // Standard reward pool only (kit signatures are a separate, opt-in pool).
-    const pool = CARD_DEFS.filter((c) => !c.starterKitOnly);
+    const pool = CARD_DEFS;
 
     for (const a of pool) {
       for (const b of pool) {

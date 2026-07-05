@@ -13,10 +13,9 @@ import {
   VISION_RADIUS,
 } from '../config';
 import { Card, makeCard, CARD_DEFS } from '../data/cards';
-import { EnemyInstance, spawnBoss, spawnElite, spawnEncounter } from '../data/enemies';
+import { EnemyInstance, spawnScenarioEncounter } from '../data/enemies';
 import { InventoryItem, makeItem, randomItemIdForDepth } from '../data/items';
 import type { Relic } from '../data/relics';
-import { STARTER_KITS } from '../data/starterKits';
 import { ARCHETYPES } from '../data/archetypes';
 import { makeStartRoom, makeNextRoom, RoomData, type RoomEvent } from '../dungeon/rooms';
 import { makeCardView } from '../gfx/cardview';
@@ -39,6 +38,7 @@ import {
 } from '../game/restEconomy';
 import { commitDelve, resolveBank } from '../game/delve';
 import { calculateEmberReward } from '../game/metaRewards';
+import { applyPoisonedRoomEntryDamage } from '../game/scenarioRules';
 import { stratumForDepth } from '../game/strata';
 import { getRun } from '../state';
 import type { RunBattleSceneData } from './TurnBattle';
@@ -491,29 +491,6 @@ export class DungeonScene extends Phaser.Scene {
             objs.push(banner);
           }
         }
-        if (run.starterKitId) {
-          const kit = STARTER_KITS.find((candidate) => candidate.id === run.starterKitId);
-          const signature = kit
-            ? CARD_DEFS.find((candidate) => candidate.id === kit.signatureCardId)
-            : null;
-          const kitText = kit && signature ? `${kit.name}: ${signature.name} starts in deck` : '';
-          if (kitText) {
-            const label = this.add
-              .text(origin.x + ROOM_W / 2, origin.y + 92, kitText, {
-                fontFamily: 'monospace',
-                fontSize: '14px',
-                fontStyle: 'bold',
-                color: '#f1c40f',
-                align: 'center',
-                stroke: '#16121e',
-                strokeThickness: 4,
-              })
-              .setOrigin(0.5)
-              .setDepth(6);
-            objs.push(label);
-          }
-        }
-
         const cardIds = startingCardIdsForRun(run);
         const cols = cardIds.length === 4 ? [2, 5, 9, 12] : [3, 7, 11];
 
@@ -575,18 +552,35 @@ export class DungeonScene extends Phaser.Scene {
         break;
       }
       case 'encounter': {
-        built.enemyPack = spawnEncounter(this.gameRng, room.depth);
+        built.enemyPack = spawnScenarioEncounter(
+          this.gameRng,
+          room.depth,
+          'normal',
+          getRun().scenarioId,
+        );
         built.enemy = built.enemyPack[0];
         this.createEnemyActor(built, origin, 'normal', built.enemy);
         break;
       }
       case 'elite': {
-        built.enemy = spawnElite(this.gameRng, room.depth);
+        built.enemyPack = spawnScenarioEncounter(
+          this.gameRng,
+          room.depth,
+          'elite',
+          getRun().scenarioId,
+        );
+        built.enemy = built.enemyPack[0];
         this.createEnemyActor(built, origin, 'elite', built.enemy);
         break;
       }
       case 'boss': {
-        built.enemy = spawnBoss(this.gameRng, room.depth);
+        built.enemyPack = spawnScenarioEncounter(
+          this.gameRng,
+          room.depth,
+          'boss',
+          getRun().scenarioId,
+        );
+        built.enemy = built.enemyPack[0];
         this.createEnemyActor(built, origin, 'boss', built.enemy);
         break;
       }
@@ -857,6 +851,20 @@ export class DungeonScene extends Phaser.Scene {
     run.onRoomEntered();
     if (run.hp > beforeHp) {
       this.floatText(this.player.x, this.player.y - 50, "Wanderer's Flask +1 HP", '#5fe07a');
+    }
+    const poison = applyPoisonedRoomEntryDamage(run, this.gameRng);
+    if (poison.applied) {
+      this.floatText(this.player.x, this.player.y - 78, `Poison -${poison.amount} HP`, '#9b59b6');
+      this.hud();
+      if (poison.died) {
+        this.player.setVelocity(0, 0);
+        this.battleActive = true;
+        playSfx(this, 'hit_player');
+        this.time.delayedCall(450, () => this.scene.start('End', { victory: false }));
+        return;
+      }
+    } else if (run.hp !== beforeHp) {
+      this.hud();
     }
     playSfx(this, 'step');
     if (

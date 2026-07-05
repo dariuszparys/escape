@@ -2,6 +2,8 @@ import { MAX_DEPTH } from '../config';
 import { GameRng } from '../game/rng';
 import type { ActiveStatusEffect } from '../game/combat';
 import { empowerPattern, type IntentPattern } from '../game/intentPatterns';
+import { shouldDoubleNormalEncounters } from '../game/scenarioRules';
+import type { ScenarioId } from './scenarios';
 
 export type EnemyTier = 'weak' | 'medium' | 'strong' | 'elite';
 
@@ -1032,6 +1034,25 @@ export function spawnEncounter(rng: GameRng, depth: number): EnemyInstance[] {
   if (depth <= 2 || rng.frac() < PACK_SOLO_CHANCE) return [spawnEnemy(rng, depth)];
   const size = rng.frac() < PACK_TRIPLE_CHANCE ? 3 : 2;
   return spawnMinionPack(rng, depth, size);
+}
+
+export type ScenarioEncounterKind = 'normal' | 'elite' | 'boss';
+
+/**
+ * Scenario-aware encounter shape. "Enemies Are Doubled" only doubles normal
+ * encounter rooms; elites and bosses stay authored single targets.
+ */
+export function spawnScenarioEncounter(
+  rng: GameRng,
+  depth: number,
+  kind: ScenarioEncounterKind,
+  scenarioId: ScenarioId | null,
+): EnemyInstance[] {
+  if (kind === 'boss') return [spawnBoss(rng, depth)];
+  if (kind === 'elite') return [spawnElite(rng, depth)];
+  if (shouldDoubleNormalEncounters(scenarioId))
+    return [spawnEnemy(rng, depth), spawnEnemy(rng, depth)];
+  return spawnEncounter(rng, depth);
 }
 
 /**

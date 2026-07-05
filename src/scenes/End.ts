@@ -9,6 +9,7 @@ import { getRun } from '../state';
 import { formatRelicSummary, relicDef } from '../data/relics';
 import { applyContractCompletions, evaluateNewContracts } from '../game/contracts';
 import { contractDef } from '../data/contracts';
+import { shouldResolveProgressionRewards } from '../game/runCompletion';
 
 export class EndScene extends Phaser.Scene {
   private victory = false;
@@ -21,7 +22,11 @@ export class EndScene extends Phaser.Scene {
     this.victory = data.victory;
   }
 
-  private awardEmbersOnce(): { awarded: boolean; reward: EmberRewardBreakdown } {
+  private awardEmbersOnce(): {
+    handled: boolean;
+    reward: EmberRewardBreakdown;
+    progressionSuppressed: boolean;
+  } {
     const run = getRun();
     const meta = getMeta();
     const zeroReward: EmberRewardBreakdown = {
@@ -32,7 +37,15 @@ export class EndScene extends Phaser.Scene {
     };
 
     if (meta.lastAwardedRunId === run.runId) {
-      return { awarded: false, reward: zeroReward };
+      return { handled: false, reward: zeroReward, progressionSuppressed: false };
+    }
+
+    if (!shouldResolveProgressionRewards(run)) {
+      setMeta({
+        ...meta,
+        lastAwardedRunId: run.runId,
+      });
+      return { handled: true, reward: zeroReward, progressionSuppressed: true };
     }
 
     const reward = calculateEmberReward({
@@ -49,11 +62,13 @@ export class EndScene extends Phaser.Scene {
       lastAwardedRunId: run.runId,
     });
 
-    return { awarded: true, reward };
+    return { handled: true, reward, progressionSuppressed: false };
   }
 
   private awardContractsOnce() {
     const run = getRun();
+    if (!shouldResolveProgressionRewards(run)) return [];
+
     const meta = getMeta();
     const completions = evaluateNewContracts(meta.progression, {
       escaped: this.victory,
@@ -71,9 +86,11 @@ export class EndScene extends Phaser.Scene {
     const run = getRun();
     const emberAward = this.awardEmbersOnce();
     const contractAward = this.awardContractsOnce();
-    const emberLine = emberAward.awarded
-      ? this.formatEmberLine(emberAward.reward)
-      : 'Embers already recovered.';
+    const emberLine = !emberAward.handled
+      ? 'Embers already recovered.'
+      : emberAward.progressionSuppressed
+        ? 'Escape the Dungeon grants no progression rewards.'
+        : this.formatEmberLine(emberAward.reward);
     const contractLine =
       contractAward.length > 0
         ? contractAward
@@ -87,7 +104,7 @@ export class EndScene extends Phaser.Scene {
       run.relics.length > 0
         ? `Relics collected:\n${formatRelicSummary(run.relics)}`
         : 'No relics collected this run.';
-    if (emberAward.awarded) {
+    if (emberAward.handled) {
       this.recordChronicleEntry(emberAward.reward.total, emberAward.reward.convertedEmbers);
       this.recordDailyAttemptOnce();
     }

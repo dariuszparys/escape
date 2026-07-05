@@ -52,7 +52,6 @@ export interface CardDef {
   color: number;
   description: string;
   effects: CardEffect[];
-  starterKitOnly?: boolean;
   /**
    * Archetype gate: a tagged card only enters the draw/pick pool when its archetype is the
    * active one (see `cardPoolForArchetype`). Untagged cards are neutral — always available.
@@ -133,7 +132,6 @@ export const CARD_DEFS: CardDef[] = [
     cost: 1,
     color: 0xe67e22,
     description: 'Deal 5, gain 2 block',
-    starterKitOnly: true,
     effects: [
       { kind: 'damage', amount: 5 },
       { kind: 'block', amount: 2 },
@@ -147,7 +145,6 @@ export const CARD_DEFS: CardDef[] = [
     cost: 1,
     color: 0x27ae60,
     description: 'Gain 5 block, restore 2 HP',
-    starterKitOnly: true,
     effects: [
       { kind: 'block', amount: 5 },
       { kind: 'heal', amount: 2 },
@@ -161,7 +158,6 @@ export const CARD_DEFS: CardDef[] = [
     cost: 1,
     color: 0xd35400,
     description: 'Deal 2, burn 2 for 2 turns',
-    starterKitOnly: true,
     effects: [
       { kind: 'damage', amount: 2 },
       { kind: 'status', status: 'burn', amount: 2, duration: 2 },
@@ -762,11 +758,10 @@ export const CARD_DEFS: CardDef[] = [
 ];
 
 /**
- * The neutral pool: cards with no archetype tag and not starter-kit-only. This is the exact
- * set random draws used before archetypes existed, so a neutral (no-archetype) run is
- * byte-identical to today — the `runSignature` golden and the dominance gates stay put.
+ * The neutral pool: cards with no archetype tag. This is the shared pool used when no archetype
+ * is active, while archetype runs widen it with their class cards.
  */
-const STANDARD_CARD_DEFS = CARD_DEFS.filter((card) => !card.starterKitOnly && !card.archetype);
+const STANDARD_CARD_DEFS = CARD_DEFS.filter((card) => !card.archetype);
 
 /**
  * The draw/pick pool for a run: the neutral pool, plus the active archetype's cards. `null`
@@ -823,6 +818,7 @@ export function randomCard(
   rng: GameRng,
   depth: number,
   archetype: ArchetypeId | null = null,
+  predicate: (card: CardDef) => boolean = () => true,
 ): Card {
   const t =
     depth <= 3
@@ -832,7 +828,9 @@ export function randomCard(
         : depth <= 9
           ? pickWeighted(rng, [2, 5, 3])
           : pickWeighted(rng, deepTierWeights(depth));
-  const pool = cardPoolForArchetype(archetype).filter((c) => c.tier === t);
+  const fullPool = cardPoolForArchetype(archetype).filter(predicate);
+  const pool = fullPool.filter((c) => c.tier === t);
+  if (pool.length === 0) return makeCard(rng.pick(fullPool));
   return makeCard(rng.pick(pool));
 }
 

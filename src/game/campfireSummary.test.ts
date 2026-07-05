@@ -13,16 +13,12 @@ describe('campfire summary formatting', () => {
     const summary = formatCampfireProgressionSummary({
       starterCardVarietyUnlocked: true,
       migrationBonusGranted: true,
-      unlockedStarterKitIds: ['duelist', 'warden'],
-      activeStarterKitId: 'warden',
     });
 
     expect(summary).toBe(
       [
         'Archetype: none',
         'Starter variety: unlocked',
-        'Starter kits: 2/3 unlocked',
-        'Active kit: Warden',
         'Relics: path locked',
         'Starting relic: none',
       ].join('\n'),
@@ -34,8 +30,6 @@ describe('campfire summary formatting', () => {
     const summary = formatCampfireProgressionSummary({
       starterCardVarietyUnlocked: false,
       migrationBonusGranted: false,
-      unlockedStarterKitIds: [],
-      activeStarterKitId: null,
       activeArchetypeId: 'necromancer',
     });
 
@@ -74,8 +68,6 @@ describe('campfire summary formatting', () => {
     const summary = formatPendingPrepSummary(createDefaultPendingPrep(), {
       starterCardVarietyUnlocked: true,
       migrationBonusGranted: true,
-      unlockedStarterKitIds: [],
-      activeStarterKitId: null,
     });
 
     expect(summary).toBe(
@@ -83,23 +75,11 @@ describe('campfire summary formatting', () => {
         'Archetype: none',
         'One-run prep: none (0/3)',
         'Opening picks: 2 of 4',
-        'Starter kit: none selected',
         'Scout flame: unlit',
         'Relic charm: none',
       ].join('\n'),
     );
     expect(summary).not.toMatch(/Ash|Kindling/);
-  });
-
-  test('includes the active starter kit in the next-run summary', () => {
-    const summary = formatPendingPrepSummary(createDefaultPendingPrep(), {
-      starterCardVarietyUnlocked: true,
-      migrationBonusGranted: false,
-      unlockedStarterKitIds: ['duelist'],
-      activeStarterKitId: 'duelist',
-    });
-
-    expect(summary).toContain('Starter kit: Duelist (Riposte)');
   });
 
   test('formats chronicle line for no completed runs', () => {

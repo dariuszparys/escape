@@ -14,6 +14,8 @@ import {
   rollVictoryCardOffers,
 } from './rewards';
 import { SequenceRng } from './test-rng';
+import { cardGrantsBlock, isScenarioAllowedRelic } from './scenarioRules';
+import { relicPoolFromUnlocked, rollRelicOffers } from '../data/relics';
 
 describe('rewards', () => {
   test('every added card stays in the collection — the deck IS the collection (R1)', () => {
@@ -127,6 +129,18 @@ describe('rewards', () => {
     expect(run.cardCollection).toHaveLength(1);
   });
 
+  test('Left Arm chest and victory card rewards exclude block cards', () => {
+    const run = new RunState('seed');
+    run.scenarioId = 'lost_left_arm';
+    const chest = rollChestReward(run, new SequenceRng([0, 0, 0]), 5);
+    const offers = rollVictoryCardOffers(createSimRng(2), 5, 4, 0, null, 'lost_left_arm');
+
+    expect(chest.kind).toBe('card');
+    expect(run.cardCollection.every((card) => !cardGrantsBlock(card))).toBe(true);
+    expect(offers).toHaveLength(4);
+    expect(offers.every((card) => !cardGrantsBlock(card))).toBe(true);
+  });
+
   test('chest can award a relic and store it on the run', () => {
     const run = new RunState('seed');
 
@@ -140,6 +154,16 @@ describe('rewards', () => {
     // relic actually came from `run.relicPool`, the real invariant `randomRelic`'s `poolIds`
     // param exists to protect (a `toBeTruthy()` name check would pass for any relic at all).
     expect(STARTER_RELIC_IDS).toContain(result.relic.id);
+  });
+
+  test('Left Arm relic offers exclude block-only relics but allow armor relics', () => {
+    const pool = relicPoolFromUnlocked(['stone_heart']);
+    const offers = rollRelicOffers(createSimRng(1), new Set(), pool, 5, (candidate) =>
+      isScenarioAllowedRelic(candidate, 'lost_left_arm'),
+    );
+
+    expect(offers.map((relic) => relic.id)).not.toContain('stone_heart');
+    expect(offers.map((relic) => relic.id)).toContain('iron_will');
   });
 
   test('lucky_coin increases all gold rewards by 50%', () => {

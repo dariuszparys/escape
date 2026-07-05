@@ -14,12 +14,14 @@ npm run dev      # http://localhost:5173
 
 ## How it plays
 
-- Each run descends through **strata** of 10 rooms apiece. On the Progression
-  screen you can freely pick an **archetype** — Barbarian, Necromancer, or
-  Ranger — that reshapes the whole run's card pool instead of adding a single
-  card; skip it and the run draws from the neutral pool only. The fire offers
-  **two opening card picks** (Ember progression can unlock a fourth) plus any
-  active starter kit.
+- Each normal run starts by choosing a **Scenario**. Escape the Dungeon is the
+  clean attempt with no progression rewards; I'm Poisoned, I Lost My Left Arm,
+  and Enemies Are Doubled are harder progression runs with explicit run rules.
+  On the Progression screen you can freely pick an **archetype** — Barbarian,
+  Necromancer, or Ranger — that reshapes the whole run's card pool instead of
+  adding a single card; skip it and the run draws from the neutral pool only.
+  The fire offers **two opening card picks** (Ember progression can unlock a
+  fourth).
 - Every later room has four doors — the one you came through is barred.
   Rooms are randomized: **encounters, elites, treasure chests, health
   potions, paid rest rooms, or spike traps**. Each stratum guarantees exactly
@@ -28,6 +30,8 @@ npm run dev      # http://localhost:5173
   at adjacent room types before committing.
 - Encounter rooms place one or more visible monsters in the room — most
   fights are solo, but some spawn a budget-anchored pack of 2-3 weaker foes.
+  In the Enemies Are Doubled Scenario, normal encounter rooms instead spawn two
+  full-strength normal enemies; elites and bosses stay single authored fights.
   Entering an uncleared room starts the card battle immediately — entry is
   commitment, so you avoid a fight by not entering the room, not by slipping
   past the monster(s). You play a card (or drink a potion), the enemies each
@@ -42,7 +46,7 @@ npm run dev      # http://localhost:5173
   next combat hand changes.
 - **Gold** is earned and spent inside the current run, including paid rest-room
   deck upgrades or removals. **Embers** persist after the run and unlock
-  long-term Campfire progression (Ember unlocks, starter kits, archetypes).
+  long-term Campfire progression (opening variety, relic paths, archetypes).
 - The 10th room of each stratum holds a boss fight. Boss fights are
   mandatory: no escape hatch opens until the boss is defeated (elites, by
   contrast, are an informed opt-in — you can route around one via a Scout

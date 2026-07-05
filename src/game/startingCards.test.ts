@@ -1,9 +1,12 @@
 import { describe, expect, test } from 'vitest';
 import {
   ARCHETYPE_STARTING_CARD_IDS,
+  startingDeckPadIdsForScenario,
   startingCardIdsForChoiceCount,
   startingCardIdsForRun,
 } from './startingCards';
+import { CARD_DEFS } from '../data/cards';
+import { cardGrantsBlock } from './scenarioRules';
 
 describe('startingCardIdsForChoiceCount', () => {
   test('defaults to the three-card opening offer', () => {
@@ -78,5 +81,25 @@ describe('startingCardIdsForChoiceCount', () => {
     expect(startingCardIdsForChoiceCount(3, 'necromancer')).toEqual(
       ARCHETYPE_STARTING_CARD_IDS.necromancer.slice(0, 3),
     );
+  });
+
+  test('Left Arm opening choices and deck pad exclude block cards with safe backfill', () => {
+    const choices = startingCardIdsForRun({
+      startingCardChoices: 4,
+      archetypeId: null,
+      isDaily: false,
+      scenarioId: 'lost_left_arm',
+    });
+    const pad = startingDeckPadIdsForScenario('lost_left_arm');
+    const defs = [...choices, ...pad].map((id) => {
+      const def = CARD_DEFS.find((card) => card.id === id);
+      if (!def) throw new Error(`missing card def: ${id}`);
+      return def;
+    });
+
+    expect(choices).toHaveLength(4);
+    expect(pad).toHaveLength(4);
+    expect(defs.every((card) => !cardGrantsBlock(card))).toBe(true);
+    expect(pad).not.toContain('guard');
   });
 });

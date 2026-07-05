@@ -6,6 +6,7 @@ import { relicEliteGoldBonus } from './relicBehaviors';
 import { relicChestGoldMultiplier } from './relicRegistry';
 import { previewRewardImpact } from './rewardImpact';
 import { GameRng } from './rng';
+import { isScenarioAllowedCard, isScenarioAllowedRelic } from './scenarioRules';
 
 export type RewardResult =
   | { kind: 'card'; cardName: string; impactLabel: string }
@@ -44,7 +45,9 @@ function rollChestGold(run: RunState, rng: GameRng, low: number, high: number): 
 export function rollChestReward(run: RunState, rng: GameRng, depth: number): RewardResult {
   const roll = rng.frac();
   if (roll < 0.5) {
-    const card = randomCard(rng, depth, run.archetypeId);
+    const card = randomCard(rng, depth, run.archetypeId, (candidate) =>
+      isScenarioAllowedCard(candidate, run.scenarioId),
+    );
     const impact = previewRewardImpact({
       collection: run.cardCollection,
       change: { kind: 'add', card },
@@ -66,7 +69,12 @@ export function rollChestReward(run: RunState, rng: GameRng, depth: number): Rew
   }
 
   if (roll < 0.9) {
-    const relic = randomRelic(rng, new Set(run.relics.map((relic) => relic.id)), run.relicPool);
+    const relic = randomRelic(
+      rng,
+      new Set(run.relics.map((relic) => relic.id)),
+      run.relicPool,
+      (candidate) => isScenarioAllowedRelic(candidate, run.scenarioId),
+    );
     if (relic) {
       run.addRelic(relic);
       return { kind: 'relic', relic };
@@ -129,10 +137,13 @@ export function rollVictoryCardOffers(
   count = 3,
   tierBiasDepth = 0,
   archetype: ArchetypeId | null = null,
+  scenarioId: RunState['scenarioId'] = null,
 ): Card[] {
   const offers: Card[] = [];
   for (let attempts = 0; offers.length < count && attempts < 24; attempts++) {
-    const card = randomCard(rng, depth + tierBiasDepth, archetype);
+    const card = randomCard(rng, depth + tierBiasDepth, archetype, (candidate) =>
+      isScenarioAllowedCard(candidate, scenarioId),
+    );
     if (offers.some((offer) => offer.id === card.id)) continue;
     offers.push(card);
   }

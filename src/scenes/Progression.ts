@@ -4,7 +4,6 @@ import { playSfx } from '../audio/sfx';
 import {
   STARTER_CARD_VARIETY_UNLOCK_COST,
   buyStarterCardVarietyUnlock,
-  buyStarterKitUnlock,
   buyRelicPathUnlock,
   buyRelicUnlock,
   formatArchetypeProgressionLine,
@@ -12,11 +11,9 @@ import {
   formatRelicProgressionLine,
   formatRelicProgressionSummary,
   formatStarterCardProgressionSummary,
-  formatStarterKitProgressionLine,
   RELIC_PATH_UNLOCK_COST,
   setActiveArchetype,
   setActiveStartingRelic,
-  setActiveStarterKit,
 } from '../game/progression';
 import {
   clampScrollOffset,
@@ -24,7 +21,6 @@ import {
   createScrollbarThumbLayout,
   type ProgressionPanelLayout,
 } from '../game/progressionLayout';
-import { STARTER_KITS, type StarterKitId } from '../data/starterKits';
 import { RELIC_DEFS, type RelicId } from '../data/relics';
 import { ARCHETYPES } from '../data/archetypes';
 import type { ArchetypeId } from '../data/cards';
@@ -92,11 +88,7 @@ export class ProgressionScene extends Phaser.Scene {
     this.scrollContent = undefined;
     this.scrollbar = undefined;
     const meta = getMeta();
-    const layout = createProgressionPanelLayout(
-      STARTER_KITS.length,
-      ARCHETYPES.length,
-      RELIC_DEFS.length,
-    );
+    const layout = createProgressionPanelLayout(ARCHETYPES.length, RELIC_DEFS.length);
     this.layout = layout;
     this.scrollOffset = clampScrollOffset(this.scrollOffset, layout.maxScrollOffset);
 
@@ -192,8 +184,8 @@ export class ProgressionScene extends Phaser.Scene {
         ...TEXT_STYLE,
         fontSize: '12px',
         color: '#d8d2e4',
-        fixedWidth: layout.kitTextW,
-        wordWrap: { width: layout.kitTextW, useAdvancedWrap: true },
+        fixedWidth: layout.rowTextW,
+        wordWrap: { width: layout.rowTextW, useAdvancedWrap: true },
         lineSpacing: 5,
       }),
     );
@@ -204,21 +196,6 @@ export class ProgressionScene extends Phaser.Scene {
     divider.lineStyle(1, 0x6f687c, 0.55);
     divider.lineBetween(0, layout.dividerY, layout.contentW - 22, layout.dividerY);
     content.add(divider);
-
-    content.add(
-      this.add.text(0, layout.starterKitHeadingY, 'STARTER KITS', {
-        ...TEXT_STYLE,
-        fontSize: '18px',
-        fontStyle: 'bold',
-        color: '#f1c40f',
-      }),
-    );
-
-    for (const [index, kit] of STARTER_KITS.entries()) {
-      this.addStarterKitRow(kit.id, layout.kitRowsStartY + index * layout.kitRowH, content, layout);
-    }
-
-    this.addClearKitButton(content, layout);
 
     const relicDivider = this.add.graphics();
     relicDivider.lineStyle(1, 0x6f687c, 0.55);
@@ -238,8 +215,8 @@ export class ProgressionScene extends Phaser.Scene {
         ...TEXT_STYLE,
         fontSize: '12px',
         color: '#d8d2e4',
-        fixedWidth: layout.kitTextW,
-        wordWrap: { width: layout.kitTextW, useAdvancedWrap: true },
+        fixedWidth: layout.rowTextW,
+        wordWrap: { width: layout.rowTextW, useAdvancedWrap: true },
         lineSpacing: 5,
       }),
     );
@@ -335,64 +312,6 @@ export class ProgressionScene extends Phaser.Scene {
     );
   }
 
-  private addStarterKitRow(
-    kitId: StarterKitId,
-    y: number,
-    container: Phaser.GameObjects.Container,
-    layout: ProgressionPanelLayout,
-  ): void {
-    const meta = getMeta();
-    const kit = STARTER_KITS.find((candidate) => candidate.id === kitId);
-    if (!kit) return;
-
-    const rowBg = this.add.graphics();
-    rowBg.fillStyle(0x0f0d15, 0.68);
-    rowBg.fillRect(0, y - 12, layout.contentW - 22, layout.kitRowH - 10);
-    rowBg.lineStyle(1, 0x3f394d, 0.55);
-    rowBg.strokeRect(0, y - 12, layout.contentW - 22, layout.kitRowH - 10);
-    container.add(rowBg);
-
-    container.add(
-      this.add.text(14, y, formatStarterKitProgressionLine(meta, kitId), {
-        ...TEXT_STYLE,
-        fontSize: '12px',
-        color: '#d8d2e4',
-        fixedWidth: layout.kitTextW,
-        wordWrap: { width: layout.kitTextW, useAdvancedWrap: true },
-        lineSpacing: 4,
-      }),
-    );
-
-    const unlocked = meta.progression.unlockedStarterKitIds.includes(kit.id);
-    const active = meta.progression.activeStarterKitId === kit.id;
-    const canBuy =
-      meta.progression.starterCardVarietyUnlocked && !unlocked && meta.embers >= kit.cost;
-    const label = active
-      ? '[ ACTIVE ]'
-      : unlocked
-        ? '[ SELECT ]'
-        : canBuy
-          ? `[ BUY ${kit.cost} ]`
-          : meta.progression.starterCardVarietyUnlocked
-            ? `[ NEED ${kit.cost} ]`
-            : '[ LOCKED ]';
-    const enabled = unlocked ? !active : canBuy;
-    const onPointerDown = unlocked
-      ? () => this.selectStarterKit(kit.id)
-      : () => this.buyStarterKit(kit.id);
-
-    this.addTextButton(
-      layout.kitButtonX,
-      y + 24,
-      label,
-      enabled,
-      onPointerDown,
-      '14px',
-      container,
-      true,
-    );
-  }
-
   private addArchetypeRow(
     archetypeId: ArchetypeId,
     y: number,
@@ -413,15 +332,15 @@ export class ProgressionScene extends Phaser.Scene {
         ...TEXT_STYLE,
         fontSize: '12px',
         color: '#d8d2e4',
-        fixedWidth: layout.kitTextW,
-        wordWrap: { width: layout.kitTextW, useAdvancedWrap: true },
+        fixedWidth: layout.rowTextW,
+        wordWrap: { width: layout.rowTextW, useAdvancedWrap: true },
         lineSpacing: 4,
       }),
     );
 
     const active = meta.progression.activeArchetypeId === archetypeId;
     this.addTextButton(
-      layout.kitButtonX,
+      layout.rowButtonX,
       y + 34,
       active ? '[ ACTIVE ]' : '[ SELECT ]',
       !active,
@@ -443,23 +362,6 @@ export class ProgressionScene extends Phaser.Scene {
       active ? '[ NO ARCHETYPE NEXT RUN ]' : '[ NO ARCHETYPE SELECTED ]',
       active,
       () => this.selectArchetype(null),
-      '14px',
-      container,
-      true,
-    );
-  }
-
-  private addClearKitButton(
-    container: Phaser.GameObjects.Container,
-    layout: ProgressionPanelLayout,
-  ): void {
-    const active = getMeta().progression.activeStarterKitId !== null;
-    this.addTextButton(
-      layout.contentW / 2 - 11,
-      layout.clearKitButtonY,
-      active ? '[ NO KIT NEXT RUN ]' : '[ NO KIT SELECTED ]',
-      active,
-      () => this.selectStarterKit(null),
       '14px',
       container,
       true,
@@ -513,8 +415,8 @@ export class ProgressionScene extends Phaser.Scene {
         ...TEXT_STYLE,
         fontSize: '12px',
         color: '#d8d2e4',
-        fixedWidth: layout.kitTextW,
-        wordWrap: { width: layout.kitTextW, useAdvancedWrap: true },
+        fixedWidth: layout.rowTextW,
+        wordWrap: { width: layout.rowTextW, useAdvancedWrap: true },
         lineSpacing: 4,
       }),
     );
@@ -548,7 +450,7 @@ export class ProgressionScene extends Phaser.Scene {
         : () => this.buyRelic(relic.id);
 
     this.addTextButton(
-      layout.kitButtonX,
+      layout.rowButtonX,
       y + 18,
       label,
       enabled,
@@ -697,36 +599,6 @@ export class ProgressionScene extends Phaser.Scene {
   private buyStarterUnlock(): void {
     const meta = getMeta();
     const result = buyStarterCardVarietyUnlock(meta);
-    if (!result.ok) return;
-
-    const updated = setMeta({
-      ...meta,
-      embers: result.state.embers,
-      progression: result.state.progression,
-    });
-    this.game.events.emit('meta-update', updated);
-    playSfx(this, 'purchase');
-    this.redraw();
-  }
-
-  private buyStarterKit(kitId: StarterKitId): void {
-    const meta = getMeta();
-    const result = buyStarterKitUnlock(meta, kitId);
-    if (!result.ok) return;
-
-    const updated = setMeta({
-      ...meta,
-      embers: result.state.embers,
-      progression: result.state.progression,
-    });
-    this.game.events.emit('meta-update', updated);
-    playSfx(this, 'purchase');
-    this.redraw();
-  }
-
-  private selectStarterKit(kitId: StarterKitId | null): void {
-    const meta = getMeta();
-    const result = setActiveStarterKit(meta, kitId);
     if (!result.ok) return;
 
     const updated = setMeta({

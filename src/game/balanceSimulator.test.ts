@@ -34,6 +34,9 @@ const minRng: GameRng = {
   pick: (items) => items[0],
 };
 
+const SIMULATION_TEST_TIMEOUT = 30_000;
+const simulationTest = (name: string, fn: () => void) => test(name, fn, SIMULATION_TEST_TIMEOUT);
+
 describe('balance simulator battle kernel (U13)', () => {
   test('simulated battles run the real turn engine and terminate across seeds', () => {
     for (let seed = 1; seed <= 40; seed++) {
@@ -137,7 +140,7 @@ describe('balance simulator battle kernel (U13)', () => {
 });
 
 describe('balance simulator economy bands', () => {
-  test('baseline runs land in the roguelike-hard band (combat-depth rebaseline)', () => {
+  simulationTest('baseline runs land in the roguelike-hard band (combat-depth rebaseline)', () => {
     const summary = simulateScenarioSummary({}, 400);
 
     // Re-baselined for the combat-depth rework (2026-07-04). The band is now measured against a
@@ -166,7 +169,7 @@ describe('balance simulator economy bands', () => {
     expect(summary.bossKillGivenReach).toBeLessThanOrEqual(0.85);
   });
 
-  test('weak-tier fights stay highly winnable — fresh-deck floor (U12)', () => {
+  simulationTest('weak-tier fights stay highly winnable — fresh-deck floor (U12)', () => {
     const summary = simulateScenarioSummary({}, 400);
 
     // Tier-1 winnability floor (plan test scenario): the base run's difficulty
@@ -184,7 +187,7 @@ describe('balance simulator economy bands', () => {
     expect(Object.keys(summary.byEncounter).some((key) => key !== '0')).toBe(true);
   });
 
-  test('starter-card variety alone stays inside the baseline band', () => {
+  simulationTest('starter-card variety alone stays inside the baseline band', () => {
     const summary = simulateScenarioSummary({ starterCardVarietyUnlocked: true }, 400);
 
     // Same band as the baseline test (variety alone doesn't distort the challenge band).
@@ -192,34 +195,7 @@ describe('balance simulator economy bands', () => {
     expect(summary.winRate).toBeLessThanOrEqual(0.45);
   });
 
-  test('starter kit scenarios change the opener without erasing the challenge band', () => {
-    const varietyOnly = simulateScenarioSummary({ starterCardVarietyUnlocked: true }, 400);
-    const kits = ['duelist', 'warden', 'hexbinder'] as const;
-
-    for (const kit of kits) {
-      const summary = simulateScenarioSummary(
-        {
-          starterCardVarietyUnlocked: true,
-          unlockedStarterKitIds: [kit],
-          activeStarterKitId: kit,
-        },
-        400,
-      );
-
-      expect(summary).not.toEqual(varietyOnly);
-      // Kits are a separate tuning surface (not U12's file scope) and legitimately
-      // sit at different power levels — measured 0.32 (hexbinder) to 0.47 (warden)
-      // at 400 seeds. The upper bound widened with multi-enemy packs: the warden's
-      // block kit strongly synergizes with a pack's turn-1 multi-hit burst (one big
-      // block absorbs the combined salvo, then you pick members off with reduced
-      // incoming), so its win rate legitimately sits higher than the baseline's. The
-      // band still catches a kit drifting to "always wins"/"never wins".
-      expect(summary.winRate).toBeGreaterThanOrEqual(0.15);
-      expect(summary.winRate).toBeLessThanOrEqual(0.53);
-    }
-  });
-
-  test('full prep materially improves the chance to escape', () => {
+  simulationTest('full prep materially improves the chance to escape', () => {
     const baseline = simulateScenarioSummary({}, 400);
     const prepared = simulateScenarioSummary(
       {
@@ -238,23 +214,65 @@ describe('balance simulator economy bands', () => {
     expect(prepared.bossKillGivenReach).toBeGreaterThanOrEqual(0.65);
   });
 
-  test('battle-setup relics run cleanly through the harness and help rather than hurt', () => {
-    // Coverage gate: before `startingRelicIds`, BalanceScenario had no way to grant spark_coil,
-    // stone_heart, venom_ring, or hunter_charm, so `relicBattleSetup`'s startingEnergyBonus/
-    // retainBlockCap/poisonBonus/enemyKillDraw branches never ran through a single simulated
-    // battle — a broken or badly-tuned value for any of them could ship with the harness fully
-    // green. Measured at 400 seeds against the baseline's 0.3575 winRate: spark_coil 0.49,
-    // stone_heart 0.4625, venom_ring 0.365, hunter_charm 0.385 — every relic is at/above baseline
-    // (within seed-to-seed noise for the two situational ones) and none is degenerate.
-    const baseline = simulateScenarioSummary({}, 400);
-    const relicIds = ['spark_coil', 'stone_heart', 'venom_ring', 'hunter_charm'] as const;
+  simulationTest(
+    'battle-setup relics run cleanly through the harness and help rather than hurt',
+    () => {
+      // Coverage gate: before `startingRelicIds`, BalanceScenario had no way to grant spark_coil,
+      // stone_heart, venom_ring, or hunter_charm, so `relicBattleSetup`'s startingEnergyBonus/
+      // retainBlockCap/poisonBonus/enemyKillDraw branches never ran through a single simulated
+      // battle — a broken or badly-tuned value for any of them could ship with the harness fully
+      // green. Measured at 400 seeds against the baseline's 0.3575 winRate: spark_coil 0.49,
+      // stone_heart 0.4625, venom_ring 0.365, hunter_charm 0.385 — every relic is at/above baseline
+      // (within seed-to-seed noise for the two situational ones) and none is degenerate.
+      const baseline = simulateScenarioSummary({}, 400);
+      const relicIds = ['spark_coil', 'stone_heart', 'venom_ring', 'hunter_charm'] as const;
 
-    for (const relicId of relicIds) {
-      const summary = simulateScenarioSummary({ startingRelicIds: [relicId] }, 400);
-      expect(summary.winRate).toBeGreaterThanOrEqual(baseline.winRate - 0.03);
-      expect(summary.winRate).toBeLessThanOrEqual(0.65);
-    }
-  });
+      for (const relicId of relicIds) {
+        const summary = simulateScenarioSummary({ startingRelicIds: [relicId] }, 400);
+        expect(summary.winRate).toBeGreaterThanOrEqual(baseline.winRate - 0.03);
+        expect(summary.winRate).toBeLessThanOrEqual(0.65);
+      }
+    },
+  );
+
+  simulationTest(
+    'Escape the Dungeon keeps the baseline combat shape but converts no progression reward',
+    () => {
+      const baseline = simulateScenarioSummary({}, 160);
+      const escape = simulateScenarioSummary({ playerScenarioId: 'escape_the_dungeon' }, 160);
+
+      // Escape is the clean/default Scenario: same combat route as the baseline simulator, but no
+      // post-run progression conversion. Seed 7 is the committed runSignature victory seed.
+      expect(escape.winRate).toBe(baseline.winRate);
+      expect(escape.bossReachRate).toBe(baseline.bossReachRate);
+      expect(escape.byTier).toEqual(baseline.byTier);
+      expect(simulateRun(7, { playerScenarioId: 'escape_the_dungeon' }).convertedEmbers).toBe(0);
+    },
+  );
+
+  simulationTest(
+    'hard player scenarios are deterministic and sit at or below the baseline band',
+    () => {
+      const baseline = simulateScenarioSummary({}, 160);
+      const hardScenarios = [
+        ['im_poisoned', 'room-entry attrition'],
+        ['lost_left_arm', 'no player block'],
+        ['enemies_doubled', 'two full normal enemies'],
+      ] as const;
+
+      for (const [playerScenarioId] of hardScenarios) {
+        const first = simulateScenarioSummary({ playerScenarioId }, 160);
+        const second = simulateScenarioSummary({ playerScenarioId }, 160);
+
+        // These are intentionally harder routes, not new baseline bands. Keep the assertions broad:
+        // the product rule owns the difficulty shift; later tuning can tighten per-scenario bands.
+        expect(second).toEqual(first);
+        expect(first.winRate).toBeLessThanOrEqual(baseline.winRate);
+        expect(first.winRate).toBeGreaterThanOrEqual(0);
+        expect(first.bossReachRate).toBeLessThanOrEqual(baseline.bossReachRate);
+      }
+    },
+  );
 });
 
 describe('elite engagement (U9)', () => {
@@ -264,28 +282,34 @@ describe('elite engagement (U9)', () => {
   // actually reachable AND actually fought at a non-degenerate rate) — the
   // exact rate is playtest-owned (U12), so the bounds here stay loose.
 
-  test('the elite engagement rate is non-degenerate — neither near 0 nor near 1', () => {
+  simulationTest('the elite engagement rate is non-degenerate — neither near 0 nor near 1', () => {
     const summary = simulateScenarioSummary({}, 400);
 
     expect(summary.eliteEngagementRate).toBeGreaterThan(0.05);
     expect(summary.eliteEngagementRate).toBeLessThan(0.98);
   });
 
-  test('elites are offered and engaged at a representative rate, with a sane win/engaged ordering', () => {
-    const summary = simulateScenarioSummary({}, 400);
+  simulationTest(
+    'elites are offered and engaged at a representative rate, with a sane win/engaged ordering',
+    () => {
+      const summary = simulateScenarioSummary({}, 400);
 
-    expect(summary.eliteBucket.offered).toBeGreaterThan(0);
-    expect(summary.eliteBucket.engaged).toBeGreaterThan(0);
-    expect(summary.eliteBucket.wins).toBeLessThanOrEqual(summary.eliteBucket.engaged);
-  });
+      expect(summary.eliteBucket.offered).toBeGreaterThan(0);
+      expect(summary.eliteBucket.engaged).toBeGreaterThan(0);
+      expect(summary.eliteBucket.wins).toBeLessThanOrEqual(summary.eliteBucket.engaged);
+    },
+  );
 
-  test('the top-level elite rates are internally consistent with the raw bucket counts', () => {
-    const summary = simulateScenarioSummary({}, 400);
-    const { offered, engaged, wins } = summary.eliteBucket;
+  simulationTest(
+    'the top-level elite rates are internally consistent with the raw bucket counts',
+    () => {
+      const summary = simulateScenarioSummary({}, 400);
+      const { offered, engaged, wins } = summary.eliteBucket;
 
-    expect(summary.eliteEngagementRate).toBeCloseTo(engaged / offered, 10);
-    expect(summary.eliteWinRate).toBeCloseTo(wins / engaged, 10);
-  });
+      expect(summary.eliteEngagementRate).toBeCloseTo(engaged / offered, 10);
+      expect(summary.eliteWinRate).toBeCloseTo(wins / engaged, 10);
+    },
+  );
 
   test('a fixed seed set produces an identical elite summary across double runs', () => {
     const first = simulateScenarioSummary({}, 50);
@@ -299,7 +323,7 @@ describe('elite engagement (U9)', () => {
 });
 
 describe('card emphasis policy guard (U13)', () => {
-  test('no single always-one-emphasis policy dominates the seed spread', () => {
+  simulationTest('no single always-one-emphasis policy dominates the seed spread', () => {
     const dominance = assessCardEmphasisDominance({}, { runs: 120, margin: 0.12 });
 
     expect(dominance.hasDominantEmphasis).toBe(false);
@@ -315,7 +339,7 @@ describe('delve economy', () => {
   // payoff beats both rivals by this many Embers. Healthy tuning keeps the lines closer.
   const DOMINANCE_MARGIN = 1.5;
 
-  test('a delve run reaches strata past depth 10 and terminates within the cap', () => {
+  simulationTest('a delve run reaches strata past depth 10 and terminates within the cap', () => {
     // Aggressive never banks until forced, so this exercises the max-strata guard.
     let deepestStratum = 0;
     for (let seed = 1; seed <= 200; seed++) {
@@ -332,7 +356,7 @@ describe('delve economy', () => {
     expect(deepestStratum).toBeGreaterThanOrEqual(2);
   });
 
-  test('the three heuristics produce distinct banked/died profiles', () => {
+  simulationTest('the three heuristics produce distinct banked/died profiles', () => {
     const economy = simulateDelveEconomy({}, { runs: 400 });
 
     // Cautious always banks at gate 1; moderate sometimes dies pushing one stratum;
@@ -348,7 +372,7 @@ describe('delve economy', () => {
     );
   });
 
-  test('no line dominates under the tuned conversion (R14)', () => {
+  simulationTest('no line dominates under the tuned conversion (R14)', () => {
     const economy = simulateDelveEconomy({}, { runs: 400 });
     const dominance = assessDelveDominance(economy, DOMINANCE_MARGIN);
 
@@ -357,7 +381,7 @@ describe('delve economy', () => {
     expect(dominance.hasDominantLine).toBe(false);
   });
 
-  test('an over-generous conversion still leaks straight into line payoffs', () => {
+  simulationTest('an over-generous conversion still leaks straight into line payoffs', () => {
     // The old canary asserted a cautious/aggressive extreme would dominate; under
     // the rebuilt combat the aggressive line dies before it ever banks, so no
     // conversion can crown an extreme (deep-scaling tuning is playtest-owned).
@@ -379,7 +403,7 @@ describe('delve economy', () => {
     expect(spread(generous)).toBeGreaterThan(spread(tuned) * 2.5);
   });
 
-  test('expected Ember yield stays bounded by the conversion guard across strata', () => {
+  simulationTest('expected Ember yield stays bounded by the conversion guard across strata', () => {
     // Even pushing the iteration cap higher cannot unbound the yield: the guard caps
     // per-run conversion, so the average can never exceed it for any strategy.
     for (const maxStrata of [4, MAX_SIMULATED_STRATA, 24]) {

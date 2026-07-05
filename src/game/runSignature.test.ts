@@ -9,13 +9,10 @@ import { RngDrawDigest, runSignature } from './runSignature';
  */
 const GOLDEN_SEED = 7;
 const GOLDEN_SIGNATURE =
-  // Re-goldened for the iron_will/enemy-block-timing fix (2026-07-05). Intentional determinism
-  // change, not a regression: iron_will now fills armor to its raised cap immediately on
-  // acquire instead of leaving it to rare chest pickups, and an enemy's block-kind intent
-  // effects now apply the instant they're telegraphed (protecting it against the player's hits
-  // THIS round) instead of at the end of that same turn. Both change how much damage lands and
-  // how long fights run for a fixed seed, shifting downstream draw order and count.
-  'v=1|boss=1|gate=1|death=-|stratum=1|enc=0|embers=3|draws=118|hash=d89aae7f';
+  // Re-goldened for Starter Kit retirement (2026-07-05). Intentional determinism change, not a
+  // regression: the former signature cards are now normal authored neutral cards instead of a
+  // kit-only pool, so reward offer contents and downstream draw order shift for fixed seeds.
+  'v=1|boss=1|gate=1|death=-|stratum=1|enc=0|embers=3|draws=106|hash=37c4bdba';
 
 describe('RngDrawDigest', () => {
   test('samples draw order and count, not just the value set (the load-bearing property)', () => {
@@ -88,8 +85,7 @@ describe('runSignature', () => {
   test('a non-default scenario yields a stable signature across double runs', () => {
     const scenario: BalanceScenario = {
       starterCardVarietyUnlocked: true,
-      unlockedStarterKitIds: ['duelist'],
-      activeStarterKitId: 'duelist',
+      activeArchetypeId: 'ranger',
     };
     for (let seed = 1; seed <= 10; seed++) {
       expect(runSignature(seed, scenario)).toBe(runSignature(seed, scenario));

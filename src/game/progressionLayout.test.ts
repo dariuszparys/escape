@@ -6,14 +6,14 @@ import {
 } from './progressionLayout';
 
 describe('progression screen layout', () => {
-  test('keeps starter-kit heading below wrapped starter summary', () => {
-    const layout = createProgressionPanelLayout(3, 3);
+  test('keeps relic heading below wrapped starter summary', () => {
+    const layout = createProgressionPanelLayout(3, 12);
 
-    expect(layout.starterKitHeadingY - layout.starterSummaryBottom).toBeGreaterThanOrEqual(24);
+    expect(layout.relicHeadingY - layout.starterSummaryBottom).toBeGreaterThanOrEqual(40);
   });
 
   test('stacks the archetype section above starter variety when archetypes are present', () => {
-    const layout = createProgressionPanelLayout(3, 3);
+    const layout = createProgressionPanelLayout(3, 12);
 
     expect(layout.archetypeHeadingY).toBeLessThan(layout.starterHeadingY);
     expect(layout.clearArchetypeButtonY).toBeLessThan(layout.archetypeDividerY);
@@ -21,13 +21,13 @@ describe('progression screen layout', () => {
   });
 
   test('omits the archetype section for legacy no-archetype callers', () => {
-    const layout = createProgressionPanelLayout(3);
+    const layout = createProgressionPanelLayout();
 
     expect(layout.starterHeadingY).toBe(0);
   });
 
   test('uses scrolling when progression content is taller than the panel viewport', () => {
-    const layout = createProgressionPanelLayout(3, 3);
+    const layout = createProgressionPanelLayout(3, 12);
 
     expect(layout.maxScrollOffset).toBeGreaterThan(0);
   });
@@ -39,7 +39,7 @@ describe('progression screen layout', () => {
   });
 
   test('positions the scrollbar thumb within its track', () => {
-    const layout = createProgressionPanelLayout(3, 3);
+    const layout = createProgressionPanelLayout(3, 12);
     const thumb = createScrollbarThumbLayout(layout, layout.maxScrollOffset);
 
     expect(thumb.visible).toBe(true);

@@ -7,7 +7,6 @@ import { MAX_INVENTORY } from './config';
 import { CAMPFIRE_BARGAINS } from './data/campfireBargains';
 import type { CampfireCurseId } from './data/campfireBargains';
 import { CAMPFIRE_PURCHASES, createDefaultPendingPrep } from './data/campfirePurchases';
-import { STARTER_KITS, type StarterKitId } from './data/starterKits';
 import { ARCHETYPES } from './data/archetypes';
 import type { ArchetypeId } from './data/cards';
 import type { RelicId } from './data/relics';
@@ -29,8 +28,6 @@ const ARCHETYPE_ID_SET = new Set<string>(ARCHETYPE_IDS);
 export interface MetaProgressionState {
   starterCardVarietyUnlocked: boolean;
   migrationBonusGranted: boolean;
-  unlockedStarterKitIds: StarterKitId[];
-  activeStarterKitId: StarterKitId | null;
   /**
    * The archetype whose cards shape the next normal run, or null/undefined for the neutral
    * (standard) pool. Optional so it reads as an additive field: pre-archetype saves and older
@@ -66,8 +63,6 @@ export function createDefaultProgressionState(): MetaProgressionState {
   return {
     starterCardVarietyUnlocked: false,
     migrationBonusGranted: false,
-    unlockedStarterKitIds: [],
-    activeStarterKitId: null,
     activeArchetypeId: null,
     relicPathUnlocked: false,
     unlockedRelicIds: [],
@@ -94,7 +89,6 @@ const CAMPFIRE_ITEM_IDS = new Set<PendingPrep['itemIds'][number]>(
   CAMPFIRE_PURCHASES.filter(isCampfireItemPurchase).map((purchase) => purchase.itemId),
 );
 const CAMPFIRE_CURSE_IDS = new Set<string>(CAMPFIRE_BARGAINS.map((bargain) => bargain.curseId));
-const STARTER_KIT_IDS = new Set<string>(STARTER_KITS.map((kit) => kit.id));
 
 function normalizeItemIds(value: unknown): PendingPrep['itemIds'] {
   if (!Array.isArray(value)) return [];
@@ -115,20 +109,6 @@ function normalizeCurseIds(value: unknown): CampfireCurseId[] {
     .slice(0, 1);
 }
 
-function normalizeStarterKitIds(value: unknown): StarterKitId[] {
-  if (!Array.isArray(value)) return [];
-
-  const seen = new Set<string>();
-  return value.filter((kitId): kitId is StarterKitId => {
-    if (typeof kitId !== 'string' || !STARTER_KIT_IDS.has(kitId) || seen.has(kitId)) {
-      return false;
-    }
-
-    seen.add(kitId);
-    return true;
-  });
-}
-
 function normalizeEmbers(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
 }
@@ -139,14 +119,6 @@ function normalizeProgression(value: unknown): MetaProgressionState {
   const migrationBonusGranted = value.migrationBonusGranted === true;
   const starterCardVarietyUnlocked =
     value.starterCardVarietyUnlocked === true || migrationBonusGranted;
-  const unlockedStarterKitIds = starterCardVarietyUnlocked
-    ? normalizeStarterKitIds(value.unlockedStarterKitIds)
-    : [];
-  const activeStarterKitId =
-    typeof value.activeStarterKitId === 'string' &&
-    unlockedStarterKitIds.includes(value.activeStarterKitId as StarterKitId)
-      ? (value.activeStarterKitId as StarterKitId)
-      : null;
   // Kept independent of `relicPathUnlocked` (contracts can unlock a relic id before the path
   // purchase — see the "Deep Delver"-style rewards) so buying the path later doesn't require
   // re-earning contract rewards. Whether an unlocked id actually appears in-run is still gated by
@@ -162,8 +134,6 @@ function normalizeProgression(value: unknown): MetaProgressionState {
   return {
     starterCardVarietyUnlocked,
     migrationBonusGranted,
-    unlockedStarterKitIds,
-    activeStarterKitId,
     activeArchetypeId: normalizeArchetypeId(value.activeArchetypeId),
     relicPathUnlocked,
     unlockedRelicIds,
@@ -176,8 +146,6 @@ function createMigratedProgressionState(grantsStarterBonus: boolean): MetaProgre
   return {
     starterCardVarietyUnlocked: grantsStarterBonus,
     migrationBonusGranted: grantsStarterBonus,
-    unlockedStarterKitIds: [],
-    activeStarterKitId: null,
     activeArchetypeId: null,
     relicPathUnlocked: false,
     unlockedRelicIds: [],

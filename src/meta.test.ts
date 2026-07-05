@@ -67,8 +67,6 @@ describe('meta state', () => {
       progression: {
         starterCardVarietyUnlocked: true,
         migrationBonusGranted: true,
-        unlockedStarterKitIds: [],
-        activeStarterKitId: null,
         activeArchetypeId: null,
         relicPathUnlocked: false,
         unlockedRelicIds: [],
@@ -104,8 +102,6 @@ describe('meta state', () => {
       progression: {
         starterCardVarietyUnlocked: true,
         migrationBonusGranted: true,
-        unlockedStarterKitIds: [],
-        activeStarterKitId: null,
         activeArchetypeId: null,
         relicPathUnlocked: false,
         unlockedRelicIds: [],
@@ -159,8 +155,6 @@ describe('meta state', () => {
     ).toEqual({
       starterCardVarietyUnlocked: true,
       migrationBonusGranted: false,
-      unlockedStarterKitIds: [],
-      activeStarterKitId: null,
       activeArchetypeId: null,
       relicPathUnlocked: false,
       unlockedRelicIds: [],
@@ -169,7 +163,7 @@ describe('meta state', () => {
     });
   });
 
-  test('deduplicates unlocked starter kits and clears stale active ids', () => {
+  test('drops retired starter-kit fields from old saved progression', () => {
     expect(
       normalizeMetaState({
         economyVersion: META_ECONOMY_VERSION,
@@ -178,7 +172,7 @@ describe('meta state', () => {
           starterCardVarietyUnlocked: true,
           migrationBonusGranted: false,
           unlockedStarterKitIds: ['duelist', 'bad-kit', 'warden', 'duelist'],
-          activeStarterKitId: 'hexbinder',
+          activeStarterKitId: 'warden',
         },
         pendingPrep: {
           itemIds: [],
@@ -191,8 +185,6 @@ describe('meta state', () => {
     ).toEqual({
       starterCardVarietyUnlocked: true,
       migrationBonusGranted: false,
-      unlockedStarterKitIds: ['duelist', 'warden'],
-      activeStarterKitId: null,
       activeArchetypeId: null,
       relicPathUnlocked: false,
       unlockedRelicIds: [],
@@ -255,8 +247,6 @@ describe('meta state', () => {
         progression: {
           starterCardVarietyUnlocked: true,
           migrationBonusGranted: false,
-          unlockedStarterKitIds: ['duelist'],
-          activeStarterKitId: 'duelist',
         },
         pendingPrep: {
           itemIds: ['small_potion'],
@@ -275,8 +265,6 @@ describe('meta state', () => {
       progression: {
         starterCardVarietyUnlocked: true,
         migrationBonusGranted: false,
-        unlockedStarterKitIds: ['duelist'],
-        activeStarterKitId: 'duelist',
         activeArchetypeId: null,
         relicPathUnlocked: false,
         unlockedRelicIds: [],
@@ -309,8 +297,6 @@ describe('meta state', () => {
         progression: {
           starterCardVarietyUnlocked: true,
           migrationBonusGranted: false,
-          unlockedStarterKitIds: ['warden', 'warden'],
-          activeStarterKitId: 'duelist',
         },
         pendingPrep: {
           itemIds: ['large_potion', 'bomb'],
@@ -326,8 +312,6 @@ describe('meta state', () => {
       progression: {
         starterCardVarietyUnlocked: true,
         migrationBonusGranted: false,
-        unlockedStarterKitIds: ['warden'],
-        activeStarterKitId: null,
         activeArchetypeId: null,
         relicPathUnlocked: false,
         unlockedRelicIds: [],
@@ -351,8 +335,6 @@ describe('meta state', () => {
         progression: {
           starterCardVarietyUnlocked: false,
           migrationBonusGranted: false,
-          unlockedStarterKitIds: [],
-          activeStarterKitId: null,
         },
         pendingPrep: {
           itemIds: ['bomb'],
@@ -368,8 +350,6 @@ describe('meta state', () => {
       progression: {
         starterCardVarietyUnlocked: false,
         migrationBonusGranted: false,
-        unlockedStarterKitIds: [],
-        activeStarterKitId: null,
         activeArchetypeId: null,
         relicPathUnlocked: false,
         unlockedRelicIds: [],
@@ -392,8 +372,6 @@ describe('meta state', () => {
       progression: {
         starterCardVarietyUnlocked: false,
         migrationBonusGranted: false,
-        unlockedStarterKitIds: [],
-        activeStarterKitId: null,
         activeArchetypeId: null,
         relicPathUnlocked: false,
         unlockedRelicIds: [],

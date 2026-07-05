@@ -6,7 +6,7 @@ import { InventoryItem, makeItem } from '../data/items';
 /**
  * The slice playground's fixed content (R13/R24). Everything here is private to
  * the sandbox: the deck is built fresh per battle, slice-only defs never join
- * `CARD_DEFS` (so no reward pool or starter kit can roll them), and no run
+ * `CARD_DEFS` (so no reward pool can roll them), and no run
  * state is read or written.
  */
 

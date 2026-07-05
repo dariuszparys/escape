@@ -3,7 +3,7 @@ import { Card, type ArchetypeId } from './data/cards';
 import type { CampfireCurseId } from './data/campfireBargains';
 import { InventoryItem, makeItem } from './data/items';
 import { MAX_RELICS_PER_RUN, type RelicId, type Relic, starterRelicPool } from './data/relics';
-import type { StarterKitId } from './data/starterKits';
+import type { ScenarioId } from './data/scenarios';
 import {
   RELIC_ON_ACQUIRE_FILLS_ARMOR,
   RELIC_ON_ACQUIRE_MAX_HP,
@@ -38,7 +38,8 @@ export class RunState {
   startingCardChoices = DEFAULT_STARTING_CARD_CHOICES;
   startingCardPicks = DEFAULT_STARTING_CARD_PICKS;
   startingCardsTaken = 0;
-  starterKitId: StarterKitId | null = null;
+  /** Player-facing Scenario selected for a normal run; null for daily and legacy run setup. */
+  scenarioId: ScenarioId | null = null;
   /** The active archetype for this run (null = neutral pool). Drives starting picks and reward draws. */
   archetypeId: ArchetypeId | null = null;
   scoutCharges = 0;

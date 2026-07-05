@@ -69,7 +69,7 @@ export class TitleScene extends Phaser.Scene {
     ]);
     this.addInfoColumn(cx, layout, 'CARDS', [
       'Pick 2 at the fire',
-      'Kits add a signature',
+      'Scenarios shape runs',
       'Gold now, Embers later',
     ]);
     this.addInfoColumn(cx + 204, layout, 'BATTLE', [
