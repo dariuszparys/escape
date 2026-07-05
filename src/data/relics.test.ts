@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'vitest';
-import { makeRelic, randomRelic, relicDef, RELIC_DEFS } from './relics';
+import {
+  makeRelic,
+  randomRelic,
+  relicDef,
+  RELIC_DEFS,
+  rollRelicOffers,
+  starterRelicPool,
+} from './relics';
 import { GameRng } from '../game/rng';
 
 function makePredictableRng(index: number): GameRng {
@@ -53,14 +60,14 @@ describe('relic defs', () => {
   test('randomRelic returns a relic from available definitions', () => {
     const rng = makePredictableRng(1);
 
-    const relic = randomRelic(rng, new Set());
+    const relic = randomRelic(rng, new Set(), starterRelicPool());
 
     expect(RELIC_DEFS.map((def) => def.id)).toContain(relic?.id);
   });
 
   test('randomRelic returns null when all relics are owned', () => {
     const allRelics = new Set(RELIC_DEFS.map((relic) => relic.id));
-    const relic = randomRelic(makePredictableRng(0), allRelics);
+    const relic = randomRelic(makePredictableRng(0), allRelics, starterRelicPool());
 
     expect(relic).toBeNull();
   });
@@ -69,10 +76,22 @@ describe('relic defs', () => {
     const relics = new Set(['swift_boots', 'iron_will', 'vampiric_blade'] as const);
     const rng = makePredictableRng(2);
 
-    const relic = randomRelic(rng, relics);
+    const relic = randomRelic(rng, relics, starterRelicPool());
 
     expect(relic).not.toBeNull();
     if (relic === null) throw new Error('Expected a relic');
     expect(relic.id).toBe('lucky_coin');
+  });
+
+  test('rollRelicOffers returns distinct unowned offers', () => {
+    const offers = rollRelicOffers(
+      makePredictableRng(0),
+      new Set(['swift_boots']),
+      starterRelicPool(),
+      3,
+    );
+    expect(offers.length).toBeGreaterThan(0);
+    expect(new Set(offers.map((relic) => relic.id)).size).toBe(offers.length);
+    expect(offers.every((relic) => relic.id !== 'swift_boots')).toBe(true);
   });
 });

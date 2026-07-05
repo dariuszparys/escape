@@ -2,8 +2,14 @@ import { MAX_ARMOR, MAX_INVENTORY, PLAYER_MAX_HP } from './config';
 import { Card, type ArchetypeId } from './data/cards';
 import type { CampfireCurseId } from './data/campfireBargains';
 import { InventoryItem, makeItem } from './data/items';
-import { RelicId, Relic } from './data/relics';
+import { MAX_RELICS_PER_RUN, type RelicId, type Relic, starterRelicPool } from './data/relics';
 import type { StarterKitId } from './data/starterKits';
+import {
+  RELIC_ON_ACQUIRE_MAX_HP,
+  relicGoldMultiplier,
+  relicMaxArmor,
+  relicRoomEnterHeal,
+} from './game/relicRegistry';
 import { DEFAULT_STARTING_CARD_CHOICES, DEFAULT_STARTING_CARD_PICKS } from './game/startingCards';
 
 let nextRunId = 1;
@@ -26,6 +32,8 @@ export class RunState {
   enemiesDefeated = 0;
   relics: Relic[] = [];
   maxArmor = MAX_ARMOR;
+  /** Relic ids eligible for in-run drops (set at run start from meta or daily rules). */
+  relicPool: ReadonlySet<RelicId> = starterRelicPool();
   startingCardChoices = DEFAULT_STARTING_CARD_CHOICES;
   startingCardPicks = DEFAULT_STARTING_CARD_PICKS;
   startingCardsTaken = 0;
@@ -43,6 +51,8 @@ export class RunState {
   escaped = false;
   isDaily = false;
   dailyKey: string | null = null;
+  /** Elite rooms defeated this run (for chronicle contracts). */
+  elitesDefeated = 0;
 
   constructor(seed = String(Math.random()), runId = createRunId()) {
     this.seed = seed;
@@ -61,6 +71,14 @@ export class RunState {
 
   get inventoryFull(): boolean {
     return this.inventory.length >= MAX_INVENTORY;
+  }
+
+  get relicIds(): RelicId[] {
+    return this.relics.map((relic) => relic.id);
+  }
+
+  get atRelicCap(): boolean {
+    return this.relics.length >= MAX_RELICS_PER_RUN;
   }
 
   addCard(card: Card): boolean {
@@ -115,18 +133,30 @@ export class RunState {
   }
 
   get goldMultiplier(): number {
-    return this.hasRelic('lucky_coin') ? 1.5 : 1;
+    return relicGoldMultiplier(this.relicIds);
   }
 
   hasRelic(id: RelicId): boolean {
     return this.relics.some((relic) => relic.id === id);
   }
 
-  addRelic(relic: Relic): void {
-    if (this.hasRelic(relic.id)) return;
+  addRelic(relic: Relic): boolean {
+    if (this.hasRelic(relic.id) || this.atRelicCap) return false;
 
     this.relics.push(relic);
-    this.maxArmor = this.hasRelic('iron_will') ? MAX_ARMOR + 1 : MAX_ARMOR;
+    this.maxArmor = relicMaxArmor(MAX_ARMOR, this.relicIds);
+    const maxHpBonus = RELIC_ON_ACQUIRE_MAX_HP[relic.id] ?? 0;
+    if (maxHpBonus > 0) {
+      this.maxHp += maxHpBonus;
+      this.hp += maxHpBonus;
+    }
+    return true;
+  }
+
+  /** Heal from room-enter relics (Wanderer's Flask). */
+  onRoomEntered(): void {
+    const heal = relicRoomEnterHeal(this.relicIds);
+    if (heal > 0) this.heal(heal);
   }
 }
 

@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { GAME_W, ROOM_H, HUD_H, MAX_INVENTORY, STRATUM_SIZE } from '../config';
+import type { Relic } from '../data/relics';
 import { depthWithinStratum, isStratumBoundary, stratumForDepth } from '../game/strata';
+import { createRelicTooltip } from '../gfx/relicTooltip';
 import { getRun } from '../state';
 
 const TYPE_COLOR: Record<string, string> = {
@@ -13,6 +15,7 @@ const TYPE_COLOR: Record<string, string> = {
 
 export class HudScene extends Phaser.Scene {
   private dynamic!: Phaser.GameObjects.Container;
+  private relicTooltip: Phaser.GameObjects.Container | null = null;
 
   constructor() {
     super('Hud');
@@ -30,11 +33,23 @@ export class HudScene extends Phaser.Scene {
     this.game.events.on('hud-update', this.redraw, this);
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.game.events.off('hud-update', this.redraw, this);
+      this.hideRelicTooltip();
     });
     this.redraw();
   }
 
+  private hideRelicTooltip(): void {
+    this.relicTooltip?.destroy();
+    this.relicTooltip = null;
+  }
+
+  private showRelicTooltip(relic: Relic, anchorX: number, anchorY: number): void {
+    this.hideRelicTooltip();
+    this.relicTooltip = createRelicTooltip(this, relic, anchorX, anchorY - 8);
+  }
+
   private redraw(): void {
+    this.hideRelicTooltip();
     this.dynamic.removeAll(true);
     const run = getRun();
     const y0 = ROOM_H;
@@ -102,7 +117,7 @@ export class HudScene extends Phaser.Scene {
       );
     }
     this.dynamic.add(
-      this.add.text(cardX0, y0 + 90, 'Every card fights — [C] view deck', {
+      this.add.text(cardX0, y0 + 90, 'Every card fights — [C] deck  [R] relics', {
         fontFamily: 'monospace',
         fontSize: '9px',
         color: '#6a6478',
@@ -133,7 +148,7 @@ export class HudScene extends Phaser.Scene {
     this.dynamic.add(this.add.image(invX, y0 + 74, 'armor').setScale(2));
     this.dynamic.add(
       this.add
-        .text(invX + 22, y0 + 74, `x${run.armor}`, {
+        .text(invX + 22, y0 + 74, `x${run.armor}/${run.maxArmor}`, {
           fontFamily: 'monospace',
           fontSize: '15px',
           fontStyle: 'bold',
@@ -147,8 +162,8 @@ export class HudScene extends Phaser.Scene {
           invX,
           y0 + 94,
           run.scoutCharges > 0
-            ? `SCOUT x${run.scoutCharges}  [P] potion  [C] cards  [M] mute`
-            : '[P] drink potion  [C] cards  [M] mute',
+            ? `SCOUT x${run.scoutCharges}  [P] potion  [C] cards  [R] relics  [M] mute`
+            : '[P] drink potion  [C] cards  [R] relics  [M] mute',
           {
             fontFamily: 'monospace',
             fontSize: '9px',
@@ -158,22 +173,47 @@ export class HudScene extends Phaser.Scene {
         .setOrigin(0, 0.5),
     );
 
-    const relicNames = run.relics.map((relic) => relic.name);
-    if (relicNames.length > 0) {
-      const relicLine =
-        relicNames.length <= 2
-          ? relicNames.join(' / ')
-          : `${relicNames.slice(0, 2).join(' / ')} +${relicNames.length - 2}`;
+    if (run.relics.length > 0) {
       this.dynamic.add(
-        this.add
-          .text(cardX0, y0 + 101, relicLine, {
-            fontFamily: 'monospace',
-            fontSize: '9px',
-            color: '#b8b0c8',
-            fixedWidth: 320,
-          })
-          .setOrigin(0, 0.5),
+        this.add.text(cardX0, y0 + 101, 'RELICS', {
+          fontFamily: 'monospace',
+          fontSize: '8px',
+          color: '#6a6478',
+        }),
       );
+      for (const [index, relic] of run.relics.slice(0, 6).entries()) {
+        const chipX = cardX0 + index * 34;
+        const chipY = y0 + 118;
+        const chip = this.add.container(chipX, chipY);
+        const g = this.add.graphics();
+        g.fillStyle(relic.color, 1);
+        g.fillRoundedRect(0, 0, 28, 16, 4);
+        chip.add(g);
+        const label = relic.name
+          .split(' ')
+          .map((part) => part[0])
+          .join('')
+          .slice(0, 2)
+          .toUpperCase();
+        chip.add(
+          this.add
+            .text(14, 8, label, {
+              fontFamily: 'monospace',
+              fontSize: '8px',
+              fontStyle: 'bold',
+              color: '#16121e',
+            })
+            .setOrigin(0.5),
+        );
+        chip.setSize(28, 16);
+        chip.setInteractive(
+          new Phaser.Geom.Rectangle(0, 0, 28, 16),
+          Phaser.Geom.Rectangle.Contains,
+        );
+        chip.on('pointerover', () => this.showRelicTooltip(relic, chipX, chipY));
+        chip.on('pointerout', () => this.hideRelicTooltip());
+        this.dynamic.add(chip);
+      }
     }
 
     const atBoss = isStratumBoundary(run.depth);

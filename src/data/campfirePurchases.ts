@@ -7,13 +7,16 @@ export type CampfirePurchaseId =
   | 'smoke_bomb'
   | 'bomb'
   | 'extra_starting_choice'
-  | 'scout_flame';
+  | 'scout_flame'
+  | 'relic_charm';
 
 export interface PendingPrep {
   itemIds: InventoryItemDef['id'][];
   extraStartingChoice: boolean;
   scoutFlame: boolean;
   curseIds?: CampfireCurseId[];
+  /** Roll a random unlocked relic at run start (Relic Charm purchase). */
+  pendingRelicRoll?: boolean;
 }
 
 interface CampfirePurchaseBase {
@@ -29,7 +32,7 @@ export type CampfirePurchaseDef =
       itemId: InventoryItemDef['id'];
     })
   | (CampfirePurchaseBase & {
-      kind: 'extra_starting_choice' | 'scout_flame';
+      kind: 'extra_starting_choice' | 'scout_flame' | 'relic_charm';
       itemId?: never;
     });
 
@@ -83,6 +86,13 @@ export const CAMPFIRE_PURCHASES: CampfirePurchaseDef[] = [
     description: 'Reveal the next room outcome behind each door once.',
     kind: 'scout_flame',
   },
+  {
+    id: 'relic_charm',
+    name: 'Relic Charm',
+    cost: 8,
+    description: 'Start the next run with a random unlocked relic.',
+    kind: 'relic_charm',
+  },
 ];
 
 export function createDefaultPendingPrep(): PendingPrep {
@@ -91,6 +101,7 @@ export function createDefaultPendingPrep(): PendingPrep {
     extraStartingChoice: false,
     scoutFlame: false,
     curseIds: [],
+    pendingRelicRoll: false,
   };
 }
 
@@ -124,6 +135,10 @@ export function canBuyCampfirePurchase(
     return { ok: false, reason: 'Already prepared.' };
   }
 
+  if (purchase.kind === 'relic_charm' && state.pendingPrep.pendingRelicRoll) {
+    return { ok: false, reason: 'Already prepared.' };
+  }
+
   return { ok: true };
 }
 
@@ -140,14 +155,17 @@ export function buyCampfirePurchase(
     extraStartingChoice: state.pendingPrep.extraStartingChoice,
     scoutFlame: state.pendingPrep.scoutFlame,
     curseIds: [...(state.pendingPrep.curseIds ?? [])],
+    pendingRelicRoll: state.pendingPrep.pendingRelicRoll === true,
   };
 
   if (purchase.kind === 'item') {
     pendingPrep.itemIds.push(purchase.itemId);
   } else if (purchase.kind === 'extra_starting_choice') {
     pendingPrep.extraStartingChoice = true;
-  } else {
+  } else if (purchase.kind === 'scout_flame') {
     pendingPrep.scoutFlame = true;
+  } else {
+    pendingPrep.pendingRelicRoll = true;
   }
 
   return {

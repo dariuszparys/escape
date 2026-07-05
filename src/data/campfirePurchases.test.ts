@@ -24,6 +24,7 @@ describe('campfire purchases', () => {
         extraStartingChoice: false,
         scoutFlame: false,
         curseIds: [],
+        pendingRelicRoll: false,
       },
     });
 
@@ -84,6 +85,7 @@ describe('campfire purchases', () => {
         extraStartingChoice: false,
         scoutFlame: true,
         curseIds: [],
+        pendingRelicRoll: false,
       },
     });
 

@@ -23,6 +23,8 @@ describe('campfire summary formatting', () => {
         'Starter variety: unlocked',
         'Starter kits: 2/3 unlocked',
         'Active kit: Warden',
+        'Relics: path locked',
+        'Starting relic: none',
       ].join('\n'),
     );
     expect(summary).not.toMatch(/Migration bonus|four opening card options/);
@@ -42,7 +44,12 @@ describe('campfire summary formatting', () => {
 
   test('formats empty pending prep for hub status', () => {
     expect(formatPendingPrepSummary(createDefaultPendingPrep())).toBe(
-      ['One-run prep: none (0/3)', 'Opening picks: 2 of 3', 'Scout flame: unlit'].join('\n'),
+      [
+        'One-run prep: none (0/3)',
+        'Opening picks: 2 of 3',
+        'Scout flame: unlit',
+        'Relic charm: none',
+      ].join('\n'),
     );
   });
 
@@ -58,6 +65,7 @@ describe('campfire summary formatting', () => {
         'One-run prep: Small Potion, Bomb (2/3)',
         'Opening picks: 3 of 4',
         'Scout flame: ready',
+        'Relic charm: none',
       ].join('\n'),
     );
   });
@@ -77,6 +85,7 @@ describe('campfire summary formatting', () => {
         'Opening picks: 2 of 4',
         'Starter kit: none selected',
         'Scout flame: unlit',
+        'Relic charm: none',
       ].join('\n'),
     );
     expect(summary).not.toMatch(/Ash|Kindling/);

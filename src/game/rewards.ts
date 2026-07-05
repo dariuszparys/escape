@@ -1,7 +1,9 @@
 import { Card, randomCard, type ArchetypeId } from '../data/cards';
 import { InventoryItem, makeItem, randomItemIdForDepth } from '../data/items';
-import { randomRelic } from '../data/relics';
+import { randomRelic, type Relic } from '../data/relics';
 import { RunState } from '../state';
+import { relicEliteGoldBonus } from './relicBehaviors';
+import { relicChestGoldMultiplier } from './relicRegistry';
 import { previewRewardImpact } from './rewardImpact';
 import { GameRng } from './rng';
 
@@ -11,7 +13,8 @@ export type RewardResult =
   | { kind: 'armor'; amount: number }
   | { kind: 'gold'; amount: number }
   | { kind: 'heal'; amount: number }
-  | { kind: 'relic'; relicName: string }
+  | { kind: 'relic'; relic: Relic }
+  | { kind: 'relic_exhausted'; amount: number }
   | { kind: 'inventory_full'; item: InventoryItem };
 
 export type FloorPotionResult =
@@ -30,6 +33,12 @@ export function awardPotionItem(run: RunState, item: InventoryItem): FloorPotion
   }
 
   return { kind: 'inventory_full', item };
+}
+
+function rollChestGold(run: RunState, rng: GameRng, low: number, high: number): number {
+  return Math.floor(
+    rng.between(low, high) * run.goldMultiplier * relicChestGoldMultiplier(run.relicIds),
+  );
 }
 
 export function rollChestReward(run: RunState, rng: GameRng, depth: number): RewardResult {
@@ -51,20 +60,23 @@ export function rollChestReward(run: RunState, rng: GameRng, depth: number): Rew
 
   if (roll < 0.8) {
     if (run.addArmor()) return { kind: 'armor', amount: 1 };
-    const amount = Math.floor(rng.between(8, 18) * run.goldMultiplier);
+    const amount = rollChestGold(run, rng, 8, 18);
     run.addGold(amount);
     return { kind: 'gold', amount };
   }
 
-  if (roll < 0.88) {
-    const relic = randomRelic(rng, new Set(run.relics.map((relic) => relic.id)));
+  if (roll < 0.9) {
+    const relic = randomRelic(rng, new Set(run.relics.map((relic) => relic.id)), run.relicPool);
     if (relic) {
       run.addRelic(relic);
-      return { kind: 'relic', relicName: relic.name };
+      return { kind: 'relic', relic };
     }
+    const amount = rollChestGold(run, rng, 10, 24);
+    run.addGold(amount);
+    return { kind: 'relic_exhausted', amount };
   }
 
-  const amount = Math.floor(rng.between(10, 24) * run.goldMultiplier);
+  const amount = rollChestGold(run, rng, 10, 24);
   run.addGold(amount);
   return { kind: 'gold', amount };
 }
@@ -95,6 +107,13 @@ export const ELITE_GOLD_MULTIPLIER = 2;
 export function awardEliteBonusGold(run: RunState, baseGold: number): number {
   const bonus = Math.floor(baseGold * (ELITE_GOLD_MULTIPLIER - 1));
   run.addGold(bonus);
+  return bonus;
+}
+
+/** Flat relic bonus gold after defeating an elite (Merchant's Seal). */
+export function awardRelicEliteGold(run: RunState): number {
+  const bonus = relicEliteGoldBonus(run.relicIds);
+  if (bonus > 0) run.addGold(bonus);
   return bonus;
 }
 

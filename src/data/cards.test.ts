@@ -234,6 +234,10 @@ describe('U3 new cards (draw, exhaust, energy, tempo)', () => {
       playerStunned: false,
       phase: 'player',
       outcome: null,
+      startingEnergyBonus: 0,
+      retainBlockCap: 0,
+      poisonBonus: 0,
+      enemyKillDraw: 0,
       ...overrides,
     };
   }

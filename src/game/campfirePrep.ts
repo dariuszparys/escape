@@ -1,9 +1,17 @@
 import { PendingPrep, createDefaultPendingPrep } from '../data/campfirePurchases';
 import { CARD_DEFS, makeCard } from '../data/cards';
 import { makeItem } from '../data/items';
+import {
+  makeRelic,
+  randomRelic,
+  relicPoolFromUnlocked,
+  starterRelicPool,
+  type RelicId,
+} from '../data/relics';
 import { starterKitDef, type StarterKitDef } from '../data/starterKits';
 import type { MetaProgressionState } from '../meta';
 import { RunState } from '../state';
+import { GameRng } from './rng';
 import {
   BONUS_STARTING_CARD_CHOICES,
   BONUS_STARTING_CARD_PICKS,
@@ -24,14 +32,25 @@ function makeSignatureCard(kit: StarterKitDef) {
   return makeCard(def);
 }
 
+export function relicPoolForRun(
+  progression?: MetaProgressionState,
+  isDaily = false,
+): ReadonlySet<RelicId> {
+  if (isDaily || !progression?.relicPathUnlocked) return starterRelicPool();
+  return relicPoolFromUnlocked(progression?.unlockedRelicIds ?? []);
+}
+
 export function applyPendingPrepToRun(
   run: RunState,
   pendingPrep: PendingPrep,
   progression?: MetaProgressionState,
+  rng?: GameRng,
 ): PendingPrep {
   const curseIds = pendingPrep.curseIds ?? [];
   const hasStarterCardVariety = progression?.starterCardVarietyUnlocked === true;
   const starterKit = activeStarterKit(progression);
+
+  run.relicPool = relicPoolForRun(progression, run.isDaily);
 
   run.startingCardChoices =
     hasStarterCardVariety || pendingPrep.extraStartingChoice
@@ -42,7 +61,7 @@ export function applyPendingPrepToRun(
     : DEFAULT_STARTING_CARD_PICKS;
   run.startingCardsTaken = 0;
   run.starterKitId = starterKit?.id ?? null;
-  run.archetypeId = progression?.activeArchetypeId ?? null;
+  run.archetypeId = run.isDaily ? null : (progression?.activeArchetypeId ?? null);
   run.scoutCharges = pendingPrep.scoutFlame ? 1 : 0;
   run.curseIds = [...curseIds];
 
@@ -67,6 +86,15 @@ export function applyPendingPrepToRun(
 
   for (const itemId of pendingPrep.itemIds) {
     run.addItem(makeItem(itemId));
+  }
+
+  if (!run.isDaily && progression?.activeStartingRelicId) {
+    run.addRelic(makeRelic(progression.activeStartingRelicId));
+  }
+
+  if (!run.isDaily && pendingPrep.pendingRelicRoll && rng) {
+    const relic = randomRelic(rng, new Set(run.relicIds), run.relicPool);
+    if (relic) run.addRelic(relic);
   }
 
   return createDefaultPendingPrep();

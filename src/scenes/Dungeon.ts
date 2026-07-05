@@ -15,13 +15,17 @@ import {
 import { Card, makeCard, CARD_DEFS } from '../data/cards';
 import { EnemyInstance, spawnBoss, spawnElite, spawnEncounter } from '../data/enemies';
 import { InventoryItem, makeItem, randomItemIdForDepth } from '../data/items';
+import type { Relic } from '../data/relics';
 import { STARTER_KITS } from '../data/starterKits';
 import { ARCHETYPES } from '../data/archetypes';
 import { makeStartRoom, makeNextRoom, RoomData, type RoomEvent } from '../dungeon/rooms';
 import { makeCardView } from '../gfx/cardview';
 import { createDeckPanel } from '../gfx/deckPanel';
+import { createRelicPanel } from '../gfx/relicPanel';
+import { createRelicRevealPanel } from '../gfx/relicRevealPanel';
 import { createRewardImpactText } from '../gfx/rewardImpactView';
 import { PhaserGameRng } from '../game/rng';
+import { relicChestGoldBonusLabel } from '../game/relicRegistry';
 import { playSfx } from '../audio/sfx';
 import { awardPotionItem, rollChestReward } from '../game/rewards';
 import { previewRewardImpact } from '../game/rewardImpact';
@@ -115,6 +119,9 @@ export class DungeonScene extends Phaser.Scene {
   private itemSwapKeyHandlers: { event: string; handler: (event: KeyboardEvent) => void }[] = [];
   private ignoredPotionUid: number | null = null;
   private deckOverlay: Phaser.GameObjects.Container | null = null;
+  private relicOverlay: Phaser.GameObjects.Container | null = null;
+  private relicRevealPanel: Phaser.GameObjects.Container | null = null;
+  private relicRevealDismiss: (() => void) | null = null;
   private visionGraphics: Phaser.GameObjects.Graphics | null = null;
   private restActionPanel: Phaser.GameObjects.Container | null = null;
   private restCardPanel: Phaser.GameObjects.Container | null = null;
@@ -157,6 +164,7 @@ export class DungeonScene extends Phaser.Scene {
       d: kb.addKey('D'),
       p: kb.addKey('P'),
       c: kb.addKey('C'),
+      r: kb.addKey('R'),
     };
 
     this.cameras.main.setScroll(this.origin.x, this.origin.y);
@@ -169,6 +177,8 @@ export class DungeonScene extends Phaser.Scene {
     this.game.events.on('battle-end', (won: boolean) => this.onBattleEnd(won));
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.closeDeckOverlay();
+      this.closeRelicOverlay();
+      this.closeRelicRevealPanel();
       this.closeItemSwapPrompt();
       this.disableDarknessOverlay();
       this.closeRestActionPanel();
@@ -257,6 +267,7 @@ export class DungeonScene extends Phaser.Scene {
     }
 
     this.closeItemSwapPrompt();
+    this.closeRelicOverlay();
     const run = getRun();
     this.deckOverlay = createDeckPanel(
       this,
@@ -270,6 +281,54 @@ export class DungeonScene extends Phaser.Scene {
   private closeDeckOverlay(): void {
     this.deckOverlay?.destroy();
     this.deckOverlay = null;
+  }
+
+  private toggleRelicOverlay(): void {
+    if (this.relicOverlay) {
+      this.closeRelicOverlay();
+      return;
+    }
+    this.closeItemSwapPrompt();
+    this.closeRelicRevealPanel();
+    this.closeDeckOverlay();
+    const run = getRun();
+    this.relicOverlay = createRelicPanel(
+      this,
+      'Your relics',
+      this.origin.x + ROOM_W / 2,
+      this.origin.y + GAME_H / 2 - 12,
+      run.relics,
+    );
+  }
+
+  private closeRelicOverlay(): void {
+    this.relicOverlay?.destroy();
+    this.relicOverlay = null;
+  }
+
+  private closeRelicRevealPanel(): void {
+    if (this.relicRevealDismiss) {
+      this.input.keyboard?.off('keydown-ENTER', this.relicRevealDismiss);
+      this.relicRevealDismiss = null;
+    }
+    this.relicRevealPanel?.destroy();
+    this.relicRevealPanel = null;
+  }
+
+  private showRelicRevealPanel(relic: Relic): void {
+    this.closeRelicRevealPanel();
+    this.transitioning = true;
+    this.player.setVelocity(0, 0);
+    const cx = this.origin.x + ROOM_W / 2;
+    const cy = this.origin.y + ROOM_H / 2;
+    const dismiss = (): void => {
+      this.closeRelicRevealPanel();
+      this.transitioning = false;
+      this.hud();
+    };
+    this.relicRevealDismiss = dismiss;
+    this.relicRevealPanel = createRelicRevealPanel(this, relic, cx, cy, dismiss);
+    this.input.keyboard?.once('keydown-ENTER', dismiss);
   }
 
   private closeRestActionPanel(): void {
@@ -715,6 +774,8 @@ export class DungeonScene extends Phaser.Scene {
     if (this.transitioning) return;
     this.transitioning = true;
     this.closeDeckOverlay();
+    this.closeRelicOverlay();
+    this.closeRelicRevealPanel();
     this.disableDarknessOverlay();
     this.player.setVelocity(0, 0);
     this.player.body.enable = false;
@@ -791,6 +852,12 @@ export class DungeonScene extends Phaser.Scene {
 
   private onRoomEntered(): void {
     const { room, built } = this;
+    const run = getRun();
+    const beforeHp = run.hp;
+    run.onRoomEntered();
+    if (run.hp > beforeHp) {
+      this.floatText(this.player.x, this.player.y - 50, "Wanderer's Flask +1 HP", '#5fe07a');
+    }
     playSfx(this, 'step');
     if (
       (room.event === 'encounter' || room.event === 'boss' || room.event === 'elite') &&
@@ -893,7 +960,11 @@ export class DungeonScene extends Phaser.Scene {
       this.toggleDeckOverlay();
       return;
     }
-    if (this.deckOverlay) {
+    if (Phaser.Input.Keyboard.JustDown(this.keys.r)) {
+      this.toggleRelicOverlay();
+      return;
+    }
+    if (this.deckOverlay || this.relicOverlay || this.relicRevealPanel) {
       this.player.setVelocity(0, 0);
       return;
     }
@@ -1088,6 +1159,14 @@ export class DungeonScene extends Phaser.Scene {
   private openChest(x: number, y: number): void {
     const run = getRun();
     const result = rollChestReward(run, this.gameRng, run.depth);
+    const goldSuffix = relicChestGoldBonusLabel(run.relicIds);
+
+    if (result.kind === 'relic') {
+      this.floatText(x, y - 50, `Relic: ${result.relic.name}`, '#5fe07a');
+      this.showRelicRevealPanel(result.relic);
+      return;
+    }
+
     const message =
       result.kind === 'card'
         ? `Found card: ${result.cardName}!`
@@ -1096,18 +1175,25 @@ export class DungeonScene extends Phaser.Scene {
           : result.kind === 'armor'
             ? '+1 Armor'
             : result.kind === 'gold'
-              ? `+${result.amount} Gold`
+              ? `+${result.amount} Gold${goldSuffix}`
               : result.kind === 'heal'
                 ? `+${result.amount} HP`
-                : result.kind === 'relic'
-                  ? `Relic: ${result.relicName}`
+                : result.kind === 'relic_exhausted'
+                  ? `Relic pool exhausted — +${result.amount} Gold${goldSuffix}`
                   : `${result.item.name} dropped!`;
     if (result.kind === 'inventory_full') {
       this.spawnFloorPotion(x, y + TILE, result.item);
     }
-    this.floatText(x, y - 50, message, result.kind === 'gold' ? '#f1c40f' : '#5fe07a');
+    this.floatText(
+      x,
+      y - 50,
+      message,
+      result.kind === 'gold' || result.kind === 'relic_exhausted' ? '#f1c40f' : '#5fe07a',
+    );
     if (result.kind === 'card') {
       this.floatImpactText(x, y - 78, result.impactLabel);
+    } else if (result.kind === 'relic_exhausted') {
+      this.floatImpactText(x, y - 78, 'No new relics available');
     }
     this.hud();
   }

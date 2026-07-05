@@ -76,6 +76,10 @@ function makeState(partial: Partial<TurnBattleState>, pattern = attackPattern())
     playerStunned: false,
     phase: 'player',
     outcome: null,
+    startingEnergyBonus: 0,
+    retainBlockCap: 0,
+    poisonBonus: 0,
+    enemyKillDraw: 0,
     ...partial,
   };
 }
@@ -450,6 +454,58 @@ describe('status ticks (R20)', () => {
     // Death precedes energy reset / draw — input never opened (R20).
     expect(order).not.toContain('energyChanged');
     expect(order).not.toContain('cardDrawn');
+  });
+});
+
+// Regression coverage for a bug found in review: `poisonBonus` (venom_ring) was applied to any
+// poison application regardless of which side inflicted it, so an enemy's own poison attack
+// against the player was also boosted by the player's relic.
+describe('relic poisonBonus scoping (venom_ring regression)', () => {
+  test('poisonBonus boosts poison the player applies to an enemy', () => {
+    const venomCard = card(
+      'Venom Strike',
+      [{ kind: 'status', status: 'poison', amount: 2, duration: 2 }],
+      1,
+    );
+    const state = makeState({ hand: [venomCard], poisonBonus: 1 });
+    const result = playCard(state, venomCard.uid, new SequenceRng());
+    expect(result.state.enemies[0].statuses[0]).toMatchObject({ type: 'poison', amount: 3 });
+  });
+
+  test('poisonBonus does not boost poison an enemy applies to the player', () => {
+    const poisonBite: IntentPattern = {
+      cycle: [
+        {
+          name: 'Bite',
+          telegraph: 'bites...',
+          effects: [{ kind: 'status', status: 'poison', amount: 2, duration: 2 }],
+        },
+      ],
+    };
+    const state = makeState({ poisonBonus: 1 }, poisonBite);
+    const result = endTurn(state, new SequenceRng());
+    expect(result.state.player.statuses[0]).toMatchObject({ type: 'poison', amount: 2 });
+  });
+});
+
+// Regression coverage: hunter_charm's draw-on-kill previously only fired from the damage-effect
+// branch, never when a poison/burn tick (`tickStatuses`) was what actually dropped the enemy.
+describe('enemy kill draw (hunter_charm regression)', () => {
+  test('a DoT tick that kills the last enemy standing still credits the on-kill draw bonus', () => {
+    const state = makeState(
+      { enemyKillDraw: 1, drawSize: 0, drawPile: [strike(), strike()] },
+      blockPattern(),
+    );
+    state.enemies[0].hp = 2;
+    state.enemies[0].statuses = [{ type: 'poison', amount: 5, remainingTurns: 1 }];
+
+    const result = endTurn(state, new SequenceRng());
+
+    expect(result.state.enemies[0].hp).toBe(0);
+    expect(result.state.outcome).toBe('victory');
+    // `drawSize: 0` isolates the effect — victory skips `startPlayerTurn` entirely (endTurn), so
+    // the only card in hand came from hunter_charm's kill credit inside the DoT-kill branch.
+    expect(result.state.hand).toHaveLength(1);
   });
 });
 

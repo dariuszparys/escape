@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_H, GAME_W } from '../config';
 import { applyPendingPrepToRun } from '../game/campfirePrep';
+import { PhaserGameRng } from '../game/rng';
 import { dailyKey, dailySeed, loadDailyRecord } from '../daily';
 import { loadRunChronicle } from '../chronicle';
 import {
@@ -251,7 +252,8 @@ export class CampfireScene extends Phaser.Scene {
     const seed = new URLSearchParams(window.location.search).get('seed') ?? String(Math.random());
     const run = newRun(seed);
     const meta = getMeta();
-    const clearedPrep = applyPendingPrepToRun(run, meta.pendingPrep, meta.progression);
+    const rng = new PhaserGameRng(new Phaser.Math.RandomDataGenerator([seed, 'prep']));
+    const clearedPrep = applyPendingPrepToRun(run, meta.pendingPrep, meta.progression, rng);
     setMeta({ ...meta, pendingPrep: clearedPrep });
     this.scene.start('Dungeon');
   }

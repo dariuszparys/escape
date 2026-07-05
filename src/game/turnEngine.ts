@@ -73,6 +73,11 @@ export interface TurnBattleState {
   playerStunned: boolean;
   phase: BattlePhase;
   outcome: BattleOutcome | null;
+  /** Relic battle-setup modifiers (per-battle, set from `createBattle` config). */
+  startingEnergyBonus: number;
+  retainBlockCap: number;
+  poisonBonus: number;
+  enemyKillDraw: number;
 }
 
 export interface TurnEngineConfig {
@@ -90,6 +95,10 @@ export interface TurnEngineConfig {
   }[];
   energyPerTurn?: number;
   drawSize?: number;
+  startingEnergyBonus?: number;
+  retainBlockCap?: number;
+  poisonBonus?: number;
+  enemyKillDraw?: number;
 }
 
 export type TurnCommandRejection =
@@ -163,6 +172,10 @@ function cloneState(state: TurnBattleState): TurnBattleState {
     exhaustPile: [...state.exhaustPile],
     player: cloneCombatant(state.player),
     enemies: state.enemies.map(cloneEnemy),
+    startingEnergyBonus: state.startingEnergyBonus,
+    retainBlockCap: state.retainBlockCap,
+    poisonBonus: state.poisonBonus,
+    enemyKillDraw: state.enemyKillDraw,
   };
 }
 
@@ -298,6 +311,9 @@ function applyEffect(
     drawCards: (count) => drawCards(rt, count),
     gainEnergy: (amount) => gainEnergy(rt, amount),
     shuffleIntoDrawPile: (card) => shuffleCardIntoDrawPile(rt, card),
+    // venom_ring boosts poison the PLAYER applies, not poison inflicted on them — scope the
+    // bonus to the actor, or an enemy's own poison attack would get buffed by the player's relic.
+    poisonBonus: actor.id === state.player.id ? state.poisonBonus : 0,
   });
 
   // The single resolved damage number (B1): the same value the damage handler used for HP, so
@@ -322,6 +338,14 @@ function applyEffect(
       hpAfter: target.hp,
       blockAfter: target.block,
     });
+    if (
+      target.id !== state.player.id &&
+      beforeTargetHp > 0 &&
+      target.hp <= 0 &&
+      state.enemyKillDraw > 0
+    ) {
+      drawCards(rt, state.enemyKillDraw);
+    }
   } else if (effect.kind === 'strength') {
     // Strength is a self-buff: mirror it as a statusApplied on the ACTOR carrying the
     // post-stack total so the HUD shows the running stack (B-adjust: dual-channel amounts).
@@ -446,8 +470,21 @@ function startPlayerTurn(rt: EngineRuntime): void {
   state.turn += 1;
   rt.events.push({ type: 'turnStarted', turn: state.turn });
   if (state.player.block > 0) {
-    rt.events.push({ type: 'blockExpired', targetId: state.player.id, amount: state.player.block });
-    state.player.block = 0;
+    if (state.retainBlockCap > 0) {
+      const retained = Math.min(state.player.block, state.retainBlockCap);
+      const expired = state.player.block - retained;
+      if (expired > 0) {
+        rt.events.push({ type: 'blockExpired', targetId: state.player.id, amount: expired });
+      }
+      state.player.block = retained;
+    } else {
+      rt.events.push({
+        type: 'blockExpired',
+        targetId: state.player.id,
+        amount: state.player.block,
+      });
+      state.player.block = 0;
+    }
   }
   tickStatuses(rt, state.player);
   if (checkTerminal(rt)) return;
@@ -457,8 +494,9 @@ function startPlayerTurn(rt: EngineRuntime): void {
     state.player.statuses = state.player.statuses.filter((status) => status.type !== 'stun');
     rt.events.push({ type: 'stunned', targetId: state.player.id });
   }
-  state.energy = state.energyPerTurn;
-  rt.events.push({ type: 'energyChanged', energy: state.energy, max: state.energyPerTurn });
+  const turnEnergyMax = state.energyPerTurn + (state.turn === 1 ? state.startingEnergyBonus : 0);
+  state.energy = turnEnergyMax;
+  rt.events.push({ type: 'energyChanged', energy: state.energy, max: turnEnergyMax });
   drawCards(rt, state.drawSize);
   // Every living enemy telegraphs its own next beat (multi-enemy: one panel per enemy).
   for (const enemy of state.enemies) {
@@ -492,7 +530,15 @@ function enemyBeat(rt: EngineRuntime, enemy: EnemyCombatant): void {
     rt.events.push({ type: 'blockExpired', targetId: enemy.id, amount: enemy.block });
     enemy.block = 0;
   }
+  const hpBeforeDot = enemy.hp;
   tickStatuses(rt, enemy);
+  // hunter_charm's draw-on-kill otherwise only triggers from `applyEffect`'s damage branch, which
+  // a DoT tick never goes through — credit the kill here too. Checked BEFORE `checkTerminal`
+  // (mirroring the damage branch's own ordering) so it still fires when this is the last enemy
+  // standing and the kill ends the battle, not just when a packmate survives.
+  if (hpBeforeDot > 0 && enemy.hp <= 0 && state.enemyKillDraw > 0) {
+    drawCards(rt, state.enemyKillDraw);
+  }
   if (checkTerminal(rt)) return;
   // A DoT can drop THIS enemy while its packmates live (not terminal) — a corpse takes no beat.
   if (enemy.hp <= 0) return;
@@ -567,6 +613,10 @@ export function createBattle(config: TurnEngineConfig, rng: GameRng): TurnComman
     playerStunned: false,
     phase: 'player',
     outcome: null,
+    startingEnergyBonus: config.startingEnergyBonus ?? 0,
+    retainBlockCap: config.retainBlockCap ?? 0,
+    poisonBonus: config.poisonBonus ?? 0,
+    enemyKillDraw: config.enemyKillDraw ?? 0,
   };
   const rt: EngineRuntime = { state, events: [], log: [], rng };
   startPlayerTurn(rt);

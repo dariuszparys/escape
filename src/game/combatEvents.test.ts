@@ -53,6 +53,10 @@ function playVenomStrike(): void {
     playerStunned: false,
     phase: 'player',
     outcome: null,
+    startingEnergyBonus: 0,
+    retainBlockCap: 0,
+    poisonBonus: 0,
+    enemyKillDraw: 0,
   };
   playCard(state, venomStrike.uid, new SequenceRng());
 }

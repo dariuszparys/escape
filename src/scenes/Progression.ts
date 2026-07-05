@@ -5,11 +5,17 @@ import {
   STARTER_CARD_VARIETY_UNLOCK_COST,
   buyStarterCardVarietyUnlock,
   buyStarterKitUnlock,
+  buyRelicPathUnlock,
+  buyRelicUnlock,
   formatArchetypeProgressionLine,
   formatArchetypeSelectionSummary,
+  formatRelicProgressionLine,
+  formatRelicProgressionSummary,
   formatStarterCardProgressionSummary,
   formatStarterKitProgressionLine,
+  RELIC_PATH_UNLOCK_COST,
   setActiveArchetype,
+  setActiveStartingRelic,
   setActiveStarterKit,
 } from '../game/progression';
 import {
@@ -19,6 +25,7 @@ import {
   type ProgressionPanelLayout,
 } from '../game/progressionLayout';
 import { STARTER_KITS, type StarterKitId } from '../data/starterKits';
+import { RELIC_DEFS, type RelicId } from '../data/relics';
 import { ARCHETYPES } from '../data/archetypes';
 import type { ArchetypeId } from '../data/cards';
 import { getMeta, setMeta } from '../meta';
@@ -85,7 +92,11 @@ export class ProgressionScene extends Phaser.Scene {
     this.scrollContent = undefined;
     this.scrollbar = undefined;
     const meta = getMeta();
-    const layout = createProgressionPanelLayout(STARTER_KITS.length, ARCHETYPES.length);
+    const layout = createProgressionPanelLayout(
+      STARTER_KITS.length,
+      ARCHETYPES.length,
+      RELIC_DEFS.length,
+    );
     this.layout = layout;
     this.scrollOffset = clampScrollOffset(this.scrollOffset, layout.maxScrollOffset);
 
@@ -208,6 +219,42 @@ export class ProgressionScene extends Phaser.Scene {
     }
 
     this.addClearKitButton(content, layout);
+
+    const relicDivider = this.add.graphics();
+    relicDivider.lineStyle(1, 0x6f687c, 0.55);
+    relicDivider.lineBetween(0, layout.relicDividerY, layout.contentW - 22, layout.relicDividerY);
+    content.add(relicDivider);
+
+    content.add(
+      this.add.text(0, layout.relicHeadingY, 'RELICS', {
+        ...TEXT_STYLE,
+        fontSize: '18px',
+        fontStyle: 'bold',
+        color: '#f1c40f',
+      }),
+    );
+    content.add(
+      this.add.text(0, layout.relicSummaryY, formatRelicProgressionSummary(meta), {
+        ...TEXT_STYLE,
+        fontSize: '12px',
+        color: '#d8d2e4',
+        fixedWidth: layout.kitTextW,
+        wordWrap: { width: layout.kitTextW, useAdvancedWrap: true },
+        lineSpacing: 5,
+      }),
+    );
+    this.addRelicPathButton(meta, content, layout);
+
+    for (const [index, relic] of RELIC_DEFS.entries()) {
+      this.addRelicRow(
+        relic.id,
+        layout.relicRowsStartY + index * layout.relicRowH,
+        content,
+        layout,
+      );
+    }
+    this.addClearRelicButton(content, layout);
+
     this.addScrollbar(layout);
   }
 
@@ -419,6 +466,116 @@ export class ProgressionScene extends Phaser.Scene {
     );
   }
 
+  private addRelicPathButton(
+    meta: ReturnType<typeof getMeta>,
+    container: Phaser.GameObjects.Container,
+    layout: ProgressionPanelLayout,
+  ): void {
+    const unlocked = meta.progression.relicPathUnlocked;
+    const affordable = meta.embers >= RELIC_PATH_UNLOCK_COST;
+    const enabled = !unlocked && affordable;
+    const label = unlocked
+      ? '[ RELIC PATH UNLOCKED ]'
+      : affordable
+        ? `[ UNLOCK PATH - ${RELIC_PATH_UNLOCK_COST} EMBERS ]`
+        : `[ NEED ${RELIC_PATH_UNLOCK_COST} EMBERS ]`;
+    this.addTextButton(
+      layout.unlockButtonX,
+      layout.relicUnlockButtonY,
+      label,
+      enabled,
+      () => this.buyRelicPath(),
+      '14px',
+      container,
+      true,
+    );
+  }
+
+  private addRelicRow(
+    relicId: RelicId,
+    y: number,
+    container: Phaser.GameObjects.Container,
+    layout: ProgressionPanelLayout,
+  ): void {
+    const meta = getMeta();
+    const relic = RELIC_DEFS.find((candidate) => candidate.id === relicId);
+    if (!relic) return;
+
+    const rowBg = this.add.graphics();
+    rowBg.fillStyle(0x0f0d15, 0.68);
+    rowBg.fillRect(0, y - 12, layout.contentW - 22, layout.relicRowH - 10);
+    rowBg.lineStyle(1, 0x3f394d, 0.55);
+    rowBg.strokeRect(0, y - 12, layout.contentW - 22, layout.relicRowH - 10);
+    container.add(rowBg);
+
+    container.add(
+      this.add.text(14, y, formatRelicProgressionLine(meta, relicId), {
+        ...TEXT_STYLE,
+        fontSize: '12px',
+        color: '#d8d2e4',
+        fixedWidth: layout.kitTextW,
+        wordWrap: { width: layout.kitTextW, useAdvancedWrap: true },
+        lineSpacing: 4,
+      }),
+    );
+
+    const pathUnlocked = meta.progression.relicPathUnlocked === true;
+    // Gated on `pathUnlocked` to match `formatRelicProgressionLine`'s status text above (which
+    // always reads "locked - unlock relic path first" until the path is bought) and
+    // `setActiveStartingRelic`'s own gate — a relic can be contract-unlocked into
+    // `unlockedRelicIds` before the path purchase, but stays non-selectable until then.
+    const unlocked =
+      pathUnlocked &&
+      (relic.unlockCost === 0 || (meta.progression.unlockedRelicIds ?? []).includes(relic.id));
+    const active = meta.progression.activeStartingRelicId === relic.id;
+    const canBuy = pathUnlocked && !unlocked && meta.embers >= relic.unlockCost;
+    const canSelect = unlocked && relic.startingRelicEligible === true;
+    const label = active
+      ? '[ ACTIVE ]'
+      : canSelect
+        ? '[ SELECT ]'
+        : unlocked
+          ? '[ UNLOCKED ]'
+          : canBuy
+            ? `[ BUY ${relic.unlockCost} ]`
+            : pathUnlocked
+              ? `[ NEED ${relic.unlockCost} ]`
+              : '[ LOCKED ]';
+    const enabled = active ? false : canSelect ? true : canBuy;
+    const onPointerDown =
+      canSelect && unlocked
+        ? () => this.selectStartingRelic(relic.id)
+        : () => this.buyRelic(relic.id);
+
+    this.addTextButton(
+      layout.kitButtonX,
+      y + 18,
+      label,
+      enabled,
+      onPointerDown,
+      '14px',
+      container,
+      true,
+    );
+  }
+
+  private addClearRelicButton(
+    container: Phaser.GameObjects.Container,
+    layout: ProgressionPanelLayout,
+  ): void {
+    const active = getMeta().progression.activeStartingRelicId !== null;
+    this.addTextButton(
+      layout.contentW / 2 - 11,
+      layout.clearRelicButtonY,
+      active ? '[ NO STARTING RELIC ]' : '[ NO STARTING RELIC SELECTED ]',
+      active,
+      () => this.selectStartingRelic(null),
+      '14px',
+      container,
+      true,
+    );
+  }
+
   private addScrollbar(layout: ProgressionPanelLayout): void {
     const zone = this.add
       .zone(
@@ -587,6 +744,48 @@ export class ProgressionScene extends Phaser.Scene {
     const result = setActiveArchetype(meta, archetypeId);
     if (!result.ok) return;
 
+    const updated = setMeta({
+      ...meta,
+      embers: result.state.embers,
+      progression: result.state.progression,
+    });
+    this.game.events.emit('meta-update', updated);
+    playSfx(this, 'purchase');
+    this.redraw();
+  }
+
+  private buyRelicPath(): void {
+    const meta = getMeta();
+    const result = buyRelicPathUnlock(meta);
+    if (!result.ok) return;
+    const updated = setMeta({
+      ...meta,
+      embers: result.state.embers,
+      progression: result.state.progression,
+    });
+    this.game.events.emit('meta-update', updated);
+    playSfx(this, 'purchase');
+    this.redraw();
+  }
+
+  private buyRelic(relicId: RelicId): void {
+    const meta = getMeta();
+    const result = buyRelicUnlock(meta, relicId);
+    if (!result.ok) return;
+    const updated = setMeta({
+      ...meta,
+      embers: result.state.embers,
+      progression: result.state.progression,
+    });
+    this.game.events.emit('meta-update', updated);
+    playSfx(this, 'purchase');
+    this.redraw();
+  }
+
+  private selectStartingRelic(relicId: RelicId | null): void {
+    const meta = getMeta();
+    const result = setActiveStartingRelic(meta, relicId);
+    if (!result.ok) return;
     const updated = setMeta({
       ...meta,
       embers: result.state.embers,

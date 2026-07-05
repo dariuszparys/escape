@@ -237,6 +237,24 @@ describe('balance simulator economy bands', () => {
     expect(prepared.bossReachRate).toBeGreaterThan(baseline.bossReachRate);
     expect(prepared.bossKillGivenReach).toBeGreaterThanOrEqual(0.65);
   });
+
+  test('battle-setup relics run cleanly through the harness and help rather than hurt', () => {
+    // Coverage gate: before `startingRelicIds`, BalanceScenario had no way to grant spark_coil,
+    // stone_heart, venom_ring, or hunter_charm, so `relicBattleSetup`'s startingEnergyBonus/
+    // retainBlockCap/poisonBonus/enemyKillDraw branches never ran through a single simulated
+    // battle — a broken or badly-tuned value for any of them could ship with the harness fully
+    // green. Measured at 400 seeds against the baseline's 0.3575 winRate: spark_coil 0.49,
+    // stone_heart 0.4625, venom_ring 0.365, hunter_charm 0.385 — every relic is at/above baseline
+    // (within seed-to-seed noise for the two situational ones) and none is degenerate.
+    const baseline = simulateScenarioSummary({}, 400);
+    const relicIds = ['spark_coil', 'stone_heart', 'venom_ring', 'hunter_charm'] as const;
+
+    for (const relicId of relicIds) {
+      const summary = simulateScenarioSummary({ startingRelicIds: [relicId] }, 400);
+      expect(summary.winRate).toBeGreaterThanOrEqual(baseline.winRate - 0.03);
+      expect(summary.winRate).toBeLessThanOrEqual(0.65);
+    }
+  });
 });
 
 describe('elite engagement (U9)', () => {

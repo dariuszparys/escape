@@ -4,6 +4,7 @@ import { CARD_DEFS } from '../data/cards';
 import { ARCHETYPES } from '../data/archetypes';
 import { ITEM_DEFS } from '../data/items';
 import { STARTER_KITS } from '../data/starterKits';
+import { relicDef } from '../data/relics';
 import type { DailyRecord } from '../daily';
 import type { RunChronicle } from '../chronicle';
 import type { MetaProgressionState } from '../meta';
@@ -47,6 +48,12 @@ export function formatCampfireProgressionSummary(progression: MetaProgressionSta
     `Starter variety: ${progression.starterCardVarietyUnlocked ? 'unlocked' : 'locked'}`,
     `Starter kits: ${progression.unlockedStarterKitIds.length}/${STARTER_KITS.length} unlocked`,
     `Active kit: ${activeKitName}`,
+    progression.relicPathUnlocked
+      ? `Relics: ${(progression.unlockedRelicIds ?? []).length + 4} in pool`
+      : 'Relics: path locked',
+    progression.activeStartingRelicId
+      ? `Starting relic: ${relicDef(progression.activeStartingRelicId).name}`
+      : 'Starting relic: none',
   ].join('\n');
 }
 
@@ -71,6 +78,7 @@ export function formatPendingPrepSummary(
     `Opening picks: ${openingPicks} of ${openingChoices}`,
     ...(starterKit ? [starterKit] : []),
     `Scout flame: ${prep.scoutFlame ? 'ready' : 'unlit'}`,
+    `Relic charm: ${prep.pendingRelicRoll ? 'ready' : 'none'}`,
   ].join('\n');
 }
 

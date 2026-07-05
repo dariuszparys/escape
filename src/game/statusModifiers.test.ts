@@ -41,6 +41,10 @@ function makeState(partial: Partial<TurnBattleState>, pattern: IntentPattern): T
     playerStunned: false,
     phase: 'player',
     outcome: null,
+    startingEnergyBonus: 0,
+    retainBlockCap: 0,
+    poisonBonus: 0,
+    enemyKillDraw: 0,
     ...partial,
   };
 }

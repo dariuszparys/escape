@@ -30,6 +30,7 @@ export interface EffectContext {
   drawCards?: (count: number) => void;
   gainEnergy?: (amount: number) => void;
   shuffleIntoDrawPile?: (card: Card) => void;
+  poisonBonus?: number;
 }
 
 export type EffectHandler = (effect: ResolvableEffect, ctx: EffectContext) => void;
@@ -178,10 +179,11 @@ registerEffectHandler('shuffleCurse', (effect, { target, log, shuffleIntoDrawPil
   log.push(`${target.name} feels a curse slip into their deck`);
 });
 
-registerEffectHandler('status', (effect, { target, log }) => {
+registerEffectHandler('status', (effect, { target, log, poisonBonus = 0 }) => {
   const type = effect.status;
   if (!type) return; // authored status effects always carry a type; defensive no-op otherwise
-  const amount = effect.amount ?? 0;
+  const bonus = type === 'poison' ? poisonBonus : 0;
+  const amount = (effect.amount ?? 0) + bonus;
   const remainingTurns = effect.duration ?? 0;
   addStatus(target, { type, amount, remainingTurns });
   const current = target.statuses.find((status) => status.type === type);

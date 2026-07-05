@@ -1,22 +1,19 @@
 import type { RelicId } from '../data/relics';
+import { RELIC_BATTLE_WON_HEAL, RELIC_ELITE_GOLD } from './relicRegistry';
 import { type CombatEventOf, subscribeCombatEvent } from './combatEvents';
-
-/**
- * Relic → battle-lifecycle binding (KTD3). Only `vampiric_blade` rides a battle-lifecycle
- * moment (post-victory heal), so it is the sole relic bound here. `swift_boots`, `iron_will`,
- * and `lucky_coin` operate at the hand-selection, combat-setup, and reward-economy layers and
- * deliberately stay there — forcing them onto the combat bus would re-couple layers the
- * "decouple enemy power from reward scaling" learning warns against.
- */
-export const RELIC_BATTLE_WON_HEAL: Partial<Record<RelicId, number>> = {
-  vampiric_blade: 2,
-};
 
 /** Total post-victory heal granted by a run's owned relics. Capped at maxHp by the driver's `run.heal`. */
 export function relicBattleWonHeal(relicIds: readonly RelicId[]): number {
   let heal = 0;
   for (const id of relicIds) heal += RELIC_BATTLE_WON_HEAL[id] ?? 0;
   return heal;
+}
+
+/** Bonus gold after an elite victory. */
+export function relicEliteGoldBonus(relicIds: readonly RelicId[]): number {
+  let bonus = 0;
+  for (const id of relicIds) bonus += RELIC_ELITE_GOLD[id] ?? 0;
+  return bonus;
 }
 
 /** The single `battleWon` subscriber, shared by both drivers — this is the de-duplication (R4). */

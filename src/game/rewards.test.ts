@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { makeCard } from '../data/cards';
 import { makeItem } from '../data/items';
-import { makeRelic } from '../data/relics';
+import { makeRelic, STARTER_RELIC_IDS } from '../data/relics';
 import { RunState } from '../state';
 import { applySimulatedPostBattleRewards, createSimRng } from './balanceSimulator';
 import {
@@ -135,9 +135,11 @@ describe('rewards', () => {
     expect(result.kind).toBe('relic');
     if (result.kind !== 'relic') throw new Error(`Unexpected result: ${result.kind}`);
     expect(run.relics).toHaveLength(1);
-    expect(['Swift Boots', 'Iron Will', 'Lucky Coin', 'Vampiric Blade']).toContain(
-      result.relicName,
-    );
+    expect(run.relics[0]).toBe(result.relic);
+    // A fresh RunState defaults `relicPool` to the starter pool (state.ts) — assert the drawn
+    // relic actually came from `run.relicPool`, the real invariant `randomRelic`'s `poolIds`
+    // param exists to protect (a `toBeTruthy()` name check would pass for any relic at all).
+    expect(STARTER_RELIC_IDS).toContain(result.relic.id);
   });
 
   test('lucky_coin increases all gold rewards by 50%', () => {

@@ -14,7 +14,7 @@ const GOLDEN_SIGNATURE =
   // enemy/card content, the +2 attrition punch (intentBonusForDepth), and the rewritten
   // competent play + dilution-aware curation policies all change which cards are played and
   // which battles are won for a fixed seed, shifting downstream draw order and count.
-  'v=1|boss=1|gate=1|death=-|stratum=1|enc=0|embers=3|draws=127|hash=627f37ab';
+  'v=1|boss=1|gate=1|death=-|stratum=1|enc=0|embers=3|draws=143|hash=7e7b10fd';
 
 describe('RngDrawDigest', () => {
   test('samples draw order and count, not just the value set (the load-bearing property)', () => {

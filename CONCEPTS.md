@@ -237,3 +237,12 @@ Gold — the risk half of the push-your-luck choice.
 Ending a Run a winner at a Gate by converting unbanked Gold into Embers and
 escaping. The safe terminus opposite death; in a Daily Descent, Banking still
 ends the run but mints no Embers from Gold.
+
+### Relic
+
+A passive run modifier acquired during a dungeon run (chests, elite rewards,
+boss drops, meta starting picks, or Campfire prep). Each relic id is unique per
+run — at most one copy, up to six relics held. Relics persist for the whole run
+and explain their effect in pickup panels, HUD hover tooltips, and the `[R]`
+inspector. Meta progression unlocks additional relic types into the drop pool
+and can equip one eligible relic before a normal run starts.

@@ -6,6 +6,9 @@ import { calculateEmberReward, EmberRewardBreakdown } from '../game/metaRewards'
 import { loadRunChronicle, recordRunChronicleEntry, saveRunChronicle } from '../chronicle';
 import { getMeta, setMeta } from '../meta';
 import { getRun } from '../state';
+import { formatRelicSummary, relicDef } from '../data/relics';
+import { applyContractCompletions, evaluateNewContracts } from '../game/contracts';
+import { contractDef } from '../data/contracts';
 
 export class EndScene extends Phaser.Scene {
   private victory = false;
@@ -49,12 +52,41 @@ export class EndScene extends Phaser.Scene {
     return { awarded: true, reward };
   }
 
+  private awardContractsOnce() {
+    const run = getRun();
+    const meta = getMeta();
+    const completions = evaluateNewContracts(meta.progression, {
+      escaped: this.victory,
+      depth: run.depth,
+      relicCount: run.relics.length,
+      elitesDefeated: run.elitesDefeated,
+    });
+    if (completions.length === 0) return [];
+    setMeta(applyContractCompletions(meta, completions));
+    this.game.events.emit('meta-update');
+    return completions;
+  }
+
   create(): void {
     const run = getRun();
     const emberAward = this.awardEmbersOnce();
+    const contractAward = this.awardContractsOnce();
     const emberLine = emberAward.awarded
       ? this.formatEmberLine(emberAward.reward)
       : 'Embers already recovered.';
+    const contractLine =
+      contractAward.length > 0
+        ? contractAward
+            .map(
+              (completion) =>
+                `Contract: ${contractDef(completion.contractId).name} (+${completion.emberReward} Embers${completion.unlockedRelicId ? `, unlocked ${relicDef(completion.unlockedRelicId).name}` : ''})`,
+            )
+            .join('\n')
+        : '';
+    const relicLine =
+      run.relics.length > 0
+        ? `Relics collected:\n${formatRelicSummary(run.relics)}`
+        : 'No relics collected this run.';
     if (emberAward.awarded) {
       this.recordChronicleEntry(emberAward.reward.total, emberAward.reward.convertedEmbers);
       this.recordDailyAttemptOnce();
@@ -91,7 +123,11 @@ export class EndScene extends Phaser.Scene {
             '',
             `Escaped with ${run.hp}/${run.maxHp} HP and ${run.cardCollection.length} cards.`,
             emberLine,
-          ].join('\n'),
+            contractLine,
+            relicLine,
+          ]
+            .filter(Boolean)
+            .join('\n'),
           {
             fontFamily: 'monospace',
             fontSize: '17px',
@@ -116,7 +152,14 @@ export class EndScene extends Phaser.Scene {
         .text(
           cx,
           390,
-          [`The dungeon claims another soul in room ${run.depth}.`, emberLine].join('\n'),
+          [
+            `The dungeon claims another soul in room ${run.depth}.`,
+            emberLine,
+            contractLine,
+            relicLine,
+          ]
+            .filter(Boolean)
+            .join('\n'),
           {
             fontFamily: 'monospace',
             fontSize: '17px',

@@ -9,19 +9,23 @@ import { cardRulesLines } from '../data/keywords';
 import { createCardTooltip, estimateTooltipHeight } from '../gfx/cardTooltip';
 import { CARD_H, CARD_W, makeCardView } from '../gfx/cardview';
 import { createPileInspector } from '../gfx/pileView';
+import { createRelicPanel } from '../gfx/relicPanel';
 import { compactRewardImpactLabel, createRewardImpactText } from '../gfx/rewardImpactView';
 import { CombatEvent, emitBattleWon } from '../game/combatEvents';
 import { IntentPattern } from '../game/intentPatterns';
 import { PresentationQueue, PresentationStep } from '../game/presentationQueue';
 import { ensureRelicBehaviorsWired } from '../game/relicBehaviors';
+import { relicBattleSetup, relicGoldBonusLabel } from '../game/relicRegistry';
 import { previewRewardImpact } from '../game/rewardImpact';
 import {
   awardEliteBonusGold,
   awardEnemyGold,
+  awardRelicEliteGold,
   ELITE_CARD_OFFER_COUNT,
   ELITE_TIER_BIAS_DEPTH,
   rollVictoryCardOffers,
 } from '../game/rewards';
+import { randomRelic, rollRelicOffers, type Relic } from '../data/relics';
 import { GameRng, PhaserGameRng } from '../game/rng';
 import {
   buildSliceDeck,
@@ -256,11 +260,13 @@ export class TurnBattleScene extends Phaser.Scene {
   private itemViews: { icon: Phaser.GameObjects.Image }[] = [];
   private itemTooltip: Phaser.GameObjects.Container | null = null;
   private pilePanel: Phaser.GameObjects.Container | null = null;
+  private relicPanel: Phaser.GameObjects.Container | null = null;
   /** The rules-text tooltip for whichever card is currently hovered (hand or reward), if any (U11). */
   private activeTooltip: Phaser.GameObjects.Container | null = null;
   private outcomeShown = false;
   private keyC!: Phaser.Input.Keyboard.Key;
   private keyE!: Phaser.Input.Keyboard.Key;
+  private keyR!: Phaser.Input.Keyboard.Key;
 
   constructor() {
     super('TurnBattle');
@@ -319,6 +325,7 @@ export class TurnBattleScene extends Phaser.Scene {
     this.scene.sleep('Hud');
     this.keyC = this.input.keyboard!.addKey('C');
     this.keyE = this.input.keyboard!.addKey('E');
+    this.keyR = this.input.keyboard!.addKey('R');
 
     stopAmbience(this.game);
     playMusic(this, trackForEncounterKind(this.encounterKind));
@@ -358,6 +365,7 @@ export class TurnBattleScene extends Phaser.Scene {
       draw: deck.length,
       discard: 0,
     };
+    const setup = run ? relicBattleSetup(run.relicIds) : {};
     const result = createBattle(
       {
         deck,
@@ -370,17 +378,24 @@ export class TurnBattleScene extends Phaser.Scene {
           armor: display.armor,
           pattern: display.pattern,
         })),
-        // swift_boots re-specified for the deck model (U12): +1 draw each turn.
-        drawSize: run?.hasRelic('swift_boots') ? 6 : undefined,
+        drawSize: setup.drawSize,
+        startingEnergyBonus: setup.startingEnergyBonus,
+        retainBlockCap: setup.retainBlockCap,
+        poisonBonus: setup.poisonBonus,
+        enemyKillDraw: setup.enemyKillDraw,
       },
       this.rng,
     );
     this.acceptResult(result);
     this.refreshAllBars();
+    if (run?.hasRelic('swift_boots') && setup.drawSize) {
+      this.combatPop(this.heroSprite, `Swift Boots: draw ${setup.drawSize}`, '#7fb2e8');
+    }
 
     this.exposeDebugHandle();
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.closePilePanel();
+      this.closeRelicPanel();
       this.hideCardTooltip();
       this.hideItemTooltip();
       stopAllMusic(this.game);
@@ -391,6 +406,7 @@ export class TurnBattleScene extends Phaser.Scene {
   update(): void {
     this.queue.tick();
     if (Phaser.Input.Keyboard.JustDown(this.keyC)) this.togglePilePanel();
+    if (Phaser.Input.Keyboard.JustDown(this.keyR)) this.toggleRelicPanel();
     if (Phaser.Input.Keyboard.JustDown(this.keyE)) this.pressEndTurn();
   }
 
@@ -539,7 +555,7 @@ export class TurnBattleScene extends Phaser.Scene {
       }
       case 'cardPlayed':
         this.shown.energy = event.energyAfter;
-        this.energyText.setText(`${event.energyAfter}/${this.engineState.energyPerTurn}`);
+        this.energyText.setText(`${event.energyAfter}/${this.currentEnergyMax()}`);
         this.travelToPlayZone(event.card);
         playSfx(this, 'card_play');
         break;
@@ -1117,6 +1133,15 @@ export class TurnBattleScene extends Phaser.Scene {
     }
   }
 
+  /** This turn's energy cap — `energyPerTurn` plus the turn-1-only relic bonus (mirrors
+   * `startPlayerTurn`'s calc), so the HUD never shows current energy exceeding its own max. */
+  private currentEnergyMax(): number {
+    return (
+      this.engineState.energyPerTurn +
+      (this.engineState.turn === 1 ? this.engineState.startingEnergyBonus : 0)
+    );
+  }
+
   // ----------------------------------------------------------------- panels
 
   private drawStaticChrome(): void {
@@ -1506,6 +1531,7 @@ export class TurnBattleScene extends Phaser.Scene {
       this.closePilePanel();
       return;
     }
+    this.closeRelicPanel();
     this.pilePanel = createPileInspector(
       this,
       this.engineState.drawPile,
@@ -1519,12 +1545,35 @@ export class TurnBattleScene extends Phaser.Scene {
     this.pilePanel = null;
   }
 
+  private toggleRelicPanel(): void {
+    if (this.mode !== 'run') return;
+    if (this.relicPanel) {
+      this.closeRelicPanel();
+      return;
+    }
+    this.closePilePanel();
+    const run = getRun();
+    this.relicPanel = createRelicPanel(
+      this,
+      'Your relics',
+      GAME_W / 2,
+      GAME_H / 2 - 12,
+      run.relics,
+    );
+  }
+
+  private closeRelicPanel(): void {
+    this.relicPanel?.destroy();
+    this.relicPanel = null;
+  }
+
   // ---------------------------------------------------------------- outcome
 
   private showOutcome(outcome: 'victory' | 'defeat'): void {
     if (this.outcomeShown) return;
     this.outcomeShown = true;
     this.closePilePanel();
+    this.closeRelicPanel();
     if (outcome === 'victory') {
       for (const view of this.enemyViews.values()) {
         this.tweens.add({
@@ -1555,18 +1604,136 @@ export class TurnBattleScene extends Phaser.Scene {
     const run = getRun();
     run.hp = this.engineState.player.hp;
     run.enemiesDefeated++;
+    if (this.encounterKind === 'elite') run.elitesDefeated++;
     ensureRelicBehaviorsWired();
     const { heal } = emitBattleWon(run.relics.map((relic) => relic.id));
     if (heal > 0) {
       const before = run.hp;
       run.heal(heal);
-      if (run.hp > before) this.combatPop(this.heroSprite, `+${heal} HP`, '#5fe07a');
+      if (run.hp > before) {
+        // Generic (not `${relic name} +N HP`): `heal` already sums every relic contributing to
+        // RELIC_BATTLE_WON_HEAL, so a hardcoded relic-name label would misattribute the total the
+        // moment a second post-victory-heal relic is owned alongside this one.
+        this.combatPop(this.heroSprite, `+${heal} HP`, '#5fe07a');
+      }
     }
     playSfx(this, 'victory');
     const gold = awardEnemyGold(run, this.rng, run.depth);
+    const luckyLabel = relicGoldBonusLabel(run.relicIds);
     const eliteBonus = this.encounterKind === 'elite' ? awardEliteBonusGold(run, gold) : 0;
-    const totalGold = gold + eliteBonus;
+    const relicEliteGold = this.encounterKind === 'elite' ? awardRelicEliteGold(run) : 0;
+    const totalGold = gold + eliteBonus + relicEliteGold;
 
+    if (this.encounterKind === 'boss' && !run.atRelicCap) {
+      const bossRelic = randomRelic(this.rng, new Set(run.relicIds), run.relicPool);
+      if (bossRelic && run.addRelic(bossRelic)) {
+        this.combatPop(this.heroSprite, `Boss relic: ${bossRelic.name}`, '#f1c40f');
+      }
+    }
+
+    const relicOffers =
+      this.encounterKind === 'elite' && !run.atRelicCap
+        ? rollRelicOffers(this.rng, new Set(run.relicIds), run.relicPool, 3)
+        : [];
+    if (relicOffers.length > 0) {
+      this.showRelicVictoryOverlay(relicOffers, totalGold, luckyLabel);
+      return;
+    }
+    this.showCardVictoryOverlay(totalGold, luckyLabel);
+  }
+
+  private showRelicVictoryOverlay(offers: Relic[], totalGold: number, luckyLabel: string): void {
+    const overlay = this.add.container(0, 0).setDepth(400);
+    const g = this.add.graphics();
+    g.fillStyle(0x0b0a12, 0.88);
+    g.fillRect(0, 0, GAME_W, GAME_H);
+    overlay.add(g);
+    overlay.add(
+      this.add
+        .text(GAME_W / 2, 86, 'ELITE RELIC!', {
+          fontFamily: MONO,
+          fontSize: '36px',
+          fontStyle: 'bold',
+          color: '#f1c40f',
+        })
+        .setOrigin(0.5),
+    );
+    overlay.add(
+      this.add
+        .text(GAME_W / 2, 128, `+${totalGold} gold${luckyLabel}. Choose one relic:`, {
+          fontFamily: MONO,
+          fontSize: '16px',
+          color: '#d8d2e4',
+        })
+        .setOrigin(0.5),
+    );
+
+    const spacing = Math.min(220, (GAME_W - 80) / Math.max(offers.length, 1));
+    const startX = GAME_W / 2 - ((offers.length - 1) * spacing) / 2;
+    for (const [index, relic] of offers.entries()) {
+      const x = startX + index * spacing;
+      const panel = this.add.container(x, 250);
+      const bg = this.add.graphics();
+      bg.fillStyle(0x111019, 0.96);
+      bg.fillRoundedRect(-95, -70, 190, 170, 8);
+      bg.lineStyle(2, relic.color, 0.9);
+      bg.strokeRoundedRect(-95, -70, 190, 170, 8);
+      panel.add(bg);
+      panel.add(
+        this.add
+          .text(0, -48, relic.name, {
+            fontFamily: MONO,
+            fontSize: '15px',
+            fontStyle: 'bold',
+            color: '#f1c40f',
+            align: 'center',
+            wordWrap: { width: 170, useAdvancedWrap: true },
+          })
+          .setOrigin(0.5),
+      );
+      panel.add(
+        this.add
+          .text(0, 18, relic.description, {
+            fontFamily: MONO,
+            fontSize: '11px',
+            color: '#d8d2e4',
+            align: 'center',
+            wordWrap: { width: 170, useAdvancedWrap: true },
+          })
+          .setOrigin(0.5),
+      );
+      panel.setSize(190, 170);
+      panel.setInteractive(
+        new Phaser.Geom.Rectangle(-95, -70, 190, 170),
+        Phaser.Geom.Rectangle.Contains,
+      );
+      panel.on('pointerdown', () => {
+        const run = getRun();
+        run.addRelic(relic);
+        this.game.events.emit('hud-update');
+        overlay.destroy();
+        this.showCardVictoryOverlay(totalGold, luckyLabel);
+      });
+      overlay.add(panel);
+    }
+
+    const skip = this.add
+      .text(GAME_W / 2, 412, '[ Skip relic ]', {
+        fontFamily: MONO,
+        fontSize: '16px',
+        color: '#b8b0c8',
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => {
+        overlay.destroy();
+        this.showCardVictoryOverlay(totalGold, luckyLabel);
+      });
+    overlay.add(skip);
+  }
+
+  private showCardVictoryOverlay(totalGold: number, luckyLabel: string): void {
+    const run = getRun();
     const overlay = this.add.container(0, 0).setDepth(400);
     const g = this.add.graphics();
     g.fillStyle(0x0b0a12, 0.88);
@@ -1584,7 +1751,7 @@ export class TurnBattleScene extends Phaser.Scene {
     );
     overlay.add(
       this.add
-        .text(GAME_W / 2, 132, `+${totalGold} gold. Add one card to your deck:`, {
+        .text(GAME_W / 2, 132, `+${totalGold} gold${luckyLabel}. Add one card to your deck:`, {
           fontFamily: MONO,
           fontSize: '17px',
           color: '#d8d2e4',

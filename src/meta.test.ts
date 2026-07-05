@@ -70,12 +70,17 @@ describe('meta state', () => {
         unlockedStarterKitIds: [],
         activeStarterKitId: null,
         activeArchetypeId: null,
+        relicPathUnlocked: false,
+        unlockedRelicIds: [],
+        activeStartingRelicId: null,
+        completedContractIds: [],
       },
       pendingPrep: {
         itemIds: [],
         extraStartingChoice: false,
         scoutFlame: false,
         curseIds: [],
+        pendingRelicRoll: false,
       },
       lastAwardedRunId: 'old-run',
     });
@@ -102,12 +107,17 @@ describe('meta state', () => {
         unlockedStarterKitIds: [],
         activeStarterKitId: null,
         activeArchetypeId: null,
+        relicPathUnlocked: false,
+        unlockedRelicIds: [],
+        activeStartingRelicId: null,
+        completedContractIds: [],
       },
       pendingPrep: {
         itemIds: ['small_potion'],
         extraStartingChoice: true,
         scoutFlame: true,
         curseIds: ['narrow_opening'],
+        pendingRelicRoll: false,
       },
       lastAwardedRunId: null,
     });
@@ -152,6 +162,10 @@ describe('meta state', () => {
       unlockedStarterKitIds: [],
       activeStarterKitId: null,
       activeArchetypeId: null,
+      relicPathUnlocked: false,
+      unlockedRelicIds: [],
+      activeStartingRelicId: null,
+      completedContractIds: [],
     });
   });
 
@@ -180,6 +194,10 @@ describe('meta state', () => {
       unlockedStarterKitIds: ['duelist', 'warden'],
       activeStarterKitId: null,
       activeArchetypeId: null,
+      relicPathUnlocked: false,
+      unlockedRelicIds: [],
+      activeStartingRelicId: null,
+      completedContractIds: [],
     });
   });
 
@@ -260,12 +278,17 @@ describe('meta state', () => {
         unlockedStarterKitIds: ['duelist'],
         activeStarterKitId: 'duelist',
         activeArchetypeId: null,
+        relicPathUnlocked: false,
+        unlockedRelicIds: [],
+        activeStartingRelicId: null,
+        completedContractIds: [],
       },
       pendingPrep: {
         itemIds: ['small_potion'],
         extraStartingChoice: true,
         scoutFlame: false,
         curseIds: [],
+        pendingRelicRoll: false,
       },
       lastAwardedRunId: 'run-1',
     });
@@ -306,12 +329,17 @@ describe('meta state', () => {
         unlockedStarterKitIds: ['warden'],
         activeStarterKitId: null,
         activeArchetypeId: null,
+        relicPathUnlocked: false,
+        unlockedRelicIds: [],
+        activeStartingRelicId: null,
+        completedContractIds: [],
       },
       pendingPrep: {
         itemIds: ['bomb'],
         extraStartingChoice: true,
         scoutFlame: false,
         curseIds: [],
+        pendingRelicRoll: false,
       },
       lastAwardedRunId: null,
     });
@@ -343,12 +371,17 @@ describe('meta state', () => {
         unlockedStarterKitIds: [],
         activeStarterKitId: null,
         activeArchetypeId: null,
+        relicPathUnlocked: false,
+        unlockedRelicIds: [],
+        activeStartingRelicId: null,
+        completedContractIds: [],
       },
       pendingPrep: {
         itemIds: ['bomb'],
         extraStartingChoice: true,
         scoutFlame: true,
         curseIds: [],
+        pendingRelicRoll: false,
       },
       lastAwardedRunId: 'run-2',
     });
@@ -362,14 +395,62 @@ describe('meta state', () => {
         unlockedStarterKitIds: [],
         activeStarterKitId: null,
         activeArchetypeId: null,
+        relicPathUnlocked: false,
+        unlockedRelicIds: [],
+        activeStartingRelicId: null,
+        completedContractIds: [],
       },
       pendingPrep: {
         itemIds: ['bomb'],
         extraStartingChoice: true,
         scoutFlame: true,
         curseIds: [],
+        pendingRelicRoll: false,
       },
       lastAwardedRunId: 'run-2',
     });
+  });
+
+  // Regression coverage for a bug found in review: `normalizeProgression` used to reset
+  // `unlockedRelicIds` to `[]` whenever `relicPathUnlocked` was false, so a contract-granted
+  // relic unlock (earned before the path purchase) was silently discarded on the very next
+  // `setMeta` call — permanent, since the completed contract could never re-fire.
+  test('keeps a contract-granted relic unlock even before the relic path is purchased', () => {
+    const meta = setMeta({
+      ...createDefaultMetaState(),
+      progression: {
+        ...createDefaultMetaState().progression,
+        relicPathUnlocked: false,
+        unlockedRelicIds: ['merchants_seal'],
+        completedContractIds: ['first_elite_kill'],
+      },
+    });
+
+    expect(meta.progression.relicPathUnlocked).toBe(false);
+    expect(meta.progression.unlockedRelicIds).toEqual(['merchants_seal']);
+    expect(meta.progression.completedContractIds).toEqual(['first_elite_kill']);
+
+    // Buying the path afterward must see the relic still unlocked, not lost.
+    const afterPathBuy = setMeta({
+      ...meta,
+      progression: { ...meta.progression, relicPathUnlocked: true },
+    });
+    expect(afterPathBuy.progression.unlockedRelicIds).toEqual(['merchants_seal']);
+  });
+
+  // Regression coverage: `normalizeActiveStartingRelicId` used to accept a cost-0 starter relic
+  // as the active starting relic regardless of `relicPathUnlocked`, letting a save (or a manually
+  // edited one) carry a starting relic that bypassed the Ember-gated relic path.
+  test('drops an active starting relic on load if the relic path is not unlocked', () => {
+    const meta = setMeta({
+      ...createDefaultMetaState(),
+      progression: {
+        ...createDefaultMetaState().progression,
+        relicPathUnlocked: false,
+        activeStartingRelicId: 'swift_boots',
+      },
+    });
+
+    expect(meta.progression.activeStartingRelicId).toBeNull();
   });
 });

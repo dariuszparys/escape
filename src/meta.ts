@@ -10,9 +10,16 @@ import { CAMPFIRE_PURCHASES, createDefaultPendingPrep } from './data/campfirePur
 import { STARTER_KITS, type StarterKitId } from './data/starterKits';
 import { ARCHETYPES } from './data/archetypes';
 import type { ArchetypeId } from './data/cards';
+import type { RelicId } from './data/relics';
+import {
+  normalizeActiveStartingRelicId,
+  normalizeContractIds,
+  normalizeUnlockedRelicIds,
+  type ContractId,
+} from './data/contracts';
 
 export const META_STORAGE_KEY = 'escape.meta.v1';
-export const META_ECONOMY_VERSION = 2;
+export const META_ECONOMY_VERSION = 3;
 
 /** The selectable player archetype ids, derived from the one canonical `ARCHETYPES` list so a new
  * archetype can never be added there yet silently rejected here by save normalization. */
@@ -31,6 +38,10 @@ export interface MetaProgressionState {
    * runtime state carries a concrete value.
    */
   activeArchetypeId?: ArchetypeId | null;
+  relicPathUnlocked?: boolean;
+  unlockedRelicIds?: RelicId[];
+  activeStartingRelicId?: RelicId | null;
+  completedContractIds?: ContractId[];
 }
 
 export interface MetaState extends CampfirePurchaseState {
@@ -51,13 +62,17 @@ export function createDefaultMetaState(): MetaState {
   };
 }
 
-function createDefaultProgressionState(): MetaProgressionState {
+export function createDefaultProgressionState(): MetaProgressionState {
   return {
     starterCardVarietyUnlocked: false,
     migrationBonusGranted: false,
     unlockedStarterKitIds: [],
     activeStarterKitId: null,
     activeArchetypeId: null,
+    relicPathUnlocked: false,
+    unlockedRelicIds: [],
+    activeStartingRelicId: null,
+    completedContractIds: [],
   };
 }
 
@@ -132,6 +147,17 @@ function normalizeProgression(value: unknown): MetaProgressionState {
     unlockedStarterKitIds.includes(value.activeStarterKitId as StarterKitId)
       ? (value.activeStarterKitId as StarterKitId)
       : null;
+  // Kept independent of `relicPathUnlocked` (contracts can unlock a relic id before the path
+  // purchase — see the "Deep Delver"-style rewards) so buying the path later doesn't require
+  // re-earning contract rewards. Whether an unlocked id actually appears in-run is still gated by
+  // `relicPoolForRun`, which checks `relicPathUnlocked` on its own.
+  const relicPathUnlocked = value.relicPathUnlocked === true;
+  const unlockedRelicIds = normalizeUnlockedRelicIds(value.unlockedRelicIds);
+  const activeStartingRelicId = normalizeActiveStartingRelicId(
+    value.activeStartingRelicId,
+    relicPathUnlocked,
+    unlockedRelicIds,
+  );
 
   return {
     starterCardVarietyUnlocked,
@@ -139,6 +165,10 @@ function normalizeProgression(value: unknown): MetaProgressionState {
     unlockedStarterKitIds,
     activeStarterKitId,
     activeArchetypeId: normalizeArchetypeId(value.activeArchetypeId),
+    relicPathUnlocked,
+    unlockedRelicIds,
+    activeStartingRelicId,
+    completedContractIds: normalizeContractIds(value.completedContractIds),
   };
 }
 
@@ -149,6 +179,27 @@ function createMigratedProgressionState(grantsStarterBonus: boolean): MetaProgre
     unlockedStarterKitIds: [],
     activeStarterKitId: null,
     activeArchetypeId: null,
+    relicPathUnlocked: false,
+    unlockedRelicIds: [],
+    activeStartingRelicId: null,
+    completedContractIds: [],
+  };
+}
+
+function migrateMetaV2ToV3(value: Record<string, unknown>): MetaState {
+  const pending = isRecord(value.pendingPrep) ? value.pendingPrep : {};
+  return {
+    economyVersion: META_ECONOMY_VERSION,
+    embers: normalizeEmbers(value.embers),
+    progression: normalizeProgression(value.progression),
+    pendingPrep: {
+      itemIds: normalizeItemIds(pending.itemIds),
+      extraStartingChoice: pending.extraStartingChoice === true,
+      scoutFlame: pending.scoutFlame === true,
+      curseIds: normalizeCurseIds(pending.curseIds),
+      pendingRelicRoll: pending.pendingRelicRoll === true,
+    },
+    lastAwardedRunId: typeof value.lastAwardedRunId === 'string' ? value.lastAwardedRunId : null,
   };
 }
 
@@ -156,6 +207,9 @@ export function normalizeMetaState(value: unknown): MetaState {
   if (!isRecord(value)) return createDefaultMetaState();
 
   const hasEconomyVersion = Object.prototype.hasOwnProperty.call(value, 'economyVersion');
+  if (hasEconomyVersion && value.economyVersion === 2) {
+    return migrateMetaV2ToV3(value);
+  }
   if (hasEconomyVersion && value.economyVersion !== META_ECONOMY_VERSION) {
     return createDefaultMetaState();
   }
@@ -175,6 +229,7 @@ export function normalizeMetaState(value: unknown): MetaState {
       extraStartingChoice: pending.extraStartingChoice === true,
       scoutFlame: pending.scoutFlame === true,
       curseIds: normalizeCurseIds(pending.curseIds),
+      pendingRelicRoll: pending.pendingRelicRoll === true,
     },
     lastAwardedRunId: typeof value.lastAwardedRunId === 'string' ? value.lastAwardedRunId : null,
   };

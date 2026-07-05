@@ -11,12 +11,15 @@ import {
   toEngineEnemies,
 } from '../data/enemies';
 import { InventoryItem, type InventoryItemDef, makeItem } from '../data/items';
+import { makeRelic, type RelicId } from '../data/relics';
 import type { StarterKitId } from '../data/starterKits';
 import { isEliteEligibleDepth, rollRoomEvent, type RoomEvent } from '../dungeon/rooms';
 import { RunState } from '../state';
 import { applyPendingPrepToRun } from './campfirePrep';
+import { createDefaultProgressionState } from '../meta';
 import { emitBattleWon } from './combatEvents';
 import { ensureRelicBehaviorsWired } from './relicBehaviors';
+import { relicBattleSetup } from './relicRegistry';
 import { commitDelve } from './delve';
 import { intentView } from './intentPatterns';
 import { convertGoldToEmbers } from './metaRewards';
@@ -104,6 +107,10 @@ export interface BalanceScenario {
   unlockedStarterKitIds?: StarterKitId[];
   activeStarterKitId?: StarterKitId | null;
   activeArchetypeId?: ArchetypeId | null;
+  /** Relics granted directly at run start — the knob that lets the harness measure win-rate
+   * impact for relics that aren't in the starter pool (bypasses the meta relic-path/unlock
+   * economy entirely; this harness cares about battle/economy effects, not acquisition odds). */
+  startingRelicIds?: RelicId[];
 }
 
 export interface EncounterBucketSummary {
@@ -273,12 +280,16 @@ function createScenarioRun(seed: number, scenario: BalanceScenario): RunState {
   const run = new RunState(String(seed), `sim-${seed}`);
   const prep = makePendingPrep(scenario);
   applyPendingPrepToRun(run, prep, {
+    ...createDefaultProgressionState(),
     starterCardVarietyUnlocked: scenario.starterCardVarietyUnlocked === true,
-    migrationBonusGranted: false,
     unlockedStarterKitIds: scenario.unlockedStarterKitIds ?? [],
     activeStarterKitId: scenario.activeStarterKitId ?? null,
     activeArchetypeId: scenario.activeArchetypeId ?? null,
   });
+
+  for (const relicId of scenario.startingRelicIds ?? []) {
+    run.addRelic(makeRelic(relicId));
+  }
 
   chooseStartingCards(run);
   return run;
@@ -673,11 +684,17 @@ export function simulateBattle(
   emphasis: CardEmphasis | null = null,
 ): { won: boolean; turns: number } {
   const pack = Array.isArray(enemyOrPack) ? enemyOrPack : [enemyOrPack];
+  const setup = relicBattleSetup(run.relicIds);
   let { state } = createBattle(
     {
       deck: run.cardCollection,
       player: { hp: run.hp, maxHp: run.maxHp, armor: run.armor },
       enemies: toEngineEnemies(pack),
+      drawSize: setup.drawSize,
+      startingEnergyBonus: setup.startingEnergyBonus,
+      retainBlockCap: setup.retainBlockCap,
+      poisonBonus: setup.poisonBonus,
+      enemyKillDraw: setup.enemyKillDraw,
     },
     rng,
   );
