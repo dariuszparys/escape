@@ -42,7 +42,7 @@ import {
   type RestActionMode,
 } from '../game/restEconomy';
 import { commitDelve, resolveBank } from '../game/delve';
-import { calculateEmberReward } from '../game/metaRewards';
+import { gateSummary } from '../game/gateSummary';
 import { applyTrapDamage } from '../game/hazards';
 import { applyPoisonedRoomEntryDamage } from '../game/scenarioRules';
 import { stratumForDepth } from '../game/strata';
@@ -1500,19 +1500,7 @@ export class DungeonScene extends Phaser.Scene {
     this.player.setVelocity(0, 0);
     this.player.anims.stop();
 
-    const stratum = stratumForDepth(run.depth);
-    const reward = calculateEmberReward({
-      depth: run.depth,
-      enemiesDefeated: run.enemiesDefeated,
-      gold: run.gold,
-      escaped: true,
-      convertGold: !run.isDaily,
-    });
-    const bankLine = run.isDaily
-      ? `Bank: end the delve at depth ${run.depth} (no Ember conversion in Daily)`
-      : `Bank: convert ${run.gold} Gold → ${reward.convertedEmbers} Ember${
-          reward.convertedEmbers === 1 ? '' : 's'
-        } (+${reward.escapeEmbers} escape)`;
+    const { stratum, bankLine } = gateSummary(run);
 
     const cx = this.origin.x + ROOM_W / 2;
     const cy = this.origin.y + ROOM_H / 2;
