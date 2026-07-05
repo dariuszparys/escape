@@ -1,7 +1,12 @@
 import type { RelicId } from './relics';
 import { RELIC_DEFS } from './relics';
 
-export type ContractId = 'escape_with_3_relics' | 'first_elite_kill' | 'reach_depth_6';
+export type ContractId =
+  | 'escape_with_3_relics'
+  | 'first_elite_kill'
+  | 'reach_depth_6'
+  | 'slayer_25'
+  | 'delve_past_first_gate';
 
 export interface ContractDef {
   id: ContractId;
@@ -34,6 +39,19 @@ export const CONTRACT_DEFS: ContractDef[] = [
     unlockRelicId: 'wanderers_flask',
     emberReward: 1,
   },
+  {
+    id: 'slayer_25',
+    name: 'Slayer',
+    description: 'Defeat 25 enemies in a single run.',
+    emberReward: 1,
+  },
+  {
+    id: 'delve_past_first_gate',
+    name: 'Past the First Gate',
+    description: 'Delve into a second stratum instead of banking.',
+    unlockRelicId: 'spark_coil',
+    emberReward: 0,
+  },
 ];
 
 const CONTRACT_IDS = new Set<string>(CONTRACT_DEFS.map((contract) => contract.id));
@@ -50,6 +68,8 @@ export interface ContractRunSnapshot {
   depth: number;
   relicCount: number;
   elitesDefeated: number;
+  enemiesDefeated: number;
+  stratum: number;
 }
 
 export function evaluateContract(id: ContractId, run: ContractRunSnapshot): boolean {
@@ -60,6 +80,10 @@ export function evaluateContract(id: ContractId, run: ContractRunSnapshot): bool
       return run.elitesDefeated >= 1;
     case 'reach_depth_6':
       return run.depth >= 6;
+    case 'slayer_25':
+      return run.enemiesDefeated >= 25;
+    case 'delve_past_first_gate':
+      return run.stratum >= 2;
     default: {
       const _exhaustive: never = id;
       throw new Error(`Unhandled contract: ${_exhaustive}`);
