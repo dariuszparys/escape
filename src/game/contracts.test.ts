@@ -39,4 +39,77 @@ describe('contracts', () => {
     expect(updated.progression.unlockedRelicIds).toContain('wanderers_flask');
     expect(updated.embers).toBeGreaterThan(meta.embers);
   });
+
+  test('re-applying the same completions is a no-op', () => {
+    const meta = createDefaultMetaState();
+    const completions = evaluateNewContracts(meta.progression, {
+      escaped: false,
+      depth: 6,
+      relicCount: 0,
+      elitesDefeated: 0,
+    });
+
+    const once = applyContractCompletions(meta, completions);
+    const twice = applyContractCompletions(once, completions);
+
+    expect(twice.embers).toBe(once.embers);
+    expect(twice.progression.completedContractIds?.length).toBe(
+      once.progression.completedContractIds?.length,
+    );
+    expect(twice.progression.unlockedRelicIds?.length).toBe(
+      once.progression.unlockedRelicIds?.length,
+    );
+  });
+
+  test('duplicate completions within one call count once', () => {
+    const meta = createDefaultMetaState();
+    const [completion] = evaluateNewContracts(meta.progression, {
+      escaped: false,
+      depth: 6,
+      relicCount: 0,
+      elitesDefeated: 0,
+    });
+    expect(completion).toBeDefined();
+
+    const updated = applyContractCompletions(meta, [completion!, completion!]);
+
+    expect(updated.embers).toBe(meta.embers + completion!.emberReward);
+    expect(updated.progression.completedContractIds?.length).toBe(
+      (meta.progression.completedContractIds?.length ?? 0) + 1,
+    );
+    expect(updated.progression.unlockedRelicIds?.length).toBe(
+      (meta.progression.unlockedRelicIds?.length ?? 0) + 1,
+    );
+  });
+
+  test('first_elite_kill awards ember and unlocks merchants_seal', () => {
+    const meta = createDefaultMetaState();
+    const completions = evaluateNewContracts(meta.progression, {
+      escaped: false,
+      depth: 1,
+      relicCount: 0,
+      elitesDefeated: 1,
+    });
+
+    expect(completions).toHaveLength(1);
+    expect(completions[0]?.contractId).toBe('first_elite_kill');
+
+    const updated = applyContractCompletions(meta, completions);
+    expect(updated.progression.unlockedRelicIds).toContain('merchants_seal');
+    expect(updated.embers).toBe(meta.embers + 1);
+  });
+
+  test('already-completed contracts are not re-evaluated', () => {
+    const meta = createDefaultMetaState();
+    meta.progression.completedContractIds = ['reach_depth_6'];
+
+    const completions = evaluateNewContracts(meta.progression, {
+      escaped: false,
+      depth: 6,
+      relicCount: 0,
+      elitesDefeated: 0,
+    });
+
+    expect(completions).toEqual([]);
+  });
 });

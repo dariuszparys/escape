@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'vitest';
 import {
   ARCHETYPE_STARTING_CARD_IDS,
+  STARTING_CARD_IDS,
+  STARTING_DECK_PAD_IDS,
   startingDeckPadIdsForScenario,
   startingCardIdsForChoiceCount,
   startingCardIdsForRun,
@@ -101,5 +103,25 @@ describe('startingCardIdsForChoiceCount', () => {
     expect(pad).toHaveLength(4);
     expect(defs.every((card) => !cardGrantsBlock(card))).toBe(true);
     expect(pad).not.toContain('guard');
+  });
+});
+
+describe('starting card id integrity', () => {
+  test('every archetype pool id resolves to a CARD_DEFS entry tagged with that archetype', () => {
+    for (const [archetypeId, ids] of Object.entries(ARCHETYPE_STARTING_CARD_IDS)) {
+      for (const id of ids) {
+        const def = CARD_DEFS.find((card) => card.id === id);
+        expect(def, `missing card def for archetype id: ${id}`).toBeDefined();
+        expect(def?.archetype, `card ${id} should be tagged '${archetypeId}'`).toBe(archetypeId);
+      }
+    }
+  });
+
+  test('neutral STARTING_CARD_IDS and STARTING_DECK_PAD_IDS resolve to untagged CARD_DEFS entries', () => {
+    for (const id of [...STARTING_CARD_IDS, ...STARTING_DECK_PAD_IDS]) {
+      const def = CARD_DEFS.find((card) => card.id === id);
+      expect(def, `missing card def for neutral id: ${id}`).toBeDefined();
+      expect(def?.archetype, `card ${id} must stay neutral (no archetype tag)`).toBeUndefined();
+    }
   });
 });

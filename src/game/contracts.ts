@@ -40,9 +40,8 @@ export function applyContractCompletions(
   let embers = meta.embers;
 
   for (const completion of completions) {
-    if (!completedContractIds.includes(completion.contractId)) {
-      completedContractIds.push(completion.contractId);
-    }
+    if (completedContractIds.includes(completion.contractId)) continue;
+    completedContractIds.push(completion.contractId);
     embers += completion.emberReward;
     if (completion.unlockedRelicId && !unlockedRelicIds.includes(completion.unlockedRelicId)) {
       unlockedRelicIds.push(completion.unlockedRelicId);
