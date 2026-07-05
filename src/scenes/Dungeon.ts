@@ -35,7 +35,7 @@ import { playSfx } from '../audio/sfx';
 import { awardPotionItem, rollChestReward } from '../game/rewards';
 import { previewRewardImpact } from '../game/rewardImpact';
 import { startingCardIdsForRun } from '../game/startingCards';
-import { upgradeCard } from '../game/cardUpgrade';
+import { isCardUpgradable, upgradeCard } from '../game/cardUpgrade';
 import {
   canUseRestAction,
   payRestAction,
@@ -1340,7 +1340,13 @@ export class DungeonScene extends Phaser.Scene {
 
     this.closeRestActionPanel();
     // Deck model (U12): every card fights, so list the collection reading-sorted.
-    const entries = [...run.cardCollection].sort(
+    // Upgrade mode (008): a card the upgrade table can't change (e.g. stun-only,
+    // shuffleCurse-only) is excluded — the picker must never offer a no-op paid action.
+    const eligible =
+      mode === 'upgrade'
+        ? run.cardCollection.filter((card) => isCardUpgradable(card))
+        : run.cardCollection;
+    const entries = [...eligible].sort(
       (a, b) => b.tier - a.tier || a.name.localeCompare(b.name) || a.uid - b.uid,
     );
     const cx = this.origin.x + ROOM_W / 2;
