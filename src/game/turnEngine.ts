@@ -251,9 +251,15 @@ function drawCards(rt: EngineRuntime, requested: number): void {
   }
 }
 
+/** Turn-aware energy cap: startingEnergyBonus (spark_coil) applies on turn 1 only. */
+function turnEnergyMax(state: TurnBattleState): number {
+  const bonus = state.turn === 1 ? state.startingEnergyBonus : 0;
+  return state.energyPerTurn + bonus;
+}
+
 function gainEnergy(rt: EngineRuntime, amount: number): void {
   rt.state.energy += amount;
-  rt.events.push({ type: 'energyChanged', energy: rt.state.energy, max: rt.state.energyPerTurn });
+  rt.events.push({ type: 'energyChanged', energy: rt.state.energy, max: turnEnergyMax(rt.state) });
 }
 
 /** Shuffle a card into a random position in the Draw Pile (hexer elite's curse-shuffle, U5). */
@@ -499,9 +505,8 @@ function startPlayerTurn(rt: EngineRuntime): void {
     state.player.statuses = state.player.statuses.filter((status) => status.type !== 'stun');
     rt.events.push({ type: 'stunned', targetId: state.player.id });
   }
-  const turnEnergyMax = state.energyPerTurn + (state.turn === 1 ? state.startingEnergyBonus : 0);
-  state.energy = turnEnergyMax;
-  rt.events.push({ type: 'energyChanged', energy: state.energy, max: turnEnergyMax });
+  state.energy = turnEnergyMax(state);
+  rt.events.push({ type: 'energyChanged', energy: state.energy, max: turnEnergyMax(state) });
   drawCards(rt, state.drawSize);
   // Every living enemy telegraphs its own next beat (multi-enemy: one panel per enemy).
   for (const enemy of state.enemies) {
