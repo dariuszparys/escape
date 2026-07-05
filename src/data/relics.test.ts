@@ -47,7 +47,7 @@ describe('relic defs', () => {
       expect.objectContaining({
         id: 'iron_will',
         name: 'Iron Will',
-        description: 'Max armor raised to 4.',
+        description: 'Armor raised to 4, gained immediately.',
         color: 0x90d8e8,
       }),
     );

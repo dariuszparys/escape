@@ -5,6 +5,7 @@ import { InventoryItem, makeItem } from './data/items';
 import { MAX_RELICS_PER_RUN, type RelicId, type Relic, starterRelicPool } from './data/relics';
 import type { StarterKitId } from './data/starterKits';
 import {
+  RELIC_ON_ACQUIRE_FILLS_ARMOR,
   RELIC_ON_ACQUIRE_MAX_HP,
   relicGoldMultiplier,
   relicMaxArmor,
@@ -145,6 +146,7 @@ export class RunState {
 
     this.relics.push(relic);
     this.maxArmor = relicMaxArmor(MAX_ARMOR, this.relicIds);
+    if (RELIC_ON_ACQUIRE_FILLS_ARMOR.has(relic.id)) this.armor = this.maxArmor;
     const maxHpBonus = RELIC_ON_ACQUIRE_MAX_HP[relic.id] ?? 0;
     if (maxHpBonus > 0) {
       this.maxHp += maxHpBonus;

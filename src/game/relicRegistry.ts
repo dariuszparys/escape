@@ -79,6 +79,11 @@ export function relicMaxArmor(baseMax: number, relicIds: readonly RelicId[]): nu
   return relicIds.includes('iron_will') ? baseMax + 1 : baseMax;
 }
 
+/** Relics that fill armor to the (possibly relic-raised) cap the instant they're acquired,
+ * rather than leaving it to accumulate from rare chest pickups — otherwise a cap raise with
+ * nothing behind it is a dead pick for most of a run. */
+export const RELIC_ON_ACQUIRE_FILLS_ARMOR: ReadonlySet<RelicId> = new Set(['iron_will']);
+
 /** Gold multiplier from relics (run economy layer). */
 export function relicGoldMultiplier(relicIds: readonly RelicId[]): number {
   return relicIds.includes('lucky_coin') ? 1.5 : 1;

@@ -57,7 +57,7 @@ export const RELIC_DEFS: RelicDef[] = [
   {
     id: 'iron_will',
     name: 'Iron Will',
-    description: 'Max armor raised to 4.',
+    description: 'Armor raised to 4, gained immediately.',
     color: 0x90d8e8,
     family: 'survival',
     unlockCost: 0,

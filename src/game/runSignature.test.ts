@@ -9,12 +9,13 @@ import { RngDrawDigest, runSignature } from './runSignature';
  */
 const GOLDEN_SEED = 7;
 const GOLDEN_SIGNATURE =
-  // Re-goldened for the combat-depth rework (2026-07-04). Intentional determinism change, not a
-  // regression: the new modifier statuses (Strength/Vulnerable/Weak/Frail), the rebuilt
-  // enemy/card content, the +2 attrition punch (intentBonusForDepth), and the rewritten
-  // competent play + dilution-aware curation policies all change which cards are played and
-  // which battles are won for a fixed seed, shifting downstream draw order and count.
-  'v=1|boss=1|gate=1|death=-|stratum=1|enc=0|embers=3|draws=143|hash=7e7b10fd';
+  // Re-goldened for the iron_will/enemy-block-timing fix (2026-07-05). Intentional determinism
+  // change, not a regression: iron_will now fills armor to its raised cap immediately on
+  // acquire instead of leaving it to rare chest pickups, and an enemy's block-kind intent
+  // effects now apply the instant they're telegraphed (protecting it against the player's hits
+  // THIS round) instead of at the end of that same turn. Both change how much damage lands and
+  // how long fights run for a fixed seed, shifting downstream draw order and count.
+  'v=1|boss=1|gate=1|death=-|stratum=1|enc=0|embers=3|draws=118|hash=d89aae7f';
 
 describe('RngDrawDigest', () => {
   test('samples draw order and count, not just the value set (the load-bearing property)', () => {

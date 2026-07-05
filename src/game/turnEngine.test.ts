@@ -418,13 +418,27 @@ describe('block, armor, and expiry (R19)', () => {
     expect(nextTurn.state.player.hp).toBe(30);
   });
 
-  test("enemy block expires at the enemy's own beat start", () => {
-    const state = makeState({}, blockPattern());
-    const first = endTurn(state, new SequenceRng());
-    expect(first.state.enemies[0].block).toBe(4);
-    const second = endTurn(first.state, new SequenceRng());
-    expect(eventOf(second.events, 'blockExpired').targetId).toBe('foe');
-    expect(second.state.enemies[0].block).toBe(4); // expired, then re-braced
+  test('enemy block from its intent is granted the instant it telegraphs, before the player acts (R19-block-preempt)', () => {
+    // createBattle's opening startPlayerTurn already telegraphed turn 1's Brace — the block
+    // must be live immediately, not deferred to the enemy's own beat at end of turn.
+    const result = createBattle(baseConfig({ pattern: blockPattern() }), new SequenceRng());
+    expect(result.state.enemies[0].block).toBe(4);
+  });
+
+  test("a telegraphed block already reduces the player's damage this same round", () => {
+    const result = createBattle(baseConfig({ pattern: blockPattern() }), new SequenceRng());
+    const strikeCard = result.state.hand.find((c) => c.effects[0].kind === 'damage')!;
+    const hit = playCard(result.state, strikeCard.uid, new SequenceRng());
+    const ev = eventOf(hit.events, 'damageResolved');
+    expect(ev.blockAbsorbed).toBe(4);
+    expect(ev.amount).toBe(1); // strike deals 5, 4 already blocked before the hit landed
+  });
+
+  test('enemy block still expires after one round, now anchored to the telegraph instead of the beat', () => {
+    const result = createBattle(baseConfig({ pattern: blockPattern() }), new SequenceRng());
+    const next = endTurn(result.state, new SequenceRng());
+    expect(eventOf(next.events, 'blockExpired').targetId).toBe('foe');
+    expect(next.state.enemies[0].block).toBe(4); // expired, then re-braced for the new round
   });
 });
 

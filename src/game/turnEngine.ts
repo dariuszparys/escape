@@ -501,6 +501,13 @@ function startPlayerTurn(rt: EngineRuntime): void {
   // Every living enemy telegraphs its own next beat (multi-enemy: one panel per enemy).
   for (const enemy of state.enemies) {
     if (enemy.hp <= 0) continue;
+    // Block is a defensive stance, not a delayed reward: last round's guard drops before
+    // this round's (possibly new) one goes up — mirrors the old "expires at own beat start"
+    // lifespan, just anchored to the telegraph instead of the beat.
+    if (enemy.block > 0) {
+      rt.events.push({ type: 'blockExpired', targetId: enemy.id, amount: enemy.block });
+      enemy.block = 0;
+    }
     enemy.intent = telegraphIntent(enemy.intent, state.turn);
     if (enemy.intent.current) {
       // Fold the enemy's Strength into the telegraphed magnitude so a ritual-buffed hit reads
@@ -514,22 +521,28 @@ function startPlayerTurn(rt: EngineRuntime): void {
         kind: view.kind,
         magnitude: view.magnitude,
       });
+      // Block-kind effects raise the guard the instant they're telegraphed, not at the end of
+      // this same turn — the player's hits THIS round must contend with it, matching what a
+      // "will block" telegraph actually promises. Non-block effects (damage/status/etc.) still
+      // wait for the enemy's own beat below. A voided intent (stun/smoke bomb) is decided by a
+      // player action AFTER this point, so it can no longer undo a guard already raised — the
+      // trade-off of making block honest instead of delayed.
+      for (const effect of enemy.intent.current.effects) {
+        if (effect.kind === 'block') applyEffect(rt, effect, enemy, state.player);
+      }
     }
   }
   announceNoPlays(rt);
 }
 
 /**
- * The enemy's beat (R11 rules side): its block expires, its statuses tick, then
- * the telegraphed intent resolves — or fizzles without advancing the cycle when
- * voided by stun or smoke bomb (R21; delay, not skip — see clearVoidedIntent).
+ * The enemy's beat (R11 rules side): its statuses tick, then the telegraphed intent's
+ * non-block effects resolve — or fizzle without advancing the cycle when voided by stun
+ * or smoke bomb (R21; delay, not skip — see clearVoidedIntent). Block already went up
+ * when the intent was telegraphed, at the start of this turn (see startPlayerTurn).
  */
 function enemyBeat(rt: EngineRuntime, enemy: EnemyCombatant): void {
   const state = rt.state;
-  if (enemy.block > 0) {
-    rt.events.push({ type: 'blockExpired', targetId: enemy.id, amount: enemy.block });
-    enemy.block = 0;
-  }
   const hpBeforeDot = enemy.hp;
   tickStatuses(rt, enemy);
   // hunter_charm's draw-on-kill otherwise only triggers from `applyEffect`'s damage branch, which
@@ -553,6 +566,8 @@ function enemyBeat(rt: EngineRuntime, enemy: EnemyCombatant): void {
     rt.events.push({ type: 'enemyBeatStarted', sourceId: enemy.id, name: intent.current.name });
     rt.log.push(`${enemy.name} uses ${intent.current.name}`);
     for (const effect of intent.current.effects) {
+      // Already applied when this intent was telegraphed at the top of the turn.
+      if (effect.kind === 'block') continue;
       applyEffect(rt, effect, enemy, state.player);
       if (checkTerminal(rt)) break;
     }

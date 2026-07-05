@@ -36,10 +36,13 @@ not re-offer one later in the Stratum.
 
 The Slay-the-Spire-style combat phase entered when a dungeon encounter commits
 the player to fight. Each player turn: statuses tick, energy resets, a hand
-draws from the Draw Pile, the player plays any number of cards within energy
-and ends the turn, then the enemy executes its telegraphed intent as one fast
-beat. Rules resolve instantly; visuals replay as a causally ordered queue and
-input is never locked.
+draws from the Draw Pile, and the next intent telegraphs — any block-kind
+effect in it is raised immediately, before the player acts, so a "will block"
+enemy already has to be fought through this same round, not the next one. The
+player then plays any number of cards within energy and ends the turn, and the
+enemy executes the REST of its telegraphed intent (damage/status/etc.) as one
+fast beat. Rules resolve instantly; visuals replay as a causally ordered queue
+and input is never locked.
 
 ### Reward Impact Preview
 
@@ -117,8 +120,12 @@ magnitudes fold the actor's Strength in, so a ritual-buffed hit always reads hon
 The enemy's telegraphed next action — type and raw magnitude, unadjusted for
 the player's block or armor — shown before the player commits any card. Intents
 come from authored per-enemy patterns; a voided intent (for example by stun)
-updates the telegraph immediately so it never lies. In an Enemy Pack, each
-living member telegraphs and acts on its own independent Enemy Intent cycle.
+updates the telegraph immediately so it never lies — except a block-kind
+effect, which is raised at telegraph time (see Card Battle) and so is already
+committed by the time a same-turn stun or smoke bomb could void it; voiding
+only cancels the remaining (non-block) part of that intent. In an Enemy Pack,
+each living member telegraphs and acts on its own independent Enemy Intent
+cycle.
 
 ### Enemy Pack
 

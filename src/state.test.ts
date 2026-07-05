@@ -109,13 +109,14 @@ describe('RunState.removeCard', () => {
     expect(run.maxArmor).toBe(3);
   });
 
-  test('adds iron will to increase max armor to 4', () => {
+  test('adds iron will to increase max armor to 4 and fills armor immediately', () => {
     const run = new RunState('seed');
     run.addRelic(makeRelic('iron_will'));
-    const added = [run.addArmor(), run.addArmor(), run.addArmor(), run.addArmor(), run.addArmor()];
 
     expect(run.maxArmor).toBe(4);
-    expect(added).toEqual([true, true, true, true, false]);
+    expect(run.armor).toBe(4);
+    // Already at the cap, so no further armor pickups can add anything.
+    expect(run.addArmor()).toBe(false);
   });
 
   test('does not duplicate relics by id', () => {

@@ -218,6 +218,8 @@ export class TurnBattleScene extends Phaser.Scene {
   /** The enemy the player's attacks target; click an enemy to move it (click-to-focus). */
   private focusId = '';
   private playerMaxHp = 0;
+  /** Flat damage reduction from collected armor (state.ts) — fixed for the whole battle, unlike block. */
+  private playerArmor = 0;
   private rng!: GameRng;
 
   private engineState!: TurnBattleState;
@@ -248,6 +250,7 @@ export class TurnBattleScene extends Phaser.Scene {
   private playerHpBar!: Phaser.GameObjects.Graphics;
   private playerHpText!: Phaser.GameObjects.Text;
   private playerBlockText!: Phaser.GameObjects.Text;
+  private playerArmorText!: Phaser.GameObjects.Text;
   private playerStatusText!: Phaser.GameObjects.Text;
   private announcementText!: Phaser.GameObjects.Text;
   private energyText!: Phaser.GameObjects.Text;
@@ -358,6 +361,7 @@ export class TurnBattleScene extends Phaser.Scene {
       ? { name: 'You', hp: run.hp, maxHp: run.maxHp, armor: run.armor }
       : slicePlayer();
     this.playerMaxHp = player.maxHp;
+    this.playerArmor = player.armor;
     this.shown = {
       playerHp: player.hp,
       playerBlock: 0,
@@ -1240,6 +1244,14 @@ export class TurnBattleScene extends Phaser.Scene {
       .text(cx, zone.y + 113, '', { fontFamily: MONO, fontSize: '12px', color: '#f5edd8' })
       .setOrigin(0.5)
       .setDepth(1);
+    this.playerArmorText = this.add
+      .text(zone.x + zone.w - 2, zone.y + 92, '', {
+        fontFamily: MONO,
+        fontSize: '12px',
+        fontStyle: 'bold',
+        color: '#90d8e8',
+      })
+      .setOrigin(1, 0.5);
     this.playerBlockText = this.add
       .text(zone.x + zone.w - 2, zone.y + 106, '', {
         fontFamily: MONO,
@@ -1524,6 +1536,7 @@ export class TurnBattleScene extends Phaser.Scene {
     );
     this.playerHpText.setText(`${Math.max(0, this.shown.playerHp)} / ${maxHp}`);
     this.playerBlockText.setText(this.shown.playerBlock > 0 ? `■ ${this.shown.playerBlock}` : '');
+    this.playerArmorText.setText(this.playerArmor > 0 ? `◆ ${this.playerArmor}` : '');
   }
 
   private togglePilePanel(): void {
