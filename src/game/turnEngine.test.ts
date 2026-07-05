@@ -229,6 +229,14 @@ describe('playCard (U1)', () => {
     expect(eventOf(result.events, 'energyChanged').energy).toBe(4);
   });
 
+  test('mid-turn energyChanged reports the turn-1 startingEnergyBonus (spark_coil) in max', () => {
+    const surge = card('Surge', [{ kind: 'energy', amount: 2 }], 1);
+    const state = makeState({ hand: [surge, strike()], turn: 1, startingEnergyBonus: 1 });
+    const result = playCard(state, surge.uid, new SequenceRng());
+    // energyPerTurn (3) + startingEnergyBonus (1), NOT the bare energyPerTurn.
+    expect(eventOf(result.events, 'energyChanged').max).toBe(4);
+  });
+
   test('unregistered effect kind still throws (registry contract)', () => {
     const bogus = card('Bogus', [{ kind: 'damage', amount: 1 }], 1);
     bogus.effects = [{ kind: 'warp', amount: 1 } as unknown as CardEffect];

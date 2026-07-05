@@ -7,8 +7,20 @@ import { FONT_FAMILY, PALETTE, TEXT_COLOR, TYPE_COLOR, bodyStyle } from '../gfx/
 import { getRun } from '../state';
 
 export class HudScene extends Phaser.Scene {
-  private dynamic!: Phaser.GameObjects.Container;
+  /** Variable-count sections (card-type chips, relic chips) — rebuilt each redraw. */
+  private variable!: Phaser.GameObjects.Container;
   private relicTooltip: Phaser.GameObjects.Container | null = null;
+
+  // Fixed elements — created once in create(), updated in place in redraw().
+  private hearts: Phaser.GameObjects.Image[] = [];
+  private hpText!: Phaser.GameObjects.Text;
+  private deckCountText!: Phaser.GameObjects.Text;
+  private goldText!: Phaser.GameObjects.Text;
+  private potionCountText!: Phaser.GameObjects.Text;
+  private armorCountText!: Phaser.GameObjects.Text;
+  private scoutText!: Phaser.GameObjects.Text;
+  private stratumText!: Phaser.GameObjects.Text;
+  private roomText!: Phaser.GameObjects.Text;
 
   constructor() {
     super('Hud');
@@ -21,7 +33,84 @@ export class HudScene extends Phaser.Scene {
     bg.lineStyle(2, PALETTE.hudBorder, 1);
     bg.lineBetween(0, ROOM_H + 1, GAME_W, ROOM_H + 1);
 
-    this.dynamic = this.add.container(0, 0);
+    const y0 = ROOM_H;
+    const cardX0 = 200;
+    const invX = 545;
+
+    // hearts: 10 hearts, 3 HP each
+    this.hearts = [];
+    for (let i = 0; i < 10; i++) {
+      const img = this.add.image(
+        28 + (i % 5) * 26,
+        y0 + 24 + Math.floor(i / 5) * 24,
+        'heart_empty',
+      );
+      img.setScale(2.4);
+      this.hearts.push(img);
+    }
+    this.hpText = this.add.text(28, y0 + 78, '', bodyStyle('13px', TEXT_COLOR.body));
+
+    // deck summary (R14/U12): the whole collection IS the battle deck now.
+    this.deckCountText = this.add.text(cardX0, y0 + 10, '', {
+      fontFamily: FONT_FAMILY,
+      fontSize: '12px',
+      fontStyle: 'bold',
+      color: TEXT_COLOR.primary,
+    });
+    this.add.text(
+      cardX0,
+      y0 + 90,
+      'Every card fights — [C] deck  [R] relics',
+      bodyStyle('9px', TEXT_COLOR.faint),
+    );
+
+    // inventory + depth
+    this.goldText = this.add.text(invX, y0 + 12, '', {
+      fontFamily: FONT_FAMILY,
+      fontSize: '12px',
+      fontStyle: 'bold',
+      color: TEXT_COLOR.gold,
+    });
+    this.add.image(invX, y0 + 42, 'potion').setScale(2);
+    this.potionCountText = this.add
+      .text(invX + 22, y0 + 42, '', {
+        fontFamily: FONT_FAMILY,
+        fontSize: '15px',
+        fontStyle: 'bold',
+        color: TEXT_COLOR.primary,
+      })
+      .setOrigin(0, 0.5);
+    this.add.image(invX, y0 + 74, 'armor').setScale(2);
+    this.armorCountText = this.add
+      .text(invX + 22, y0 + 74, '', {
+        fontFamily: FONT_FAMILY,
+        fontSize: '15px',
+        fontStyle: 'bold',
+        color: TEXT_COLOR.primary,
+      })
+      .setOrigin(0, 0.5);
+    this.scoutText = this.add
+      .text(invX, y0 + 94, '', bodyStyle('9px', TEXT_COLOR.faint))
+      .setOrigin(0, 0.5);
+
+    this.stratumText = this.add
+      .text(GAME_W - 24, y0 + 28, '', {
+        fontFamily: FONT_FAMILY,
+        fontSize: '14px',
+        fontStyle: 'bold',
+        color: TEXT_COLOR.body,
+      })
+      .setOrigin(1, 0.5);
+    this.roomText = this.add
+      .text(GAME_W - 24, y0 + 50, '', {
+        fontFamily: FONT_FAMILY,
+        fontSize: '17px',
+        fontStyle: 'bold',
+        color: TEXT_COLOR.gold,
+      })
+      .setOrigin(1, 0.5);
+
+    this.variable = this.add.container(0, 0);
 
     this.game.events.on('hud-update', this.redraw, this);
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -43,40 +132,41 @@ export class HudScene extends Phaser.Scene {
 
   private redraw(): void {
     this.hideRelicTooltip();
-    this.dynamic.removeAll(true);
     const run = getRun();
     const y0 = ROOM_H;
+    const cardX0 = 200;
 
     // hearts: 10 hearts, 3 HP each
     for (let i = 0; i < 10; i++) {
       const full = run.hp >= (i + 1) * 3 - 1;
-      const img = this.add.image(
-        28 + (i % 5) * 26,
-        y0 + 24 + Math.floor(i / 5) * 24,
-        full ? 'heart' : 'heart_empty',
-      );
-      img.setScale(2.4);
-      this.dynamic.add(img);
+      this.hearts[i].setTexture(full ? 'heart' : 'heart_empty');
     }
-    this.dynamic.add(
-      this.add.text(
-        28,
-        y0 + 78,
-        `HP ${Math.max(0, run.hp)}/${run.maxHp}`,
-        bodyStyle('13px', TEXT_COLOR.body),
-      ),
-    );
+    this.hpText.setText(`HP ${Math.max(0, run.hp)}/${run.maxHp}`);
 
-    // deck summary (R14/U12): the whole collection IS the battle deck now.
-    const cardX0 = 200;
-    this.dynamic.add(
-      this.add.text(cardX0, y0 + 10, `DECK ${run.cardCollection.length} cards`, {
-        fontFamily: FONT_FAMILY,
-        fontSize: '12px',
-        fontStyle: 'bold',
-        color: TEXT_COLOR.primary,
-      }),
-    );
+    this.deckCountText.setText(`DECK ${run.cardCollection.length} cards`);
+
+    this.goldText.setText(`GOLD ${run.gold}`);
+    this.potionCountText.setText(`${run.inventory.length}/${MAX_INVENTORY}`);
+    this.armorCountText.setText(`x${run.armor}/${run.maxArmor}`);
+    this.scoutText
+      .setText(
+        run.scoutCharges > 0
+          ? `SCOUT x${run.scoutCharges}  [P] potion  [C] cards  [R] relics  [M] mute`
+          : '[P] drink potion  [C] cards  [R] relics  [M] mute',
+      )
+      .setColor(run.scoutCharges > 0 ? TEXT_COLOR.gold : TEXT_COLOR.faint);
+
+    const atBoss = isStratumBoundary(run.depth);
+    this.stratumText.setText(`STRATUM ${stratumForDepth(run.depth)}`);
+    this.roomText
+      .setText(`ROOM ${depthWithinStratum(run.depth)}/${STRATUM_SIZE}`)
+      .setColor(atBoss ? TEXT_COLOR.danger : TEXT_COLOR.gold);
+
+    // Variable-count sections: card-type chips and relic chips. Their counts
+    // change run-to-run, so rebuild only these (~10 objects) instead of the
+    // whole HUD (~30 objects).
+    this.variable.removeAll(true);
+
     const typeCounts = new Map<string, number>();
     for (const card of run.cardCollection) {
       typeCounts.set(card.type, (typeCounts.get(card.type) ?? 0) + 1);
@@ -93,8 +183,8 @@ export class HudScene extends Phaser.Scene {
         1,
       );
       g.strokeRoundedRect(x, y0 + 30, 56, 52, 5);
-      this.dynamic.add(g);
-      this.dynamic.add(
+      this.variable.add(g);
+      this.variable.add(
         this.add
           .text(x + 28, y0 + 48, String(count), {
             fontFamily: FONT_FAMILY,
@@ -104,68 +194,15 @@ export class HudScene extends Phaser.Scene {
           })
           .setOrigin(0.5),
       );
-      this.dynamic.add(
+      this.variable.add(
         this.add
           .text(x + 28, y0 + 70, type.toUpperCase(), bodyStyle('8px', TEXT_COLOR.muted))
           .setOrigin(0.5),
       );
     }
-    this.dynamic.add(
-      this.add.text(
-        cardX0,
-        y0 + 90,
-        'Every card fights — [C] deck  [R] relics',
-        bodyStyle('9px', TEXT_COLOR.faint),
-      ),
-    );
-
-    // inventory + depth
-    const invX = 545;
-    this.dynamic.add(
-      this.add.text(invX, y0 + 12, `GOLD ${run.gold}`, {
-        fontFamily: FONT_FAMILY,
-        fontSize: '12px',
-        fontStyle: 'bold',
-        color: TEXT_COLOR.gold,
-      }),
-    );
-    this.dynamic.add(this.add.image(invX, y0 + 42, 'potion').setScale(2));
-    this.dynamic.add(
-      this.add
-        .text(invX + 22, y0 + 42, `${run.inventory.length}/${MAX_INVENTORY}`, {
-          fontFamily: FONT_FAMILY,
-          fontSize: '15px',
-          fontStyle: 'bold',
-          color: TEXT_COLOR.primary,
-        })
-        .setOrigin(0, 0.5),
-    );
-    this.dynamic.add(this.add.image(invX, y0 + 74, 'armor').setScale(2));
-    this.dynamic.add(
-      this.add
-        .text(invX + 22, y0 + 74, `x${run.armor}/${run.maxArmor}`, {
-          fontFamily: FONT_FAMILY,
-          fontSize: '15px',
-          fontStyle: 'bold',
-          color: TEXT_COLOR.primary,
-        })
-        .setOrigin(0, 0.5),
-    );
-    this.dynamic.add(
-      this.add
-        .text(
-          invX,
-          y0 + 94,
-          run.scoutCharges > 0
-            ? `SCOUT x${run.scoutCharges}  [P] potion  [C] cards  [R] relics  [M] mute`
-            : '[P] drink potion  [C] cards  [R] relics  [M] mute',
-          bodyStyle('9px', run.scoutCharges > 0 ? TEXT_COLOR.gold : TEXT_COLOR.faint),
-        )
-        .setOrigin(0, 0.5),
-    );
 
     if (run.relics.length > 0) {
-      this.dynamic.add(
+      this.variable.add(
         this.add.text(cardX0, y0 + 101, 'RELICS', bodyStyle('8px', TEXT_COLOR.faint)),
       );
       for (const [index, relic] of run.relics.slice(0, 6).entries()) {
@@ -199,30 +236,8 @@ export class HudScene extends Phaser.Scene {
         );
         chip.on('pointerover', () => this.showRelicTooltip(relic, chipX, chipY));
         chip.on('pointerout', () => this.hideRelicTooltip());
-        this.dynamic.add(chip);
+        this.variable.add(chip);
       }
     }
-
-    const atBoss = isStratumBoundary(run.depth);
-    this.dynamic.add(
-      this.add
-        .text(GAME_W - 24, y0 + 28, `STRATUM ${stratumForDepth(run.depth)}`, {
-          fontFamily: FONT_FAMILY,
-          fontSize: '14px',
-          fontStyle: 'bold',
-          color: TEXT_COLOR.body,
-        })
-        .setOrigin(1, 0.5),
-    );
-    this.dynamic.add(
-      this.add
-        .text(GAME_W - 24, y0 + 50, `ROOM ${depthWithinStratum(run.depth)}/${STRATUM_SIZE}`, {
-          fontFamily: FONT_FAMILY,
-          fontSize: '17px',
-          fontStyle: 'bold',
-          color: atBoss ? TEXT_COLOR.danger : TEXT_COLOR.gold,
-        })
-        .setOrigin(1, 0.5),
-    );
   }
 }
