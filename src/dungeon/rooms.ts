@@ -9,7 +9,7 @@ import {
   STRATUM_SIZE,
 } from '../config';
 import { GameRng } from '../game/rng';
-import { depthWithinStratum, isStratumBoundary } from '../game/strata';
+import { depthWithinStratum, isStratumBoundary, stratumForDepth } from '../game/strata';
 
 export type RoomEvent =
   | 'start'
@@ -97,6 +97,24 @@ export function rollRoomEvent(rng: GameRng, depth: number): RoomEvent {
 export function isEliteEligibleDepth(depth: number): boolean {
   const within = depthWithinStratum(depth);
   return within > 1 && within < STRATUM_SIZE - 1;
+}
+
+/**
+ * KTD3, scene side: pick which door (if any) gets the forced elite room when
+ * priming next-room options. Returns null when no elite is due — outside the
+ * eligible window, or one was already offered for this stratum. Pure so the
+ * Dungeon scene stays rules-free; the caller owns writing the offered flag.
+ */
+export function chooseForcedEliteDoor(
+  rng: GameRng,
+  nextDepth: number,
+  openDoors: readonly Dir[],
+  eliteOfferedForStratum: number | null,
+): Dir | null {
+  if (openDoors.length === 0) return null;
+  if (!isEliteEligibleDepth(nextDepth)) return null;
+  if (eliteOfferedForStratum === stratumForDepth(nextDepth)) return null;
+  return openDoors[rng.between(0, openDoors.length - 1)] ?? null;
 }
 
 /** Cells directly inside each door, kept trap-free for fairness. */

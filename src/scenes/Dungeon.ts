@@ -17,7 +17,13 @@ import { EnemyInstance, spawnScenarioEncounter } from '../data/enemies';
 import { InventoryItem, makeItem, randomItemIdForDepth } from '../data/items';
 import type { Relic } from '../data/relics';
 import { ARCHETYPES } from '../data/archetypes';
-import { makeStartRoom, makeNextRoom, RoomData, type RoomEvent } from '../dungeon/rooms';
+import {
+  chooseForcedEliteDoor,
+  makeStartRoom,
+  makeNextRoom,
+  RoomData,
+  type RoomEvent,
+} from '../dungeon/rooms';
 import { makeCardView } from '../gfx/cardview';
 import { createDeckPanel } from '../gfx/deckPanel';
 import { createRelicPanel } from '../gfx/relicPanel';
@@ -366,11 +372,34 @@ export class DungeonScene extends Phaser.Scene {
     this.nextRoomOptions = {};
     if (this.room.openDoors.length === 0) return;
 
+    const run = getRun();
     const nextDepth = this.room.depth + 1;
+    // KTD3: one elite offered per stratum. The door-pick RNG is seeded from
+    // (run.seed, nextDepth) alone — not origin/path — so Scout reveals and
+    // Daily runs see the same door choice. This assumes primeNextRoomOptions
+    // runs exactly once per distinct this.room (true today: create() only
+    // follows a fresh newRun(), and both transition methods reassign
+    // this.room before the single call here, guarded by this.transitioning).
+    // A second prime of the same room would see eliteOfferedForStratum
+    // already set and silently drop that stratum's elite — don't add a
+    // re-prime path without also making this write idempotent.
+    const eliteRng = new PhaserGameRng(
+      new Phaser.Math.RandomDataGenerator([run.seed, 'elite-door', String(nextDepth)]),
+    );
+    const eliteDoor = chooseForcedEliteDoor(
+      eliteRng,
+      nextDepth,
+      this.room.openDoors,
+      run.eliteOfferedForStratum,
+    );
+
     for (const dir of this.room.openDoors) {
       const rng = new Phaser.Math.RandomDataGenerator([this.branchSeed(dir)]);
-      const option = makeNextRoom(new PhaserGameRng(rng), nextDepth, dir);
+      const option = makeNextRoom(new PhaserGameRng(rng), nextDepth, dir, dir === eliteDoor);
       this.nextRoomOptions[dir] = { room: option, rngState: rng.state() };
+    }
+    if (eliteDoor !== null) {
+      run.eliteOfferedForStratum = stratumForDepth(nextDepth);
     }
   }
 

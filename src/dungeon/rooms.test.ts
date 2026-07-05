@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
-import { isEliteEligibleDepth, makeNextRoom, rollRoomEvent } from './rooms';
+import { chooseForcedEliteDoor, isEliteEligibleDepth, makeNextRoom, rollRoomEvent } from './rooms';
 import { SequenceRng } from '../game/test-rng';
-import { ROOM_COLS, ROOM_ROWS } from '../config';
+import { ROOM_COLS, ROOM_ROWS, STRATUM_SIZE } from '../config';
 
 describe('room generation', () => {
   test('rooms 2 through 8 use the roguelike-hard event thresholds without empty rooms', () => {
@@ -107,6 +107,48 @@ describe('elite room placement (KTD3)', () => {
       return [2, 3, 4, 5, 6].map((depth) => makeNextRoom(rng, depth, 'N').event);
     };
     expect(buildPath()).toEqual(buildPath());
+  });
+});
+
+describe('chooseForcedEliteDoor (KTD3, scene side)', () => {
+  const doors: ['N', 'S', 'E'] = ['N', 'S', 'E'];
+
+  test('returns null when an elite was already offered for this stratum', () => {
+    // depth 5 is within stratum 1 and eligible; stratum 1 already got its offer.
+    expect(chooseForcedEliteDoor(new SequenceRng([], [0]), 5, doors, 1)).toBeNull();
+  });
+
+  test('returns null outside the eligible window (stratum start and pre-boss)', () => {
+    expect(chooseForcedEliteDoor(new SequenceRng([], [0]), 1, doors, null)).toBeNull(); // stratum 1 start
+    expect(chooseForcedEliteDoor(new SequenceRng([], [0]), 11, doors, null)).toBeNull(); // stratum 2 start
+    expect(
+      chooseForcedEliteDoor(new SequenceRng([], [0]), STRATUM_SIZE - 1, doors, null),
+    ).toBeNull(); // pre-boss
+  });
+
+  test('returns a member of openDoors when due', () => {
+    const door = chooseForcedEliteDoor(new SequenceRng([], [1]), 5, doors, null);
+    expect(door).not.toBeNull();
+    expect(doors).toContain(door);
+
+    // A previous stratum's offer does not block the current stratum.
+    const doorNextStratum = chooseForcedEliteDoor(new SequenceRng([], [0]), 15, doors, 1);
+    expect(doorNextStratum).not.toBeNull();
+    expect(doors).toContain(doorNextStratum);
+  });
+
+  test('is deterministic for a given (rng sequence, inputs)', () => {
+    const first = chooseForcedEliteDoor(new SequenceRng([], [2]), 5, doors, null);
+    const second = chooseForcedEliteDoor(new SequenceRng([], [2]), 5, doors, null);
+    expect(first).toBe(second);
+    expect(first).toBe('E');
+  });
+
+  test('composes with makeNextRoom: the chosen door produces an elite room', () => {
+    const door = chooseForcedEliteDoor(new SequenceRng([], [1]), 5, doors, null);
+    expect(door).not.toBeNull();
+    const room = makeNextRoom(new SequenceRng([0]), 5, door as 'N' | 'S' | 'E', true);
+    expect(room.event).toBe('elite');
   });
 });
 
