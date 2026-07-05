@@ -26,9 +26,11 @@ import {
 } from '../dungeon/rooms';
 import { makeCardView } from '../gfx/cardview';
 import { createDeckPanel } from '../gfx/deckPanel';
+import { createPanel } from '../gfx/panel';
 import { createRelicPanel } from '../gfx/relicPanel';
 import { createRelicRevealPanel } from '../gfx/relicRevealPanel';
 import { createRewardImpactText } from '../gfx/rewardImpactView';
+import { PALETTE } from '../gfx/theme';
 import { PhaserGameRng } from '../game/rng';
 import { relicChestGoldBonusLabel } from '../game/relicRegistry';
 import { playSfx } from '../audio/sfx';
@@ -1248,28 +1250,19 @@ export class DungeonScene extends Phaser.Scene {
 
     const cx = this.origin.x + ROOM_W / 2;
     const cy = this.origin.y + ROOM_H / 2;
-    const panel = this.add.container(cx, cy).setDepth(260);
-    this.restActionPanel = panel;
-
     const w = 330;
     const h = 222;
-    const bg = this.add.graphics();
-    bg.fillStyle(0x111019, 0.98);
-    bg.fillRoundedRect(-w / 2, -h / 2, w, h, 8);
-    bg.lineStyle(2, 0xf1c40f, 0.85);
-    bg.strokeRoundedRect(-w / 2, -h / 2, w, h, 8);
-    panel.add(bg);
+    const panel = createPanel(this, cx, cy, {
+      width: w,
+      height: h,
+      title: 'Rest Room',
+      borderColor: PALETTE.gold,
+      bgAlpha: 0.98,
+      depth: 260,
+      titleOffsetY: 26,
+    });
+    this.restActionPanel = panel;
 
-    panel.add(
-      this.add
-        .text(0, -h / 2 + 26, 'Rest Room', {
-          fontFamily: 'monospace',
-          fontSize: '24px',
-          fontStyle: 'bold',
-          color: '#f1c40f',
-        })
-        .setOrigin(0.5),
-    );
     panel.add(
       this.add
         .text(0, -h / 2 + 56, `Gold: ${run.gold} | Choose one paid rest action:`, {
@@ -1516,28 +1509,19 @@ export class DungeonScene extends Phaser.Scene {
 
     const cx = this.origin.x + ROOM_W / 2;
     const cy = this.origin.y + ROOM_H / 2;
-    const panel = this.add.container(cx, cy).setDepth(300);
-    this.gatePanel = panel;
-
     const w = 420;
     const h = 252;
-    const bg = this.add.graphics();
-    bg.fillStyle(0x111019, 0.98);
-    bg.fillRoundedRect(-w / 2, -h / 2, w, h, 8);
-    bg.lineStyle(2, 0xf1c40f, 0.85);
-    bg.strokeRoundedRect(-w / 2, -h / 2, w, h, 8);
-    panel.add(bg);
+    const panel = createPanel(this, cx, cy, {
+      width: w,
+      height: h,
+      title: `STRATUM ${stratum} CLEARED`,
+      borderColor: PALETTE.gold,
+      bgAlpha: 0.98,
+      titleSize: '22px',
+      depth: 300,
+    });
+    this.gatePanel = panel;
 
-    panel.add(
-      this.add
-        .text(0, -h / 2 + 28, `STRATUM ${stratum} CLEARED`, {
-          fontFamily: 'monospace',
-          fontSize: '22px',
-          fontStyle: 'bold',
-          color: '#f1c40f',
-        })
-        .setOrigin(0.5),
-    );
     panel.add(
       this.add
         .text(0, -h / 2 + 60, 'Cash out a winner, or descend into a deadlier stratum?', {
