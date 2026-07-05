@@ -10,10 +10,11 @@ import {
 } from '../game/campfireSummary';
 import { getMeta } from '../meta';
 import { newRun } from '../state';
+import { FONT_FAMILY, TEXT_COLOR } from '../gfx/theme';
 
 const TEXT_STYLE = {
-  fontFamily: 'monospace',
-  color: '#f5edd8',
+  fontFamily: FONT_FAMILY,
+  color: TEXT_COLOR.primary,
 };
 
 const FIRE_X = 210;
@@ -146,7 +147,7 @@ export class CampfireScene extends Phaser.Scene {
           ...TEXT_STYLE,
           fontSize: '38px',
           fontStyle: 'bold',
-          color: '#f1c40f',
+          color: TEXT_COLOR.gold,
         })
         .setOrigin(0.5),
     );
@@ -156,7 +157,7 @@ export class CampfireScene extends Phaser.Scene {
         .text(GAME_W / 2, 94, `Embers: ${meta.embers}`, {
           ...TEXT_STYLE,
           fontSize: '18px',
-          color: '#f5edd8',
+          color: TEXT_COLOR.primary,
         })
         .setOrigin(0.5),
     );
@@ -165,7 +166,7 @@ export class CampfireScene extends Phaser.Scene {
         .text(GAME_W / 2, 120, formatChronicleLine(chronicle), {
           ...TEXT_STYLE,
           fontSize: '12px',
-          color: '#b8b0c8',
+          color: TEXT_COLOR.muted,
         })
         .setOrigin(0.5),
     );
@@ -175,14 +176,14 @@ export class CampfireScene extends Phaser.Scene {
         ...TEXT_STYLE,
         fontSize: '18px',
         fontStyle: 'bold',
-        color: '#f1c40f',
+        color: TEXT_COLOR.gold,
       }),
     );
     this.dynamic.add(
       this.add.text(STATUS_X, 206, formatCampfireProgressionSummary(meta.progression), {
         ...TEXT_STYLE,
         fontSize: '13px',
-        color: '#b8b0c8',
+        color: TEXT_COLOR.muted,
         lineSpacing: 8,
         fixedWidth: STATUS_W,
         wordWrap: { width: STATUS_W, useAdvancedWrap: true },
@@ -193,14 +194,14 @@ export class CampfireScene extends Phaser.Scene {
         ...TEXT_STYLE,
         fontSize: '18px',
         fontStyle: 'bold',
-        color: '#f1c40f',
+        color: TEXT_COLOR.gold,
       }),
     );
     this.dynamic.add(
       this.add.text(STATUS_X, 354, formatPendingPrepSummary(meta.pendingPrep, meta.progression), {
         ...TEXT_STYLE,
         fontSize: '13px',
-        color: '#b8b0c8',
+        color: TEXT_COLOR.muted,
         lineSpacing: 8,
         fixedWidth: STATUS_W,
         wordWrap: { width: STATUS_W, useAdvancedWrap: true },
@@ -211,14 +212,14 @@ export class CampfireScene extends Phaser.Scene {
         ...TEXT_STYLE,
         fontSize: '18px',
         fontStyle: 'bold',
-        color: '#f1c40f',
+        color: TEXT_COLOR.gold,
       }),
     );
     this.dynamic.add(
       this.add.text(STATUS_X, 502, formatDailyRecordLine(dailyRecord), {
         ...TEXT_STYLE,
         fontSize: '13px',
-        color: '#b8b0c8',
+        color: TEXT_COLOR.muted,
         fixedWidth: STATUS_W,
         wordWrap: { width: STATUS_W, useAdvancedWrap: true },
       }),
@@ -235,13 +236,13 @@ export class CampfireScene extends Phaser.Scene {
         ...TEXT_STYLE,
         fontSize: '18px',
         fontStyle: 'bold',
-        color: '#f1c40f',
+        color: TEXT_COLOR.gold,
       })
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true });
 
-    button.on('pointerover', () => button.setColor('#ffe48a'));
-    button.on('pointerout', () => button.setColor('#f1c40f'));
+    button.on('pointerover', () => button.setColor(TEXT_COLOR.goldHover));
+    button.on('pointerout', () => button.setColor(TEXT_COLOR.gold));
     button.on('pointerdown', onPointerDown);
     this.dynamic.add(button);
   }

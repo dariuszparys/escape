@@ -11,6 +11,8 @@ describe('contracts', () => {
         depth: 3,
         relicCount: 3,
         elitesDefeated: 0,
+        enemiesDefeated: 0,
+        stratum: 1,
       }),
     ).toBe(true);
     expect(
@@ -19,6 +21,8 @@ describe('contracts', () => {
         depth: 9,
         relicCount: 4,
         elitesDefeated: 1,
+        enemiesDefeated: 0,
+        stratum: 1,
       }),
     ).toBe(false);
   });
@@ -30,6 +34,8 @@ describe('contracts', () => {
       depth: 6,
       relicCount: 0,
       elitesDefeated: 0,
+      enemiesDefeated: 0,
+      stratum: 1,
     });
     expect(completions).toHaveLength(1);
     expect(completions[0]?.contractId).toBe('reach_depth_6');
@@ -47,6 +53,8 @@ describe('contracts', () => {
       depth: 6,
       relicCount: 0,
       elitesDefeated: 0,
+      enemiesDefeated: 0,
+      stratum: 1,
     });
 
     const once = applyContractCompletions(meta, completions);
@@ -68,6 +76,8 @@ describe('contracts', () => {
       depth: 6,
       relicCount: 0,
       elitesDefeated: 0,
+      enemiesDefeated: 0,
+      stratum: 1,
     });
     expect(completion).toBeDefined();
 
@@ -89,6 +99,8 @@ describe('contracts', () => {
       depth: 1,
       relicCount: 0,
       elitesDefeated: 1,
+      enemiesDefeated: 0,
+      stratum: 1,
     });
 
     expect(completions).toHaveLength(1);
@@ -97,6 +109,73 @@ describe('contracts', () => {
     const updated = applyContractCompletions(meta, completions);
     expect(updated.progression.unlockedRelicIds).toContain('merchants_seal');
     expect(updated.embers).toBe(meta.embers + 1);
+  });
+
+  test('slayer_25 requires at least 25 enemies defeated', () => {
+    expect(
+      evaluateContract('slayer_25', {
+        escaped: false,
+        depth: 6,
+        relicCount: 0,
+        elitesDefeated: 0,
+        enemiesDefeated: 24,
+        stratum: 1,
+      }),
+    ).toBe(false);
+    expect(
+      evaluateContract('slayer_25', {
+        escaped: false,
+        depth: 6,
+        relicCount: 0,
+        elitesDefeated: 0,
+        enemiesDefeated: 25,
+        stratum: 1,
+      }),
+    ).toBe(true);
+  });
+
+  test('delve_past_first_gate requires reaching stratum 2', () => {
+    expect(
+      evaluateContract('delve_past_first_gate', {
+        escaped: false,
+        depth: 6,
+        relicCount: 0,
+        elitesDefeated: 0,
+        enemiesDefeated: 0,
+        stratum: 1,
+      }),
+    ).toBe(false);
+    expect(
+      evaluateContract('delve_past_first_gate', {
+        escaped: false,
+        depth: 6,
+        relicCount: 0,
+        elitesDefeated: 0,
+        enemiesDefeated: 0,
+        stratum: 2,
+      }),
+    ).toBe(true);
+  });
+
+  test('delve_past_first_gate awards no embers and unlocks spark_coil', () => {
+    const meta = createDefaultMetaState();
+    const completions = evaluateNewContracts(meta.progression, {
+      escaped: false,
+      depth: 1,
+      relicCount: 0,
+      elitesDefeated: 0,
+      enemiesDefeated: 0,
+      stratum: 2,
+    });
+
+    expect(completions).toHaveLength(1);
+    expect(completions[0]?.contractId).toBe('delve_past_first_gate');
+    expect(completions[0]?.emberReward).toBe(0);
+
+    const updated = applyContractCompletions(meta, completions);
+    expect(updated.progression.completedContractIds).toContain('delve_past_first_gate');
+    expect(updated.progression.unlockedRelicIds).toContain('spark_coil');
+    expect(updated.embers).toBe(meta.embers);
   });
 
   test('already-completed contracts are not re-evaluated', () => {
@@ -108,6 +187,8 @@ describe('contracts', () => {
       depth: 6,
       relicCount: 0,
       elitesDefeated: 0,
+      enemiesDefeated: 0,
+      stratum: 1,
     });
 
     expect(completions).toEqual([]);

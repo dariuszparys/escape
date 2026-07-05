@@ -9,7 +9,6 @@ import {
   ROOM_ROWS,
   ROOM_W,
   TILE,
-  TRAP_DAMAGE,
   VISION_RADIUS,
 } from '../config';
 import { Card, makeCard, CARD_DEFS } from '../data/cards';
@@ -26,16 +25,18 @@ import {
 } from '../dungeon/rooms';
 import { makeCardView } from '../gfx/cardview';
 import { createDeckPanel } from '../gfx/deckPanel';
+import { createPanel } from '../gfx/panel';
 import { createRelicPanel } from '../gfx/relicPanel';
 import { createRelicRevealPanel } from '../gfx/relicRevealPanel';
 import { createRewardImpactText } from '../gfx/rewardImpactView';
+import { PALETTE } from '../gfx/theme';
 import { PhaserGameRng } from '../game/rng';
 import { relicChestGoldBonusLabel } from '../game/relicRegistry';
 import { playSfx } from '../audio/sfx';
 import { awardPotionItem, rollChestReward } from '../game/rewards';
 import { previewRewardImpact } from '../game/rewardImpact';
 import { startingCardIdsForRun } from '../game/startingCards';
-import { upgradeCard } from '../game/cardUpgrade';
+import { isCardUpgradable, upgradeCard } from '../game/cardUpgrade';
 import {
   canUseRestAction,
   payRestAction,
@@ -43,7 +44,8 @@ import {
   type RestActionMode,
 } from '../game/restEconomy';
 import { commitDelve, resolveBank } from '../game/delve';
-import { calculateEmberReward } from '../game/metaRewards';
+import { gateSummary } from '../game/gateSummary';
+import { applyTrapDamage } from '../game/hazards';
 import { applyPoisonedRoomEntryDamage } from '../game/scenarioRules';
 import { stratumForDepth } from '../game/strata';
 import { getRun } from '../state';
@@ -1168,14 +1170,14 @@ export class DungeonScene extends Phaser.Scene {
       for (const rect of this.built.spikeRects) {
         if (!rect.contains(px, py + 12)) continue;
         this.invulnUntil = time + 900;
-        run.hp -= TRAP_DAMAGE;
-        this.floatText(px, py - 50, `-${TRAP_DAMAGE}`, '#ff5544');
+        const trap = applyTrapDamage(run);
+        this.floatText(px, py - 50, `-${trap.amount}`, '#ff5544');
         this.cameras.main.shake(150, 0.008);
         this.player.setTint(0xff5544);
         this.time.delayedCall(250, () => this.player.clearTint());
         this.hud();
         playSfx(this, 'trap');
-        if (run.hp <= 0) {
+        if (trap.died) {
           this.scene.stop('Hud');
           this.scene.start('End', { victory: false });
           return;
@@ -1248,28 +1250,19 @@ export class DungeonScene extends Phaser.Scene {
 
     const cx = this.origin.x + ROOM_W / 2;
     const cy = this.origin.y + ROOM_H / 2;
-    const panel = this.add.container(cx, cy).setDepth(260);
-    this.restActionPanel = panel;
-
     const w = 330;
     const h = 222;
-    const bg = this.add.graphics();
-    bg.fillStyle(0x111019, 0.98);
-    bg.fillRoundedRect(-w / 2, -h / 2, w, h, 8);
-    bg.lineStyle(2, 0xf1c40f, 0.85);
-    bg.strokeRoundedRect(-w / 2, -h / 2, w, h, 8);
-    panel.add(bg);
+    const panel = createPanel(this, cx, cy, {
+      width: w,
+      height: h,
+      title: 'Rest Room',
+      borderColor: PALETTE.gold,
+      bgAlpha: 0.98,
+      depth: 260,
+      titleOffsetY: 26,
+    });
+    this.restActionPanel = panel;
 
-    panel.add(
-      this.add
-        .text(0, -h / 2 + 26, 'Rest Room', {
-          fontFamily: 'monospace',
-          fontSize: '24px',
-          fontStyle: 'bold',
-          color: '#f1c40f',
-        })
-        .setOrigin(0.5),
-    );
     panel.add(
       this.add
         .text(0, -h / 2 + 56, `Gold: ${run.gold} | Choose one paid rest action:`, {
@@ -1340,7 +1333,13 @@ export class DungeonScene extends Phaser.Scene {
 
     this.closeRestActionPanel();
     // Deck model (U12): every card fights, so list the collection reading-sorted.
-    const entries = [...run.cardCollection].sort(
+    // Upgrade mode (008): a card the upgrade table can't change (e.g. stun-only,
+    // shuffleCurse-only) is excluded — the picker must never offer a no-op paid action.
+    const eligible =
+      mode === 'upgrade'
+        ? run.cardCollection.filter((card) => isCardUpgradable(card))
+        : run.cardCollection;
+    const entries = [...eligible].sort(
       (a, b) => b.tier - a.tier || a.name.localeCompare(b.name) || a.uid - b.uid,
     );
     const cx = this.origin.x + ROOM_W / 2;
@@ -1500,44 +1499,23 @@ export class DungeonScene extends Phaser.Scene {
     this.player.setVelocity(0, 0);
     this.player.anims.stop();
 
-    const stratum = stratumForDepth(run.depth);
-    const reward = calculateEmberReward({
-      depth: run.depth,
-      enemiesDefeated: run.enemiesDefeated,
-      gold: run.gold,
-      escaped: true,
-      convertGold: !run.isDaily,
-    });
-    const bankLine = run.isDaily
-      ? `Bank: end the delve at depth ${run.depth} (no Ember conversion in Daily)`
-      : `Bank: convert ${run.gold} Gold → ${reward.convertedEmbers} Ember${
-          reward.convertedEmbers === 1 ? '' : 's'
-        } (+${reward.escapeEmbers} escape)`;
+    const { stratum, bankLine } = gateSummary(run);
 
     const cx = this.origin.x + ROOM_W / 2;
     const cy = this.origin.y + ROOM_H / 2;
-    const panel = this.add.container(cx, cy).setDepth(300);
-    this.gatePanel = panel;
-
     const w = 420;
     const h = 252;
-    const bg = this.add.graphics();
-    bg.fillStyle(0x111019, 0.98);
-    bg.fillRoundedRect(-w / 2, -h / 2, w, h, 8);
-    bg.lineStyle(2, 0xf1c40f, 0.85);
-    bg.strokeRoundedRect(-w / 2, -h / 2, w, h, 8);
-    panel.add(bg);
+    const panel = createPanel(this, cx, cy, {
+      width: w,
+      height: h,
+      title: `STRATUM ${stratum} CLEARED`,
+      borderColor: PALETTE.gold,
+      bgAlpha: 0.98,
+      titleSize: '22px',
+      depth: 300,
+    });
+    this.gatePanel = panel;
 
-    panel.add(
-      this.add
-        .text(0, -h / 2 + 28, `STRATUM ${stratum} CLEARED`, {
-          fontFamily: 'monospace',
-          fontSize: '22px',
-          fontStyle: 'bold',
-          color: '#f1c40f',
-        })
-        .setOrigin(0.5),
-    );
     panel.add(
       this.add
         .text(0, -h / 2 + 60, 'Cash out a winner, or descend into a deadlier stratum?', {
