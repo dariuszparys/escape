@@ -9,7 +9,6 @@ import {
   ROOM_ROWS,
   ROOM_W,
   TILE,
-  TRAP_DAMAGE,
   VISION_RADIUS,
 } from '../config';
 import { Card, makeCard, CARD_DEFS } from '../data/cards';
@@ -44,6 +43,7 @@ import {
 } from '../game/restEconomy';
 import { commitDelve, resolveBank } from '../game/delve';
 import { calculateEmberReward } from '../game/metaRewards';
+import { applyTrapDamage } from '../game/hazards';
 import { applyPoisonedRoomEntryDamage } from '../game/scenarioRules';
 import { stratumForDepth } from '../game/strata';
 import { getRun } from '../state';
@@ -1168,14 +1168,14 @@ export class DungeonScene extends Phaser.Scene {
       for (const rect of this.built.spikeRects) {
         if (!rect.contains(px, py + 12)) continue;
         this.invulnUntil = time + 900;
-        run.hp -= TRAP_DAMAGE;
-        this.floatText(px, py - 50, `-${TRAP_DAMAGE}`, '#ff5544');
+        const trap = applyTrapDamage(run);
+        this.floatText(px, py - 50, `-${trap.amount}`, '#ff5544');
         this.cameras.main.shake(150, 0.008);
         this.player.setTint(0xff5544);
         this.time.delayedCall(250, () => this.player.clearTint());
         this.hud();
         playSfx(this, 'trap');
-        if (run.hp <= 0) {
+        if (trap.died) {
           this.scene.stop('Hud');
           this.scene.start('End', { victory: false });
           return;
