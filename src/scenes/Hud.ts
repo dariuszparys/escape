@@ -3,15 +3,8 @@ import { GAME_W, ROOM_H, HUD_H, MAX_INVENTORY, STRATUM_SIZE } from '../config';
 import type { Relic } from '../data/relics';
 import { depthWithinStratum, isStratumBoundary, stratumForDepth } from '../game/strata';
 import { createRelicTooltip } from '../gfx/relicTooltip';
+import { FONT_FAMILY, PALETTE, TEXT_COLOR, TYPE_COLOR, bodyStyle } from '../gfx/theme';
 import { getRun } from '../state';
-
-const TYPE_COLOR: Record<string, string> = {
-  attack: '#e87060',
-  block: '#7fb2e8',
-  heal: '#5fe07a',
-  utility: '#90d8e8',
-  status: '#c490e8',
-};
 
 export class HudScene extends Phaser.Scene {
   private dynamic!: Phaser.GameObjects.Container;
@@ -23,9 +16,9 @@ export class HudScene extends Phaser.Scene {
 
   create(): void {
     const bg = this.add.graphics();
-    bg.fillStyle(0x16121e, 1);
+    bg.fillStyle(PALETTE.hudBg, 1);
     bg.fillRect(0, ROOM_H, GAME_W, HUD_H);
-    bg.lineStyle(2, 0x3a3544, 1);
+    bg.lineStyle(2, PALETTE.hudBorder, 1);
     bg.lineBetween(0, ROOM_H + 1, GAME_W, ROOM_H + 1);
 
     this.dynamic = this.add.container(0, 0);
@@ -66,21 +59,22 @@ export class HudScene extends Phaser.Scene {
       this.dynamic.add(img);
     }
     this.dynamic.add(
-      this.add.text(28, y0 + 78, `HP ${Math.max(0, run.hp)}/${run.maxHp}`, {
-        fontFamily: 'monospace',
-        fontSize: '13px',
-        color: '#d8d2e4',
-      }),
+      this.add.text(
+        28,
+        y0 + 78,
+        `HP ${Math.max(0, run.hp)}/${run.maxHp}`,
+        bodyStyle('13px', TEXT_COLOR.body),
+      ),
     );
 
     // deck summary (R14/U12): the whole collection IS the battle deck now.
     const cardX0 = 200;
     this.dynamic.add(
       this.add.text(cardX0, y0 + 10, `DECK ${run.cardCollection.length} cards`, {
-        fontFamily: 'monospace',
+        fontFamily: FONT_FAMILY,
         fontSize: '12px',
         fontStyle: 'bold',
-        color: '#f5edd8',
+        color: TEXT_COLOR.primary,
       }),
     );
     const typeCounts = new Map<string, number>();
@@ -91,57 +85,58 @@ export class HudScene extends Phaser.Scene {
     for (const [i, [type, count]] of types.entries()) {
       const x = cardX0 + i * 62;
       const g = this.add.graphics();
-      g.fillStyle(0x1c1826, 1);
+      g.fillStyle(PALETTE.chipBg, 1);
       g.fillRoundedRect(x, y0 + 30, 56, 52, 5);
-      g.lineStyle(1, Phaser.Display.Color.HexStringToColor(TYPE_COLOR[type] ?? '#b8b0c8').color, 1);
+      g.lineStyle(
+        1,
+        Phaser.Display.Color.HexStringToColor(TYPE_COLOR[type] ?? TEXT_COLOR.muted).color,
+        1,
+      );
       g.strokeRoundedRect(x, y0 + 30, 56, 52, 5);
       this.dynamic.add(g);
       this.dynamic.add(
         this.add
           .text(x + 28, y0 + 48, String(count), {
-            fontFamily: 'monospace',
+            fontFamily: FONT_FAMILY,
             fontSize: '20px',
             fontStyle: 'bold',
-            color: TYPE_COLOR[type] ?? '#b8b0c8',
+            color: TYPE_COLOR[type] ?? TEXT_COLOR.muted,
           })
           .setOrigin(0.5),
       );
       this.dynamic.add(
         this.add
-          .text(x + 28, y0 + 70, type.toUpperCase(), {
-            fontFamily: 'monospace',
-            fontSize: '8px',
-            color: '#b8b0c8',
-          })
+          .text(x + 28, y0 + 70, type.toUpperCase(), bodyStyle('8px', TEXT_COLOR.muted))
           .setOrigin(0.5),
       );
     }
     this.dynamic.add(
-      this.add.text(cardX0, y0 + 90, 'Every card fights — [C] deck  [R] relics', {
-        fontFamily: 'monospace',
-        fontSize: '9px',
-        color: '#6a6478',
-      }),
+      this.add.text(
+        cardX0,
+        y0 + 90,
+        'Every card fights — [C] deck  [R] relics',
+        bodyStyle('9px', TEXT_COLOR.faint),
+      ),
     );
 
     // inventory + depth
     const invX = 545;
     this.dynamic.add(
       this.add.text(invX, y0 + 12, `GOLD ${run.gold}`, {
-        fontFamily: 'monospace',
+        fontFamily: FONT_FAMILY,
         fontSize: '12px',
         fontStyle: 'bold',
-        color: '#f1c40f',
+        color: TEXT_COLOR.gold,
       }),
     );
     this.dynamic.add(this.add.image(invX, y0 + 42, 'potion').setScale(2));
     this.dynamic.add(
       this.add
         .text(invX + 22, y0 + 42, `${run.inventory.length}/${MAX_INVENTORY}`, {
-          fontFamily: 'monospace',
+          fontFamily: FONT_FAMILY,
           fontSize: '15px',
           fontStyle: 'bold',
-          color: '#f5edd8',
+          color: TEXT_COLOR.primary,
         })
         .setOrigin(0, 0.5),
     );
@@ -149,10 +144,10 @@ export class HudScene extends Phaser.Scene {
     this.dynamic.add(
       this.add
         .text(invX + 22, y0 + 74, `x${run.armor}/${run.maxArmor}`, {
-          fontFamily: 'monospace',
+          fontFamily: FONT_FAMILY,
           fontSize: '15px',
           fontStyle: 'bold',
-          color: '#f5edd8',
+          color: TEXT_COLOR.primary,
         })
         .setOrigin(0, 0.5),
     );
@@ -164,22 +159,14 @@ export class HudScene extends Phaser.Scene {
           run.scoutCharges > 0
             ? `SCOUT x${run.scoutCharges}  [P] potion  [C] cards  [R] relics  [M] mute`
             : '[P] drink potion  [C] cards  [R] relics  [M] mute',
-          {
-            fontFamily: 'monospace',
-            fontSize: '9px',
-            color: run.scoutCharges > 0 ? '#f1c40f' : '#6a6478',
-          },
+          bodyStyle('9px', run.scoutCharges > 0 ? TEXT_COLOR.gold : TEXT_COLOR.faint),
         )
         .setOrigin(0, 0.5),
     );
 
     if (run.relics.length > 0) {
       this.dynamic.add(
-        this.add.text(cardX0, y0 + 101, 'RELICS', {
-          fontFamily: 'monospace',
-          fontSize: '8px',
-          color: '#6a6478',
-        }),
+        this.add.text(cardX0, y0 + 101, 'RELICS', bodyStyle('8px', TEXT_COLOR.faint)),
       );
       for (const [index, relic] of run.relics.slice(0, 6).entries()) {
         const chipX = cardX0 + index * 34;
@@ -198,10 +185,10 @@ export class HudScene extends Phaser.Scene {
         chip.add(
           this.add
             .text(14, 8, label, {
-              fontFamily: 'monospace',
+              fontFamily: FONT_FAMILY,
               fontSize: '8px',
               fontStyle: 'bold',
-              color: '#16121e',
+              color: TEXT_COLOR.ink,
             })
             .setOrigin(0.5),
         );
@@ -220,20 +207,20 @@ export class HudScene extends Phaser.Scene {
     this.dynamic.add(
       this.add
         .text(GAME_W - 24, y0 + 28, `STRATUM ${stratumForDepth(run.depth)}`, {
-          fontFamily: 'monospace',
+          fontFamily: FONT_FAMILY,
           fontSize: '14px',
           fontStyle: 'bold',
-          color: '#d8d2e4',
+          color: TEXT_COLOR.body,
         })
         .setOrigin(1, 0.5),
     );
     this.dynamic.add(
       this.add
         .text(GAME_W - 24, y0 + 50, `ROOM ${depthWithinStratum(run.depth)}/${STRATUM_SIZE}`, {
-          fontFamily: 'monospace',
+          fontFamily: FONT_FAMILY,
           fontSize: '17px',
           fontStyle: 'bold',
-          color: atBoss ? '#ff5544' : '#f1c40f',
+          color: atBoss ? TEXT_COLOR.danger : TEXT_COLOR.gold,
         })
         .setOrigin(1, 0.5),
     );
