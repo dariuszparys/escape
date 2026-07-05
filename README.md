@@ -20,8 +20,8 @@ npm run dev      # http://localhost:5173
   On the Progression screen you can freely pick an **archetype** — Barbarian,
   Necromancer, or Ranger — that reshapes the whole run's card pool instead of
   adding a single card; skip it and the run draws from the neutral pool only.
-  The fire offers **two opening card picks** (Ember progression can unlock a
-  fourth).
+  The fire offers **two opening card picks from three options** (Ember
+  progression can add a fourth option to pick from, and a third pick).
 - Every later room has four doors — the one you came through is barred.
   Rooms are randomized: **encounters, elites, treasure chests, health
   potions, paid rest rooms, or spike traps**. Each stratum guarantees exactly
