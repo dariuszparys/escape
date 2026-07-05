@@ -8,5 +8,15 @@ export default tseslint.config(
   {
     ignores: ['dist/**', 'node_modules/**', 'docs/**', '.remember/**'],
   },
+  {
+    files: ['src/**/*.ts'],
+    extends: [...tseslint.configs.recommendedTypeCheckedOnly],
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
   prettier,
 );
