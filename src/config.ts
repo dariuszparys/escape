@@ -21,6 +21,13 @@ export const PLAYER_MAX_HP = 34;
 export const POTION_HEAL = 8;
 export const TRAP_DAMAGE = 3;
 export const VISION_RADIUS = 36; // trap-room field-of-view halo around the player
+export const TRAP_MIN_SPIKES = 8;
+export const TRAP_MAX_SPIKES = 10;
+export const TRAP_LANE_DISTANCE_TILES = 1;
+export const TRAP_LANE_PERIOD_MS = 2600;
+export const TRAP_HITBOX_W = 36;
+export const TRAP_HITBOX_H = 22;
+export const TRAP_HITBOX_TOP_OFFSET = -6;
 export const MAX_ARMOR = 3;
 
 export const PLAYER_SPEED = 210;

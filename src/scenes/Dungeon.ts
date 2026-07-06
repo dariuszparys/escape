@@ -25,6 +25,7 @@ import {
   RoomData,
   type RoomEvent,
 } from '../dungeon/rooms';
+import { trapCenterAt, trapContactRectFromCenter, type SpikeTrap } from '../dungeon/traps';
 import { makeCardView } from '../gfx/cardview';
 import { createDeckPanel } from '../gfx/deckPanel';
 import { createPanel } from '../gfx/panel';
@@ -85,11 +86,18 @@ interface CardPickup {
   taken: boolean;
 }
 
+interface TrapActor {
+  descriptor: SpikeTrap;
+  sprite: Phaser.GameObjects.Image;
+  rect: Phaser.Geom.Rectangle;
+  startedAtMs: number;
+}
+
 interface BuiltRoom {
   objs: Phaser.GameObjects.GameObject[];
   walls: Phaser.Physics.Arcade.StaticGroup;
   doors: { dir: Dir; rect: Phaser.Geom.Rectangle }[];
-  spikeRects: Phaser.Geom.Rectangle[];
+  traps: TrapActor[];
   potionAt: { x: number; y: number; img: Phaser.GameObjects.Image; item: InventoryItem } | null;
   chest: { x: number; y: number; img: Phaser.GameObjects.Image; opened: boolean } | null;
   restAt: { x: number; y: number; img: Phaser.GameObjects.Image; opened: boolean } | null;
@@ -517,7 +525,7 @@ export class DungeonScene extends Phaser.Scene {
       objs,
       walls,
       doors,
-      spikeRects: [],
+      traps: [],
       potionAt: null,
       chest: null,
       restAt: null,
@@ -608,10 +616,24 @@ export class DungeonScene extends Phaser.Scene {
       }
       case 'trap': {
         for (const s of room.spikes) {
-          const p = at(s.col, s.row);
-          const img = this.add.image(p.x, p.y, 'spikes').setScale(3).setDepth(1);
+          const center = trapCenterAt(s, 0);
+          const rect = trapContactRectFromCenter(center);
+          const img = this.add
+            .image(origin.x + center.x, origin.y + center.y, 'spikes')
+            .setScale(3)
+            .setDepth(1);
           objs.push(img);
-          built.spikeRects.push(new Phaser.Geom.Rectangle(p.x - 18, p.y - 6, 36, 22));
+          built.traps.push({
+            descriptor: s,
+            sprite: img,
+            rect: new Phaser.Geom.Rectangle(
+              origin.x + rect.x,
+              origin.y + rect.y,
+              rect.width,
+              rect.height,
+            ),
+            startedAtMs: this.time.now,
+          });
         }
         break;
       }
@@ -689,6 +711,16 @@ export class DungeonScene extends Phaser.Scene {
     for (const o of b.objs) o.destroy();
     b.walls.clear(true, true);
     b.walls.destroy();
+  }
+
+  private syncTrapActors(time: number): void {
+    for (const trap of this.built.traps) {
+      const elapsedMs = Math.max(0, time - trap.startedAtMs);
+      const center = trapCenterAt(trap.descriptor, elapsedMs);
+      const rect = trapContactRectFromCenter(center);
+      trap.sprite.setPosition(this.origin.x + center.x, this.origin.y + center.y);
+      trap.rect.setTo(this.origin.x + rect.x, this.origin.y + rect.y, rect.width, rect.height);
+    }
   }
 
   private spawnFloorPotion(
@@ -1037,6 +1069,7 @@ export class DungeonScene extends Phaser.Scene {
       this.visionGraphics.fillStyle(0xffffff, 1);
       this.visionGraphics.fillCircle(this.player.x, this.player.y, VISION_RADIUS);
     }
+    this.syncTrapActors(time);
     const run = getRun();
     if (Phaser.Input.Keyboard.JustDown(this.keys.c)) {
       this.toggleDeckOverlay();
@@ -1210,8 +1243,8 @@ export class DungeonScene extends Phaser.Scene {
 
     // spikes
     if (time > this.invulnUntil) {
-      for (const rect of this.built.spikeRects) {
-        if (!rect.contains(px, py + 12)) continue;
+      for (const actor of this.built.traps) {
+        if (!actor.rect.contains(px, py + 12)) continue;
         this.invulnUntil = time + 900;
         const trap = applyTrapDamage(run);
         this.floatText(px, py - 50, `-${trap.amount}`, '#ff5544');

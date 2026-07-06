@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'vitest';
 import { chooseForcedEliteDoor, isEliteEligibleDepth, makeNextRoom, rollRoomEvent } from './rooms';
 import { SequenceRng } from '../game/test-rng';
-import { BOSS_ROOM_INTERVAL, ROOM_COLS, ROOM_ROWS } from '../config';
+import { BOSS_ROOM_INTERVAL, OPPOSITE, ROOM_COLS, ROOM_ROWS, TRAP_MIN_SPIKES } from '../config';
+import { hasSafeTrapRoute, isLaneDriftTrap, trapFairCells, trapSweptCells } from './traps';
 
 describe('room generation', () => {
   test('rooms 2 through 8 use the roguelike-hard event thresholds without empty rooms', () => {
@@ -153,47 +154,40 @@ describe('chooseForcedEliteDoor (KTD3, scene side)', () => {
 });
 
 describe('trap room spike placement', () => {
-  const fairCells = ['7,1', '7,9', '1,5', '13,5'];
-
-  // One-tile breathing room behind the player's spawn, keyed by travelDir.
-  const behindCell: Record<string, { col: number; row: number }> = {
-    N: { col: 7, row: 8 },
-    S: { col: 7, row: 2 },
-    E: { col: 2, row: 5 },
-    W: { col: 12, row: 5 },
-  };
-
   for (const dir of ['N', 'E', 'S', 'W'] as const) {
-    test(`entering from ${dir} produces fair, challenging spikes`, () => {
+    test(`entering from ${dir} produces fair, challenging moving spikes`, () => {
       const rng = new SequenceRng(
         [0.95, 0.5, 0.3, 0.7, 0.1, 0.9, 0.4, 0.6, 0.2, 0.8, 0.35, 0.65, 0.45, 0.55],
         [1, 6],
       );
       const room = makeNextRoom(rng, 5, dir);
+      const entry = OPPOSITE[dir];
+      const fair = new Set(trapFairCells(entry).map((cell) => `${cell.col},${cell.row}`));
 
       expect(room.event).toBe('trap');
-      expect(room.spikes.length).toBeGreaterThanOrEqual(5);
+      expect(room.spikes.length).toBeGreaterThanOrEqual(TRAP_MIN_SPIKES);
+      expect(room.spikes.filter(isLaneDriftTrap).length).toBeGreaterThan(room.spikes.length / 2);
 
-      // No spike directly in front of any door.
+      // No spike starts or sweeps through door-entry or spawn breathing-room cells.
       for (const s of room.spikes) {
-        expect(fairCells).not.toContain(`${s.col},${s.row}`);
+        for (const swept of trapSweptCells(s)) {
+          expect(fair).not.toContain(`${swept.col},${swept.row}`);
+        }
       }
-
-      // No spike on the spawn breathing-room cell.
-      expect(room.spikes).not.toContainEqual(behindCell[dir]);
 
       // At least one spike blocks the center column.
-      expect(room.spikes.some((s) => s.col === 7)).toBe(true);
+      expect(room.spikes.flatMap(trapSweptCells).some((s) => s.col === 7)).toBe(true);
+      expect(hasSafeTrapRoute(room.spikes, entry)).toBe(true);
 
       // All spikes within bounds.
-      for (const s of room.spikes) {
-        expect(s.col).toBeGreaterThanOrEqual(2);
-        expect(s.col).toBeLessThanOrEqual(ROOM_COLS - 3);
-        expect(s.row).toBeGreaterThanOrEqual(2);
-        expect(s.row).toBeLessThanOrEqual(ROOM_ROWS - 3);
+      for (const s of room.spikes.flatMap(trapSweptCells)) {
+        expect(s.col).toBeGreaterThanOrEqual(1);
+        expect(s.col).toBeLessThanOrEqual(ROOM_COLS - 2);
+        expect(s.row).toBeGreaterThanOrEqual(1);
+        expect(s.row).toBeLessThanOrEqual(ROOM_ROWS - 2);
       }
 
-      // All spikes unique.
+      // All spike starting cells are unique.
       const keys = room.spikes.map((s) => `${s.col},${s.row}`);
       expect(new Set(keys).size).toBe(keys.length);
     });
@@ -205,22 +199,27 @@ describe('trap room spike placement', () => {
       [2, 8],
     );
     const room = makeNextRoom(rng, 5, 'N');
+    const entry = OPPOSITE.N;
+    const fair = new Set(trapFairCells(entry).map((cell) => `${cell.col},${cell.row}`));
 
     expect(room.event).toBe('trap');
-    expect(room.spikes.length).toBeGreaterThanOrEqual(5);
+    expect(room.spikes.length).toBeGreaterThanOrEqual(TRAP_MIN_SPIKES);
+    expect(room.spikes.filter(isLaneDriftTrap).length).toBeGreaterThan(room.spikes.length / 2);
 
     for (const s of room.spikes) {
-      expect(fairCells).not.toContain(`${s.col},${s.row}`);
+      for (const swept of trapSweptCells(s)) {
+        expect(fair).not.toContain(`${swept.col},${swept.row}`);
+      }
     }
 
-    expect(room.spikes).not.toContainEqual(behindCell.N);
-    expect(room.spikes.some((s) => s.col === 7)).toBe(true);
+    expect(room.spikes.flatMap(trapSweptCells).some((s) => s.col === 7)).toBe(true);
+    expect(hasSafeTrapRoute(room.spikes, entry)).toBe(true);
 
-    for (const s of room.spikes) {
-      expect(s.col).toBeGreaterThanOrEqual(2);
-      expect(s.col).toBeLessThanOrEqual(ROOM_COLS - 3);
-      expect(s.row).toBeGreaterThanOrEqual(2);
-      expect(s.row).toBeLessThanOrEqual(ROOM_ROWS - 3);
+    for (const s of room.spikes.flatMap(trapSweptCells)) {
+      expect(s.col).toBeGreaterThanOrEqual(1);
+      expect(s.col).toBeLessThanOrEqual(ROOM_COLS - 2);
+      expect(s.row).toBeGreaterThanOrEqual(1);
+      expect(s.row).toBeLessThanOrEqual(ROOM_ROWS - 2);
     }
 
     const keys = room.spikes.map((s) => `${s.col},${s.row}`);

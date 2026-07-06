@@ -26,7 +26,8 @@ npm run dev      # http://localhost:5173
   potions, paid rest rooms, or spike traps**. Each 10-room decade can offer one
   elite: a hand-authored spike fight with a signature mechanic, worth clearly
   better rewards than a normal encounter. Scout Charges let you peek at
-  adjacent room types before committing.
+  adjacent room types before committing. Trap rooms use fog, lane-drifting
+  spikes, and narrow safe gaps instead of card combat.
 - Encounter rooms place one or more visible monsters in the room — most
   fights are solo, but some spawn a budget-anchored pack of 2-3 weaker foes.
   In the Enemies Are Doubled Scenario, normal encounter rooms instead spawn a

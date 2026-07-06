@@ -1,6 +1,7 @@
 import type { Dir } from '../config';
 import { DIRS } from '../config';
 import type { RoomData } from '../dungeon/rooms';
+import { normalizeSpikeTrap } from '../dungeon/traps';
 import type { SerializedRunState } from '../state';
 import { RunState } from '../state';
 import { RUN_SNAPSHOT_STORAGE_KEY } from '../storageKeys';
@@ -74,10 +75,9 @@ function normalizeRoom(value: unknown): RoomData | null {
   if (!Array.isArray(value.spikes)) return null;
   const spikes: RoomData['spikes'] = [];
   for (const spike of value.spikes) {
-    if (!isRecord(spike)) return null;
-    if (typeof spike.col !== 'number' || !Number.isFinite(spike.col)) return null;
-    if (typeof spike.row !== 'number' || !Number.isFinite(spike.row)) return null;
-    spikes.push({ col: Math.floor(spike.col), row: Math.floor(spike.row) });
+    const normalized = normalizeSpikeTrap(spike);
+    if (!normalized) return null;
+    spikes.push(normalized);
   }
   return {
     depth: Math.max(1, Math.floor(value.depth)),

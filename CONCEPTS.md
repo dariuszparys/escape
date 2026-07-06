@@ -22,6 +22,14 @@ rooms behind the current room's open doors. The reveal fires at most once per
 room and its text persists until the player moves on; Scout Charges are the
 informed-routing tool for choosing which rooms to commit to.
 
+### Trap Room
+
+A dungeon room built around spike hazards and limited visibility. Trap rooms
+should pressure movement rather than resolve through Card Battle: the player
+crosses the room by reading safe gaps under fog, and a poor route can cost HP.
+The moving-trap direction uses lane-drifting spikes and narrower safe corridors
+so the opening layout cannot be memorized as a solved path.
+
 ### Elite
 
 A hand-authored spike encounter placed before a decade's boss. Elite rooms are

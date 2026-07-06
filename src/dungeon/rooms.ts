@@ -1,14 +1,6 @@
-import {
-  BOSS_ROOM_INTERVAL,
-  Dir,
-  DIR_VEC,
-  DIRS,
-  MAX_DEPTH,
-  OPPOSITE,
-  ROOM_COLS,
-  ROOM_ROWS,
-} from '../config';
+import { BOSS_ROOM_INTERVAL, Dir, DIRS, MAX_DEPTH, OPPOSITE } from '../config';
 import { GameRng } from '../game/rng';
+import { createTrapDescriptors, type SpikeTrap } from './traps';
 
 /**
  * Decade geometry for the fixed 100-room run. A "decade" is a band of
@@ -50,8 +42,8 @@ export interface RoomData {
   /** Doors the player may leave through. Entry door is always blocked. */
   openDoors: Dir[];
   blockedDoor: Dir | null;
-  /** Spike tile positions (room grid coords), for trap rooms. */
-  spikes: { col: number; row: number }[];
+  /** Spike descriptors (room grid coords plus optional motion), for trap rooms. */
+  spikes: SpikeTrap[];
   cleared: boolean;
 }
 
@@ -137,68 +129,6 @@ export function chooseForcedEliteDoor(
   return openDoors[rng.between(0, openDoors.length - 1)] ?? null;
 }
 
-/** Cells directly inside each door, kept trap-free for fairness. */
-const DOOR_ENTRY_CELL: Record<Dir, { col: number; row: number }> = {
-  N: { col: 7, row: 1 },
-  S: { col: 7, row: ROOM_ROWS - 2 },
-  W: { col: 1, row: 5 },
-  E: { col: ROOM_COLS - 2, row: 5 },
-};
-
-function rollSpikes(rng: GameRng, entry: Dir): { col: number; row: number }[] {
-  const spikes: { col: number; row: number }[] = [];
-  const midCol = Math.floor(ROOM_COLS / 2);
-  const midRow = Math.floor(ROOM_ROWS / 2);
-
-  // Cells that must stay trap-free: just inside every door, plus one
-  // extra tile of breathing room behind the player's spawn point.
-  const fair = new Set<string>();
-  for (const dir of DIRS) {
-    const c = DOOR_ENTRY_CELL[dir];
-    fair.add(`${c.col},${c.row}`);
-  }
-  const spawn = DOOR_ENTRY_CELL[entry];
-  fair.add(`${spawn.col - DIR_VEC[entry].x},${spawn.row - DIR_VEC[entry].y}`);
-
-  const has = (col: number, row: number) => spikes.some((s) => s.col === col && s.row === row);
-
-  // Eligible interior cells (existing wall buffer, minus fair cells).
-  const eligible: { col: number; row: number }[] = [];
-  for (let row = 2; row <= ROOM_ROWS - 3; row++) {
-    for (let col = 2; col <= ROOM_COLS - 3; col++) {
-      if (fair.has(`${col},${row}`)) continue;
-      eligible.push({ col, row });
-    }
-  }
-
-  // Seed at least one mandatory blocker on the center column.
-  const centerColCells = eligible.filter((c) => c.col === midCol);
-  if (centerColCells.length > 0) {
-    spikes.push(rng.pick(centerColCells));
-  }
-
-  // Add 1-2 middle-band blockers to pressure the center lane.
-  const midBand = eligible.filter(
-    (c) => c.row >= midRow - 1 && c.row <= midRow + 1 && !has(c.col, c.row),
-  );
-  const extraBlockers = Math.min(midBand.length, rng.between(1, 2));
-  for (let i = 0; i < extraBlockers; i++) {
-    const remaining = midBand.filter((c) => !has(c.col, c.row));
-    if (remaining.length === 0) break;
-    spikes.push(rng.pick(remaining));
-  }
-
-  // Fill remaining spikes up to the target count.
-  const count = rng.between(5, 8);
-  while (spikes.length < count) {
-    const remaining = eligible.filter((c) => !has(c.col, c.row));
-    if (remaining.length === 0) break;
-    spikes.push(rng.pick(remaining));
-  }
-
-  return spikes;
-}
-
 export function makeStartRoom(): RoomData {
   return {
     depth: 1,
@@ -233,7 +163,7 @@ export function makeNextRoom(
     event,
     openDoors: DIRS.filter((d) => d !== entry),
     blockedDoor: entry,
-    spikes: event === 'trap' ? rollSpikes(rng, entry) : [],
+    spikes: event === 'trap' ? createTrapDescriptors(rng, entry) : [],
     cleared: false,
   };
 }
