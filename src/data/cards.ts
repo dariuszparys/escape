@@ -1,5 +1,5 @@
+import { BOSS_ROOM_INTERVAL } from '../config';
 import { GameRng } from '../game/rng';
-import { stratumForDepth } from '../game/strata';
 
 export type CardType = 'attack' | 'block' | 'heal' | 'utility' | 'status';
 
@@ -798,13 +798,14 @@ function pickWeighted(rng: GameRng, weights: [number, number, number]): 1 | 2 | 
 }
 
 /**
- * Tier weights past depth 9. The depth-9 baseline is [0, 5, 5]; each stratum beyond
+ * Tier weights past depth 9. The depth-9 baseline is [0, 5, 5]; each decade beyond
  * the first shifts one point from tier 2 toward tier 3 (clamped so a sliver of tier 2
- * always remains), so deeper strata keep improving card quality rather than freezing.
- * Deterministic in depth — Daily reproducibility holds (KTD4).
+ * always remains), so deeper decades keep improving card quality rather than freezing.
+ * Deterministic in depth — Daily reproducibility holds (KTD4). Values preserved from the
+ * endless-descent era pending the U7 100-room curve re-tune.
  */
 function deepTierWeights(depth: number): [number, number, number] {
-  const beyondFirst = Math.max(0, stratumForDepth(depth) - 1);
+  const beyondFirst = Math.max(0, Math.floor((depth - 1) / BOSS_ROOM_INTERVAL));
   const tier2 = Math.max(1, 5 - beyondFirst);
   return [0, tier2, 10 - tier2];
 }

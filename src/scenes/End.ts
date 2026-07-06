@@ -76,7 +76,6 @@ export class EndScene extends Phaser.Scene {
       relicCount: run.relics.length,
       elitesDefeated: run.elitesDefeated,
       enemiesDefeated: run.enemiesDefeated,
-      stratum: run.stratum,
     });
     if (completions.length === 0) return [];
     setMeta(applyContractCompletions(meta, completions));

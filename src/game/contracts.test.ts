@@ -12,7 +12,6 @@ describe('contracts', () => {
         relicCount: 3,
         elitesDefeated: 0,
         enemiesDefeated: 0,
-        stratum: 1,
       }),
     ).toBe(true);
     expect(
@@ -22,7 +21,6 @@ describe('contracts', () => {
         relicCount: 4,
         elitesDefeated: 1,
         enemiesDefeated: 0,
-        stratum: 1,
       }),
     ).toBe(false);
   });
@@ -35,7 +33,6 @@ describe('contracts', () => {
       relicCount: 0,
       elitesDefeated: 0,
       enemiesDefeated: 0,
-      stratum: 1,
     });
     expect(completions).toHaveLength(1);
     expect(completions[0]?.contractId).toBe('reach_depth_6');
@@ -54,7 +51,6 @@ describe('contracts', () => {
       relicCount: 0,
       elitesDefeated: 0,
       enemiesDefeated: 0,
-      stratum: 1,
     });
 
     const once = applyContractCompletions(meta, completions);
@@ -77,7 +73,6 @@ describe('contracts', () => {
       relicCount: 0,
       elitesDefeated: 0,
       enemiesDefeated: 0,
-      stratum: 1,
     });
     expect(completion).toBeDefined();
 
@@ -100,7 +95,6 @@ describe('contracts', () => {
       relicCount: 0,
       elitesDefeated: 1,
       enemiesDefeated: 0,
-      stratum: 1,
     });
 
     expect(completions).toHaveLength(1);
@@ -119,7 +113,6 @@ describe('contracts', () => {
         relicCount: 0,
         elitesDefeated: 0,
         enemiesDefeated: 24,
-        stratum: 1,
       }),
     ).toBe(false);
     expect(
@@ -129,51 +122,49 @@ describe('contracts', () => {
         relicCount: 0,
         elitesDefeated: 0,
         enemiesDefeated: 25,
-        stratum: 1,
       }),
     ).toBe(true);
   });
 
-  test('delve_past_first_gate requires reaching stratum 2', () => {
+  test('reach_room_20 requires reaching room 20', () => {
     expect(
-      evaluateContract('delve_past_first_gate', {
+      evaluateContract('reach_room_20', {
         escaped: false,
-        depth: 6,
+        depth: 19,
         relicCount: 0,
         elitesDefeated: 0,
         enemiesDefeated: 0,
-        stratum: 1,
       }),
     ).toBe(false);
     expect(
-      evaluateContract('delve_past_first_gate', {
+      evaluateContract('reach_room_20', {
         escaped: false,
-        depth: 6,
+        depth: 20,
         relicCount: 0,
         elitesDefeated: 0,
         enemiesDefeated: 0,
-        stratum: 2,
       }),
     ).toBe(true);
   });
 
-  test('delve_past_first_gate awards no embers and unlocks spark_coil', () => {
+  test('reach_room_20 awards no embers and unlocks spark_coil', () => {
     const meta = createDefaultMetaState();
+    // reach_depth_6 (room 6) also fires at room 20; pre-complete it so only reach_room_20 is new.
+    meta.progression.completedContractIds = ['reach_depth_6'];
     const completions = evaluateNewContracts(meta.progression, {
       escaped: false,
-      depth: 1,
+      depth: 20,
       relicCount: 0,
       elitesDefeated: 0,
       enemiesDefeated: 0,
-      stratum: 2,
     });
 
     expect(completions).toHaveLength(1);
-    expect(completions[0]?.contractId).toBe('delve_past_first_gate');
+    expect(completions[0]?.contractId).toBe('reach_room_20');
     expect(completions[0]?.emberReward).toBe(0);
 
     const updated = applyContractCompletions(meta, completions);
-    expect(updated.progression.completedContractIds).toContain('delve_past_first_gate');
+    expect(updated.progression.completedContractIds).toContain('reach_room_20');
     expect(updated.progression.unlockedRelicIds).toContain('spark_coil');
     expect(updated.embers).toBe(meta.embers);
   });
@@ -188,7 +179,6 @@ describe('contracts', () => {
       relicCount: 0,
       elitesDefeated: 0,
       enemiesDefeated: 0,
-      stratum: 1,
     });
 
     expect(completions).toEqual([]);

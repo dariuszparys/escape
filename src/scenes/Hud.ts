@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
-import { GAME_W, ROOM_H, HUD_H, MAX_INVENTORY, STRATUM_SIZE } from '../config';
+import { GAME_W, ROOM_H, HUD_H, MAX_INVENTORY, RUN_LENGTH } from '../config';
 import type { Relic } from '../data/relics';
-import { depthWithinStratum, isStratumBoundary, stratumForDepth } from '../game/strata';
+import { isBossRoom } from '../dungeon/rooms';
 import { createRelicTooltip } from '../gfx/relicTooltip';
 import { FONT_FAMILY, PALETTE, TEXT_COLOR, TYPE_COLOR, bodyStyle } from '../gfx/theme';
 import { getRun } from '../state';
@@ -19,7 +19,6 @@ export class HudScene extends Phaser.Scene {
   private potionCountText!: Phaser.GameObjects.Text;
   private armorCountText!: Phaser.GameObjects.Text;
   private scoutText!: Phaser.GameObjects.Text;
-  private stratumText!: Phaser.GameObjects.Text;
   private roomText!: Phaser.GameObjects.Text;
 
   constructor() {
@@ -93,16 +92,8 @@ export class HudScene extends Phaser.Scene {
       .text(invX, y0 + 94, '', bodyStyle('9px', TEXT_COLOR.faint))
       .setOrigin(0, 0.5);
 
-    this.stratumText = this.add
-      .text(GAME_W - 24, y0 + 28, '', {
-        fontFamily: FONT_FAMILY,
-        fontSize: '14px',
-        fontStyle: 'bold',
-        color: TEXT_COLOR.body,
-      })
-      .setOrigin(1, 0.5);
     this.roomText = this.add
-      .text(GAME_W - 24, y0 + 50, '', {
+      .text(GAME_W - 24, y0 + 40, '', {
         fontFamily: FONT_FAMILY,
         fontSize: '17px',
         fontStyle: 'bold',
@@ -156,10 +147,9 @@ export class HudScene extends Phaser.Scene {
       )
       .setColor(run.scoutCharges > 0 ? TEXT_COLOR.gold : TEXT_COLOR.faint);
 
-    const atBoss = isStratumBoundary(run.depth);
-    this.stratumText.setText(`STRATUM ${stratumForDepth(run.depth)}`);
+    const atBoss = isBossRoom(run.depth);
     this.roomText
-      .setText(`ROOM ${depthWithinStratum(run.depth)}/${STRATUM_SIZE}`)
+      .setText(`ROOM ${run.depth}/${RUN_LENGTH}`)
       .setColor(atBoss ? TEXT_COLOR.danger : TEXT_COLOR.gold);
 
     // Variable-count sections: card-type chips and relic chips. Their counts

@@ -45,11 +45,9 @@ export class RunState {
   scoutCharges = 0;
   curseIds: CampfireCurseId[] = [];
   bossDefeated = false;
-  /** Current stratum of the endless descent. Starts at 1, advances at each gate via commitDelve. */
-  stratum = 1;
-  /** The stratum index (see `stratum`) an elite room has already been offered for (KTD3), or null if none yet this run. Comparing against the current `stratum` is the reset — no explicit boundary reset needed. */
-  eliteOfferedForStratum: number | null = null;
-  /** Run terminus: true once the player banks and escapes, false on death. Single source of truth. */
+  /** The 0-based decade index (see `decadeForDepth`) an elite room has already been offered for (KTD3), or null if none yet this run. Comparing against the current depth's decade is the reset — no explicit boundary reset needed. */
+  eliteOfferedForDecade: number | null = null;
+  /** Run terminus: true once the player escapes by defeating the room-100 boss, false on death. Single source of truth (R1). */
   escaped = false;
   isDaily = false;
   dailyKey: string | null = null;

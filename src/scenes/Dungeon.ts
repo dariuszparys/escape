@@ -8,6 +8,7 @@ import {
   ROOM_H,
   ROOM_ROWS,
   ROOM_W,
+  RUN_LENGTH,
   TILE,
   VISION_RADIUS,
 } from '../config';
@@ -18,6 +19,7 @@ import type { Relic } from '../data/relics';
 import { ARCHETYPES } from '../data/archetypes';
 import {
   chooseForcedEliteDoor,
+  decadeForDepth,
   makeStartRoom,
   makeNextRoom,
   RoomData,
@@ -43,11 +45,8 @@ import {
   restActionCost,
   type RestActionMode,
 } from '../game/restEconomy';
-import { commitDelve, resolveBank } from '../game/delve';
-import { gateSummary } from '../game/gateSummary';
 import { applyTrapDamage } from '../game/hazards';
 import { applyPoisonedRoomEntryDamage } from '../game/scenarioRules';
-import { stratumForDepth } from '../game/strata';
 import { getRun } from '../state';
 import type { RunBattleSceneData } from './TurnBattle';
 
@@ -133,7 +132,6 @@ export class DungeonScene extends Phaser.Scene {
   private visionGraphics: Phaser.GameObjects.Graphics | null = null;
   private restActionPanel: Phaser.GameObjects.Container | null = null;
   private restCardPanel: Phaser.GameObjects.Container | null = null;
-  private gatePanel: Phaser.GameObjects.Container | null = null;
 
   constructor() {
     super('Dungeon');
@@ -191,7 +189,6 @@ export class DungeonScene extends Phaser.Scene {
       this.disableDarknessOverlay();
       this.closeRestActionPanel();
       this.closeRestCardPanel();
-      this.closeGatePanel();
       this.game.events.off('battle-end');
     });
   }
@@ -376,14 +373,14 @@ export class DungeonScene extends Phaser.Scene {
 
     const run = getRun();
     const nextDepth = this.room.depth + 1;
-    // KTD3: one elite offered per stratum. The door-pick RNG is seeded from
+    // KTD3: one elite offered per decade. The door-pick RNG is seeded from
     // (run.seed, nextDepth) alone — not origin/path — so Scout reveals and
     // Daily runs see the same door choice. This assumes primeNextRoomOptions
     // runs exactly once per distinct this.room (true today: create() only
     // follows a fresh newRun(), and both transition methods reassign
     // this.room before the single call here, guarded by this.transitioning).
-    // A second prime of the same room would see eliteOfferedForStratum
-    // already set and silently drop that stratum's elite — don't add a
+    // A second prime of the same room would see eliteOfferedForDecade
+    // already set and silently drop that decade's elite — don't add a
     // re-prime path without also making this write idempotent.
     const eliteRng = new PhaserGameRng(
       new Phaser.Math.RandomDataGenerator([run.seed, 'elite-door', String(nextDepth)]),
@@ -392,7 +389,7 @@ export class DungeonScene extends Phaser.Scene {
       eliteRng,
       nextDepth,
       this.room.openDoors,
-      run.eliteOfferedForStratum,
+      run.eliteOfferedForDecade,
     );
 
     for (const dir of this.room.openDoors) {
@@ -401,7 +398,7 @@ export class DungeonScene extends Phaser.Scene {
       this.nextRoomOptions[dir] = { room: option, rngState: rng.state() };
     }
     if (eliteDoor !== null) {
-      run.eliteOfferedForStratum = stratumForDepth(nextDepth);
+      run.eliteOfferedForDecade = decadeForDepth(nextDepth);
     }
   }
 
@@ -969,13 +966,20 @@ export class DungeonScene extends Phaser.Scene {
       this.built.enemyPack = null;
     }
     if (this.room.event === 'boss') {
-      getRun().bossDefeated = true;
+      const run = getRun();
+      run.bossDefeated = true;
+      const finalBoss = run.depth >= RUN_LENGTH;
       const c = this.cellXY(7, 5);
       const img = this.add.image(c.x, c.y, 'exit').setScale(3).setDepth(1).setAlpha(0);
       this.tweens.add({ targets: img, alpha: 1, duration: 700 });
       this.built.objs.push(img);
       this.exitHatch = { x: c.x, y: c.y, img };
-      this.floatText(c.x, c.y - 60, 'The way out opens!', '#f1c40f');
+      this.floatText(
+        c.x,
+        c.y - 60,
+        finalBoss ? 'The way out opens!' : 'The way deeper opens!',
+        '#f1c40f',
+      );
     } else {
       // A cleared 'elite' room falls here too (it's not 'boss'), so it clears exactly
       // like a normal encounter — no exit hatch, just the post-victory scout reveal.
@@ -1011,7 +1015,7 @@ export class DungeonScene extends Phaser.Scene {
       this.player.setVelocity(0, 0);
       return;
     }
-    if (this.restActionPanel || this.restCardPanel || this.gatePanel) {
+    if (this.restActionPanel || this.restCardPanel) {
       this.player.setVelocity(0, 0);
       return;
     }
@@ -1186,12 +1190,14 @@ export class DungeonScene extends Phaser.Scene {
       }
     }
 
-    // exit hatch — beating the stratum boss opens the gate decision (bank or delve).
+    // exit hatch — beating a boss opens the way forward. The room-100 boss is the
+    // escape (R1); every earlier boss just descends into the next room (R3).
     if (
       this.exitHatch &&
       Phaser.Math.Distance.Between(px, py, this.exitHatch.x, this.exitHatch.y) < 30
     ) {
-      this.openGateDecision();
+      if (getRun().depth >= RUN_LENGTH) this.escapeRun();
+      else this.startDescentTransition();
     }
   }
 
@@ -1485,127 +1491,29 @@ export class DungeonScene extends Phaser.Scene {
     this.floatText(this.player.x, this.player.y - 42, 'Left the rest room', '#b8b0c8');
   }
 
-  // ------------------------------------------------------------ stratum gate
+  // ------------------------------------------------------------ boss aftermath
 
-  private closeGatePanel(): void {
-    this.gatePanel?.destroy();
-    this.gatePanel = null;
-  }
-
-  /** Present the bank-or-delve choice after a stratum boss falls (R1, R2). */
-  private openGateDecision(): void {
-    if (this.gatePanel || this.transitioning) return;
-    const run = getRun();
-    this.player.setVelocity(0, 0);
-    this.player.anims.stop();
-
-    const { stratum, bankLine } = gateSummary(run);
-
-    const cx = this.origin.x + ROOM_W / 2;
-    const cy = this.origin.y + ROOM_H / 2;
-    const w = 420;
-    const h = 252;
-    const panel = createPanel(this, cx, cy, {
-      width: w,
-      height: h,
-      title: `STRATUM ${stratum} CLEARED`,
-      borderColor: PALETTE.gold,
-      bgAlpha: 0.98,
-      titleSize: '22px',
-      depth: 300,
-    });
-    this.gatePanel = panel;
-
-    panel.add(
-      this.add
-        .text(0, -h / 2 + 60, 'Cash out a winner, or descend into a deadlier stratum?', {
-          fontFamily: 'monospace',
-          fontSize: '11px',
-          color: '#b8b0c8',
-          align: 'center',
-          fixedWidth: w - 40,
-          wordWrap: { width: w - 40, useAdvancedWrap: true },
-        })
-        .setOrigin(0.5),
-    );
-
-    const bank = this.add
-      .text(0, -14, '[ BANK & ESCAPE ]', {
-        fontFamily: 'monospace',
-        fontSize: '16px',
-        fontStyle: 'bold',
-        color: '#5fe07a',
-        backgroundColor: '#1c2a1c',
-        padding: { x: 14, y: 9 },
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
-    bank.on('pointerover', () => bank.setColor('#9bf5ad'));
-    bank.on('pointerout', () => bank.setColor('#5fe07a'));
-    bank.on('pointerdown', () => this.bankAndEscape());
-    panel.add(bank);
-
-    panel.add(
-      this.add
-        .text(0, 22, bankLine, {
-          fontFamily: 'monospace',
-          fontSize: '10px',
-          color: '#8e889a',
-          align: 'center',
-          fixedWidth: w - 40,
-          wordWrap: { width: w - 40, useAdvancedWrap: true },
-        })
-        .setOrigin(0.5),
-    );
-
-    const delve = this.add
-      .text(0, 62, `[ DELVE → STRATUM ${stratum + 1} ]`, {
-        fontFamily: 'monospace',
-        fontSize: '16px',
-        fontStyle: 'bold',
-        color: '#ff7a55',
-        backgroundColor: '#2a1c1c',
-        padding: { x: 14, y: 9 },
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
-    delve.on('pointerover', () => delve.setColor('#ff9b80'));
-    delve.on('pointerout', () => delve.setColor('#ff7a55'));
-    delve.on('pointerdown', () => this.startDelveTransition());
-    panel.add(delve);
-
-    panel.add(
-      this.add
-        .text(0, 98, 'Delving forfeits all unbanked Gold if you fall.', {
-          fontFamily: 'monospace',
-          fontSize: '10px',
-          color: '#6a6478',
-          align: 'center',
-        })
-        .setOrigin(0.5),
-    );
-  }
-
-  /** Bank terminus: cash out the run as a win and route to End (R6, KTD2). */
-  private bankAndEscape(): void {
-    const run = getRun();
-    resolveBank(run);
-    this.closeGatePanel();
+  /** Escape terminus: the room-100 boss has fallen. End the run a victory (R1). */
+  private escapeRun(): void {
+    if (this.transitioning) return;
+    this.transitioning = true;
+    getRun().escaped = true;
+    this.exitHatch = null;
     playSfx(this, 'victory');
     this.scene.stop('Hud');
     this.scene.start('End', { victory: true });
   }
 
   /**
-   * Delve terminus: advance into the next stratum. The boss room is sealed, so we
-   * fade out, rebuild the next stratum's first room at a canonical origin seeded
-   * from run.seed + stratum index (independent of the prior path), then fade in —
-   * keeping Daily strata reproducible across players (KTD1, delve-determinism risk).
+   * Descend past a non-final boss (R3). The boss room is sealed, so we fade out,
+   * rebuild the next decade's first room at a canonical origin seeded from
+   * run.seed + depth (independent of the prior path), then fade in — keeping Daily
+   * runs reproducible across players (KTD1). No banking, no gate, no breather heal:
+   * the run flows straight on toward room 100.
    */
-  private startDelveTransition(): void {
+  private startDescentTransition(): void {
     if (this.transitioning) return;
     this.transitioning = true;
-    this.closeGatePanel();
     this.closeDeckOverlay();
     this.disableDarknessOverlay();
     this.player.setVelocity(0, 0);
@@ -1614,11 +1522,10 @@ export class DungeonScene extends Phaser.Scene {
     playSfx(this, 'door');
 
     const run = getRun();
-    commitDelve(run);
     run.bossDefeated = false;
     const nextDepth = run.depth + 1;
-    const delveSeed = [run.seed, 'stratum', run.stratum].join(':');
-    this.rng = new Phaser.Math.RandomDataGenerator([delveSeed]);
+    const descentSeed = [run.seed, 'descent', String(nextDepth)].join(':');
+    this.rng = new Phaser.Math.RandomDataGenerator([descentSeed]);
     this.gameRng = new PhaserGameRng(this.rng);
 
     const dir: Dir = 'S';

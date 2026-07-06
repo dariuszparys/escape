@@ -9,10 +9,12 @@ import { RngDrawDigest, runSignature } from './runSignature';
  */
 const GOLDEN_SEED = 7;
 const GOLDEN_SIGNATURE =
-  // Re-goldened for Starter Kit retirement (2026-07-05). Intentional determinism change, not a
-  // regression: the former signature cards are now normal authored neutral cards instead of a
-  // kit-only pool, so reward offer contents and downstream draw order shift for fixed seeds.
-  'v=1|boss=1|gate=1|death=-|stratum=1|enc=0|embers=3|draws=106|hash=37c4bdba';
+  // Re-goldened for the Hundred-Room Escape U1 (2026-07-06). Deliberate, reviewed determinism change,
+  // not a regression: the old early exit retired, so seed 7 no longer ends a victory at the first
+  // boss — it runs the fixed 100-room descent and dies at room 44 (four bosses cleared). The old
+  // depth-band field also left the signature. The RNG draw kernel is unchanged; the run is simply
+  // longer, so draws grow.
+  'v=0|boss=1|firstBoss=1|death=44|enc=9|embers=0|draws=466|hash=7929fc90';
 
 describe('RngDrawDigest', () => {
   test('samples draw order and count, not just the value set (the load-bearing property)', () => {
@@ -69,17 +71,17 @@ describe('runSignature', () => {
     }
   });
 
-  test('a death and a bank produce stable, distinct signatures', () => {
-    // Under the combat-depth rebaseline, seed 1 dies; seed 2 banks a victory — the gate must not
-    // collapse these.
-    const death = runSignature(1);
-    const bank = runSignature(2);
+  test('two different runs produce stable, distinct signatures', () => {
+    // The old early exit retired in U1 — a bare loadout escapes ~never over 100 rooms, so both seeds
+    // die at different depths. The signature must keep the two runs stable and distinct.
+    const first = runSignature(1);
+    const second = runSignature(2);
 
-    expect(death).toBe(runSignature(1));
-    expect(bank).toBe(runSignature(2));
-    expect(death).not.toBe(bank);
-    expect(death.startsWith('v=0|')).toBe(true);
-    expect(bank.startsWith('v=1|')).toBe(true);
+    expect(first).toBe(runSignature(1));
+    expect(second).toBe(runSignature(2));
+    expect(first).not.toBe(second);
+    expect(first.startsWith('v=0|')).toBe(true);
+    expect(second.startsWith('v=0|')).toBe(true);
   });
 
   test('a non-default scenario yields a stable signature across double runs', () => {

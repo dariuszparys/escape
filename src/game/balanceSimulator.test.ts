@@ -2,18 +2,14 @@ import { describe, expect, test } from 'vitest';
 import { CARD_DEFS, makeCard } from '../data/cards';
 import { makeRelic } from '../data/relics';
 import { RunState } from '../state';
-import { CONVERSION_EMBER_CAP } from './metaRewards';
 import {
   applySimulatedRest,
   applySimulatedPostBattleRewards,
   assessCardEmphasisDominance,
-  assessDelveDominance,
   createSimRng,
-  MAX_SIMULATED_STRATA,
   SIM_BATTLE_TURN_CAP,
   SIM_DECK_THIN_THRESHOLD,
   simulateBattle,
-  simulateDelveEconomy,
   simulateRun,
   simulateScenarioSummary,
 } from './balanceSimulator';
@@ -140,33 +136,21 @@ describe('balance simulator battle kernel (U13)', () => {
 });
 
 describe('balance simulator economy bands', () => {
-  simulationTest('baseline runs land in the roguelike-hard band (combat-depth rebaseline)', () => {
+  simulationTest('baseline runs reach the first boss inside the first-decade survival band', () => {
     const summary = simulateScenarioSummary({}, 400);
 
-    // Re-baselined for the combat-depth rework (2026-07-04). The band is now measured against a
-    // COMPETENT play policy (pickCardToPlay: multi-card lethal, Strength/Vulnerable-aware, sequences
-    // setup-before-dump, blocks the honest telegraph) plus a dilution-aware curation reward policy —
-    // NOT the old conservative bot whose passivity fabricated a fake 25%. Fights are also externally
-    // anchored by the fixed reference-deck gates below, so this band cannot be gamed by tuning
-    // enemies against the bot alone.
-    // Measured at 400 seeds: winRate 0.333, bossReachRate 0.542, bossKillGivenReach 0.613, and
-    // avgDeathDepth 8.3 — deaths cluster at the END of the stratum (strong tier + boss), the
-    // signature of an attrition gauntlet rather than a room-1 wall. The difficulty comes from
-    // ATTRITION: the medium tier on takes a flat +2 heaviest-hit punch (intentBonusForDepth) and
-    // fights last long enough (elite/boss ~7 turns) that rituals fire, so ~5 fights drain the 34-HP
-    // pool faster than limited healing refills. The number is honest: an anti-stalemate racing rule
-    // (pickCardToPlay) removed the full-HP turn-cap losses that would otherwise inflate it.
-    // Multi-enemy packs (spawnEncounter) are kept close to difficulty-neutral here: a pack carries
-    // ~1.3x a solo's HP (PACK_HP_MULTIPLIER) to partly offset the focus-fire advantage, so the band
-    // holds (re-measured ~0.36 winRate / ~0.65 bossReach at 400 seeds) — packs are a change of pace,
-    // not a difficulty shift. The multiplier is deliberately modest so it doesn't tighten the
-    // co-tuned delve gold economy past its over-generous-conversion guard.
-    expect(summary.winRate).toBeGreaterThanOrEqual(0.2);
-    expect(summary.winRate).toBeLessThanOrEqual(0.45);
+    // U1 re-key: `winRate` now means the escape rate over the whole 100-room arc (defeating the
+    // room-100 boss), NOT the old "stopped at room 10" result. A bare loadout escapes ~never, so the old
+    // winRate/bossKillGivenReach bands retire here — U7 owns the escape-rate (Earned) band.
+    // What survives unchanged is FIRST-DECADE survival: rooms 1-10 generate byte-identically to the
+    // endless-descent era (same room tables, same enemies, decade-1 elite keying resolves the same
+    // booleans in the same RNG order), so `bossReachRate` — the fraction reaching the room-10 boss —
+    // is exactly today's measurement (~0.542 at 400 seeds). That is the anchor this test holds.
     expect(summary.bossReachRate).toBeGreaterThanOrEqual(0.3);
     expect(summary.bossReachRate).toBeLessThanOrEqual(0.7);
-    expect(summary.bossKillGivenReach).toBeGreaterThanOrEqual(0.4);
-    expect(summary.bossKillGivenReach).toBeLessThanOrEqual(0.85);
+    // winRate is a valid rate; its Earned band is asserted in U7, not here.
+    expect(summary.winRate).toBeGreaterThanOrEqual(0);
+    expect(summary.winRate).toBeLessThanOrEqual(1);
   });
 
   simulationTest('weak-tier fights stay highly winnable — fresh-deck floor (U12)', () => {
@@ -187,15 +171,16 @@ describe('balance simulator economy bands', () => {
     expect(Object.keys(summary.byEncounter).some((key) => key !== '0')).toBe(true);
   });
 
-  simulationTest('starter-card variety alone stays inside the baseline band', () => {
+  simulationTest('starter-card variety alone stays inside the first-decade survival band', () => {
     const summary = simulateScenarioSummary({ starterCardVarietyUnlocked: true }, 400);
 
-    // Same band as the baseline test (variety alone doesn't distort the challenge band).
-    expect(summary.winRate).toBeGreaterThanOrEqual(0.2);
-    expect(summary.winRate).toBeLessThanOrEqual(0.45);
+    // Same first-decade anchor as the baseline test — variety alone doesn't distort reaching the
+    // room-10 boss. The escape-rate band is U7's.
+    expect(summary.bossReachRate).toBeGreaterThanOrEqual(0.3);
+    expect(summary.bossReachRate).toBeLessThanOrEqual(0.7);
   });
 
-  simulationTest('full prep materially improves the chance to escape', () => {
+  simulationTest('full prep materially improves survival over a bare loadout', () => {
     const baseline = simulateScenarioSummary({}, 400);
     const prepared = simulateScenarioSummary(
       {
@@ -206,12 +191,12 @@ describe('balance simulator economy bands', () => {
       400,
     );
 
-    // Re-baselined for U12: with the base band now genuinely hard (0.2525), full
-    // prep has real headroom to show its worth — measured 0.595 winRate / 0.8175
-    // bossReachRate / 0.728 bossKillGivenReach, vs baseline's 0.2525 / 0.365 / 0.69.
-    expect(prepared.winRate).toBeGreaterThan(baseline.winRate);
-    expect(prepared.bossReachRate).toBeGreaterThan(baseline.bossReachRate);
-    expect(prepared.bossKillGivenReach).toBeGreaterThanOrEqual(0.65);
+    // U1 re-key: the "chance to escape" (winRate) comparison is U7's — over 100 rooms both loadouts
+    // escape ~never, so it can't discriminate here. Instead assert prep materially improves SURVIVAL:
+    // a prepped loadout reaches the first boss at least as often and dies strictly deeper on average
+    // (bombs/scout/extra card give it more resources every seed). U7 asserts the escape-rate lift.
+    expect(prepared.bossReachRate).toBeGreaterThanOrEqual(baseline.bossReachRate);
+    expect(prepared.avgDeathDepth).toBeGreaterThan(baseline.avgDeathDepth);
   });
 
   simulationTest(
@@ -242,7 +227,7 @@ describe('balance simulator economy bands', () => {
       const escape = simulateScenarioSummary({ playerScenarioId: 'escape_the_dungeon' }, 160);
 
       // Escape is the clean/default Scenario: same combat route as the baseline simulator, but no
-      // post-run progression conversion. Seed 7 is the committed runSignature victory seed.
+      // post-run progression conversion. Seed 7 is the committed runSignature golden seed.
       expect(escape.winRate).toBe(baseline.winRate);
       expect(escape.bossReachRate).toBe(baseline.bossReachRate);
       expect(escape.byTier).toEqual(baseline.byTier);
@@ -277,7 +262,7 @@ describe('balance simulator economy bands', () => {
 
 describe('elite engagement (U9)', () => {
   // KTD3 parity: the simulator has no doors/branching, so it replicates "one
-  // elite offered per stratum, in the mid-stratum window" directly inside its
+  // elite offered per decade, in the mid-decade window" directly inside its
   // own room-choosing loop. These gates prove the mechanism is real (elites are
   // actually reachable AND actually fought at a non-degenerate rate) — the
   // exact rate is playtest-owned (U12), so the bounds here stay loose.
@@ -334,87 +319,6 @@ describe('card emphasis policy guard (U13)', () => {
   });
 });
 
-describe('delve economy', () => {
-  // The dominant-line gate (R14): a line is "dominant" only if its expected Ember
-  // payoff beats both rivals by this many Embers. Healthy tuning keeps the lines closer.
-  const DOMINANCE_MARGIN = 1.5;
-
-  simulationTest('a delve run reaches strata past depth 10 and terminates within the cap', () => {
-    // Aggressive never banks until forced, so this exercises the max-strata guard.
-    let deepestStratum = 0;
-    for (let seed = 1; seed <= 200; seed++) {
-      const result = simulateRun(
-        seed,
-        {},
-        { strategy: 'aggressive', maxStrata: MAX_SIMULATED_STRATA },
-      );
-      deepestStratum = Math.max(deepestStratum, result.stratumReached);
-      // Always terminates: never delves past the cap.
-      expect(result.stratumReached).toBeLessThanOrEqual(MAX_SIMULATED_STRATA);
-    }
-    // At least one aggressive line pushed past the first stratum boss.
-    expect(deepestStratum).toBeGreaterThanOrEqual(2);
-  });
-
-  simulationTest('the three heuristics produce distinct banked/died profiles', () => {
-    const economy = simulateDelveEconomy({}, { runs: 400 });
-
-    // Cautious always banks at gate 1; moderate sometimes dies pushing one stratum;
-    // aggressive (almost) never banks because it keeps pushing until it dies.
-    expect(economy.cautious.bankRate).toBe(1);
-    expect(economy.moderate.bankRate).toBeGreaterThan(0);
-    expect(economy.moderate.bankRate).toBeLessThan(1);
-    expect(economy.aggressive.bankRate).toBeLessThan(economy.moderate.bankRate);
-    // Distinct depth profiles, too.
-    expect(economy.moderate.avgStratumReached).toBeGreaterThan(economy.cautious.avgStratumReached);
-    expect(economy.aggressive.avgStratumReached).toBeGreaterThan(
-      economy.moderate.avgStratumReached,
-    );
-  });
-
-  simulationTest('no line dominates under the tuned conversion (R14)', () => {
-    const economy = simulateDelveEconomy({}, { runs: 400 });
-    const dominance = assessDelveDominance(economy, DOMINANCE_MARGIN);
-
-    expect(dominance.cautiousDominant).toBe(false);
-    expect(dominance.aggressiveDominant).toBe(false);
-    expect(dominance.hasDominantLine).toBe(false);
-  });
-
-  simulationTest('an over-generous conversion still leaks straight into line payoffs', () => {
-    // The old canary asserted a cautious/aggressive extreme would dominate; under
-    // the rebuilt combat the aggressive line dies before it ever banks, so no
-    // conversion can crown an extreme (deep-scaling tuning is playtest-owned).
-    // The guard's INPUT still matters: 1 Ember per Gold must blow the payoff
-    // spread up well past the tuned (guarded) conversion's spread.
-    // Re-baselined for the combat-depth rework: the harder base run banks even less Gold before a
-    // stratum clears, so both spreads shrink and the multiplier tightens further — measured ~3.5x at
-    // 400 seeds (tuned spread ~3.1, generous spread ~10.7). The guard still proves the INPUT matters:
-    // an un-guarded 1-Ember-per-Gold conversion still blows the payoff spread well past the tuned one.
-    const tuned = simulateDelveEconomy({}, { runs: 400 });
-    const generous = simulateDelveEconomy({}, { runs: 400, convert: (gold) => Math.floor(gold) });
-    const spread = (economy: typeof tuned) => {
-      const lines = [economy.cautious, economy.moderate, economy.aggressive].map(
-        (line) => line.avgConvertedEmbers,
-      );
-      return Math.max(...lines) - Math.min(...lines);
-    };
-
-    expect(spread(generous)).toBeGreaterThan(spread(tuned) * 2.5);
-  });
-
-  simulationTest('expected Ember yield stays bounded by the conversion guard across strata', () => {
-    // Even pushing the iteration cap higher cannot unbound the yield: the guard caps
-    // per-run conversion, so the average can never exceed it for any strategy.
-    for (const maxStrata of [4, MAX_SIMULATED_STRATA, 24]) {
-      const economy = simulateDelveEconomy({}, { runs: 200, maxStrata });
-      for (const line of [economy.cautious, economy.moderate, economy.aggressive]) {
-        expect(line.avgConvertedEmbers).toBeLessThanOrEqual(CONVERSION_EMBER_CAP);
-      }
-    }
-  });
-});
-
 describe('determinism gate (R5)', () => {
   // The seed-stability safety net for the Combat Content Engine refactor: a fixed seed must
   // produce a draw-order-sensitive run signature that never drifts. Authored against current
@@ -426,11 +330,10 @@ describe('determinism gate (R5)', () => {
     }
   });
 
-  test('the signature stays stable under a non-default strategy', () => {
+  test('a non-default scenario keeps a stable signature across double runs', () => {
+    const scenario = { activeArchetypeId: 'ranger' } as const;
     for (let seed = 1; seed <= 25; seed++) {
-      const first = runSignature(seed, {}, { strategy: 'aggressive' });
-      const second = runSignature(seed, {}, { strategy: 'aggressive' });
-      expect(first).toBe(second);
+      expect(runSignature(seed, scenario)).toBe(runSignature(seed, scenario));
     }
   });
 });

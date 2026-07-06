@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'vitest';
 import { chooseForcedEliteDoor, isEliteEligibleDepth, makeNextRoom, rollRoomEvent } from './rooms';
 import { SequenceRng } from '../game/test-rng';
-import { ROOM_COLS, ROOM_ROWS, STRATUM_SIZE } from '../config';
+import { BOSS_ROOM_INTERVAL, ROOM_COLS, ROOM_ROWS } from '../config';
 
 describe('room generation', () => {
   test('rooms 2 through 8 use the roguelike-hard event thresholds without empty rooms', () => {
-    // Stratum-1 table (U12): encounter 50, chest 24, potion 10, rest 8, trap 8.
+    // First-decade table (U12): encounter 50, chest 24, potion 10, rest 8, trap 8.
     expect(rollRoomEvent(new SequenceRng([0.49]), 5)).toBe('encounter');
     expect(rollRoomEvent(new SequenceRng([0.5]), 5)).toBe('chest');
     expect(rollRoomEvent(new SequenceRng([0.73]), 5)).toBe('chest');
@@ -17,7 +17,7 @@ describe('room generation', () => {
   });
 
   test('room 9 is biased toward rewards before the boss', () => {
-    // Stratum-1 pre-boss table (U12): encounter 30, chest 34, potion 18, rest 6, trap 12.
+    // First-decade pre-boss table (U12): encounter 30, chest 34, potion 18, rest 6, trap 12.
     expect(rollRoomEvent(new SequenceRng([0.29]), 9)).toBe('encounter');
     expect(rollRoomEvent(new SequenceRng([0.3]), 9)).toBe('chest');
     expect(rollRoomEvent(new SequenceRng([0.63]), 9)).toBe('chest');
@@ -36,7 +36,7 @@ describe('room generation', () => {
     expect(room.blockedDoor).toBe('S');
   });
 
-  test('the boss re-gates at every stratum boundary past depth 10', () => {
+  test('the boss repeats at every decade boundary past depth 10', () => {
     for (const depth of [20, 30]) {
       const room = makeNextRoom(new SequenceRng([0]), depth, 'N');
       expect(room.event).toBe('boss');
@@ -44,7 +44,7 @@ describe('room generation', () => {
     }
   });
 
-  test('depths between stratum boundaries roll normal events', () => {
+  test('depths between decade boundaries roll normal events', () => {
     for (const depth of [11, 15, 19, 21]) {
       const room = makeNextRoom(new SequenceRng([0]), depth, 'N');
       expect(room.event).not.toBe('boss');
@@ -52,29 +52,29 @@ describe('room generation', () => {
     }
   });
 
-  test('the deep pre-boss table repeats every stratum past the first (depth 19 == depth 29), and is easier than stratum 1s (U12)', () => {
+  test('the deep pre-boss table repeats every decade past the first (depth 19 == depth 29), and is easier than the first decade (U12)', () => {
     // Deep pre-boss table (past MAX_DEPTH): encounter 14, chest 28, potion 26, rest 24, trap 8 —
-    // softer than stratum 1's own pre-boss table, so a second stratum's gauntlet doesn't stack
-    // stratum 1's difficulty on top of itself (R14: kept "bank at gate 1" from dominating).
+    // softer than the first decade's own pre-boss table, so decade 2 doesn't stack that difficulty
+    // on top of itself.
     expect(rollRoomEvent(new SequenceRng([0.13]), 19)).toBe('encounter');
     expect(rollRoomEvent(new SequenceRng([0.13]), 29)).toBe('encounter');
     expect(rollRoomEvent(new SequenceRng([0.15]), 19)).toBe('chest');
     expect(rollRoomEvent(new SequenceRng([0.15]), 29)).toBe('chest');
-    // Stratum 1's own pre-boss table (depth 9) is not deep — chest doesn't start until 0.30.
+    // The first decade's own pre-boss table (depth 9) is not deep — chest doesn't start until 0.30.
     expect(rollRoomEvent(new SequenceRng([0.15]), 9)).toBe('encounter');
   });
 });
 
 describe('elite room placement (KTD3)', () => {
-  test("isEliteEligibleDepth excludes each stratum's start room, the pre-boss room, and the boss depth", () => {
-    expect(isEliteEligibleDepth(1)).toBe(false); // stratum 1 start
+  test("isEliteEligibleDepth excludes each decade's start room, the pre-boss room, and the boss depth", () => {
+    expect(isEliteEligibleDepth(1)).toBe(false); // decade 1 start
     expect(isEliteEligibleDepth(2)).toBe(true);
     expect(isEliteEligibleDepth(8)).toBe(true);
     expect(isEliteEligibleDepth(9)).toBe(false); // pre-boss
     expect(isEliteEligibleDepth(10)).toBe(false); // boss
-    expect(isEliteEligibleDepth(11)).toBe(false); // stratum 2 start
+    expect(isEliteEligibleDepth(11)).toBe(false); // decade 2 start
     expect(isEliteEligibleDepth(18)).toBe(true);
-    expect(isEliteEligibleDepth(19)).toBe(false); // stratum 2 pre-boss
+    expect(isEliteEligibleDepth(19)).toBe(false); // decade 2 pre-boss
   });
 
   test('forceElite places an elite room inside the eligible window, regardless of the roll', () => {
@@ -86,7 +86,7 @@ describe('elite room placement (KTD3)', () => {
   });
 
   test('forceElite is ignored outside the eligible window — never in the start, pre-boss, or boss slot', () => {
-    // Stratum start: falls back to the normal roll (r=0 -> encounter in the standard table).
+    // Decade start: falls back to the normal roll (r=0 -> encounter in the standard table).
     expect(makeNextRoom(new SequenceRng([0]), 11, 'N', true).event).toBe('encounter');
     // Pre-boss: falls back to the pre-boss table (r=0 -> encounter there too).
     expect(makeNextRoom(new SequenceRng([0]), 9, 'N', true).event).toBe('encounter');
@@ -113,16 +113,16 @@ describe('elite room placement (KTD3)', () => {
 describe('chooseForcedEliteDoor (KTD3, scene side)', () => {
   const doors: ['N', 'S', 'E'] = ['N', 'S', 'E'];
 
-  test('returns null when an elite was already offered for this stratum', () => {
-    // depth 5 is within stratum 1 and eligible; stratum 1 already got its offer.
-    expect(chooseForcedEliteDoor(new SequenceRng([], [0]), 5, doors, 1)).toBeNull();
+  test('returns null when an elite was already offered for this decade', () => {
+    // depth 5 is within decade 0 and eligible; decade 0 already got its offer.
+    expect(chooseForcedEliteDoor(new SequenceRng([], [0]), 5, doors, 0)).toBeNull();
   });
 
-  test('returns null outside the eligible window (stratum start and pre-boss)', () => {
-    expect(chooseForcedEliteDoor(new SequenceRng([], [0]), 1, doors, null)).toBeNull(); // stratum 1 start
-    expect(chooseForcedEliteDoor(new SequenceRng([], [0]), 11, doors, null)).toBeNull(); // stratum 2 start
+  test('returns null outside the eligible window (decade start and pre-boss)', () => {
+    expect(chooseForcedEliteDoor(new SequenceRng([], [0]), 1, doors, null)).toBeNull(); // decade 0 start
+    expect(chooseForcedEliteDoor(new SequenceRng([], [0]), 11, doors, null)).toBeNull(); // decade 1 start
     expect(
-      chooseForcedEliteDoor(new SequenceRng([], [0]), STRATUM_SIZE - 1, doors, null),
+      chooseForcedEliteDoor(new SequenceRng([], [0]), BOSS_ROOM_INTERVAL - 1, doors, null),
     ).toBeNull(); // pre-boss
   });
 
@@ -131,10 +131,10 @@ describe('chooseForcedEliteDoor (KTD3, scene side)', () => {
     expect(door).not.toBeNull();
     expect(doors).toContain(door);
 
-    // A previous stratum's offer does not block the current stratum.
-    const doorNextStratum = chooseForcedEliteDoor(new SequenceRng([], [0]), 15, doors, 1);
-    expect(doorNextStratum).not.toBeNull();
-    expect(doors).toContain(doorNextStratum);
+    // A previous decade's offer does not block the current decade.
+    const doorNextDecade = chooseForcedEliteDoor(new SequenceRng([], [0]), 15, doors, 0);
+    expect(doorNextDecade).not.toBeNull();
+    expect(doors).toContain(doorNextDecade);
   });
 
   test('is deterministic for a given (rng sequence, inputs)', () => {

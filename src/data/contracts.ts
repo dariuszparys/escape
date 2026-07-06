@@ -6,7 +6,7 @@ export type ContractId =
   | 'first_elite_kill'
   | 'reach_depth_6'
   | 'slayer_25'
-  | 'delve_past_first_gate';
+  | 'reach_room_20';
 
 export interface ContractDef {
   id: ContractId;
@@ -46,9 +46,9 @@ export const CONTRACT_DEFS: ContractDef[] = [
     emberReward: 1,
   },
   {
-    id: 'delve_past_first_gate',
-    name: 'Past the First Gate',
-    description: 'Delve into a second stratum instead of banking.',
+    id: 'reach_room_20',
+    name: 'Into the Depths',
+    description: 'Reach room 20 in a single run.',
     unlockRelicId: 'spark_coil',
     emberReward: 0,
   },
@@ -69,7 +69,6 @@ export interface ContractRunSnapshot {
   relicCount: number;
   elitesDefeated: number;
   enemiesDefeated: number;
-  stratum: number;
 }
 
 export function evaluateContract(id: ContractId, run: ContractRunSnapshot): boolean {
@@ -82,8 +81,8 @@ export function evaluateContract(id: ContractId, run: ContractRunSnapshot): bool
       return run.depth >= 6;
     case 'slayer_25':
       return run.enemiesDefeated >= 25;
-    case 'delve_past_first_gate':
-      return run.stratum >= 2;
+    case 'reach_room_20':
+      return run.depth >= 20;
     default: {
       const _exhaustive: never = id;
       throw new Error(`Unhandled contract: ${String(_exhaustive)}`);

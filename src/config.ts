@@ -8,9 +8,14 @@ export const HUD_H = 112;
 export const GAME_W = ROOM_W;
 export const GAME_H = ROOM_H + HUD_H; // 640
 
+/** First-decade curve anchor: enemy/card/boss scaling holds a linear baseline through this depth,
+ * then escalates past it. Numerically the first boss interval, kept as its own name so difficulty
+ * tuning (U7) can move independently of the run's boss cadence. */
 export const MAX_DEPTH = 10;
-/** Rooms per stratum. The boss fires at every multiple of this depth (10, 20, 30, ...). */
-export const STRATUM_SIZE = 10;
+/** Total rooms in a run. Defeating the boss in the final room is the only victory (R1). */
+export const RUN_LENGTH = 100;
+/** A boss guards every room at a multiple of this interval (10, 20, ..., 100) (R3). */
+export const BOSS_ROOM_INTERVAL = 10;
 export const MAX_INVENTORY = 3;
 export const PLAYER_MAX_HP = 34;
 export const POTION_HEAL = 8;

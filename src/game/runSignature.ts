@@ -1,9 +1,4 @@
-import {
-  type BalanceScenario,
-  type DelveStrategy,
-  createSimRng,
-  simulateRun,
-} from './balanceSimulator';
+import { type BalanceScenario, createSimRng, simulateRun } from './balanceSimulator';
 
 /**
  * Order-sensitive digest of a run's RNG consumption. Accumulates a draw *count* and a
@@ -41,11 +36,6 @@ export class RngDrawDigest {
   }
 }
 
-export interface RunSignatureOptions {
-  strategy?: DelveStrategy;
-  maxStrata?: number;
-}
-
 /**
  * A stable, serialized digest of a simulated run: its observable outcome fields *plus* an
  * RNG draw-order digest. Two `simulateRun(seed)` calls that consume RNG identically produce
@@ -53,23 +43,17 @@ export interface RunSignatureOptions {
  * The seed-stability gate asserts double-run equality of this signature and matches one fixed
  * seed against a committed golden (KTD4/R5).
  */
-export function runSignature(
-  seed: number,
-  scenario: BalanceScenario = {},
-  options: RunSignatureOptions = {},
-): string {
+export function runSignature(seed: number, scenario: BalanceScenario = {}): string {
   const digest = new RngDrawDigest();
   const result = simulateRun(seed, scenario, {
-    ...options,
     createRng: (s) => createSimRng(s, (frac) => digest.record(frac)),
   });
 
   return [
     `v=${result.victory ? 1 : 0}`,
     `boss=${result.reachedBoss ? 1 : 0}`,
-    `gate=${result.clearedFirstGate ? 1 : 0}`,
+    `firstBoss=${result.clearedFirstBoss ? 1 : 0}`,
     `death=${result.deathDepth ?? '-'}`,
-    `stratum=${result.stratumReached}`,
     `enc=${result.encounters}`,
     `embers=${result.convertedEmbers}`,
     `draws=${digest.count}`,

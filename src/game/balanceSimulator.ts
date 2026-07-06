@@ -1,4 +1,4 @@
-import { MAX_DEPTH } from '../config';
+import { BOSS_ROOM_INTERVAL, MAX_DEPTH, RUN_LENGTH } from '../config';
 import { Card, CARD_DEFS, cardEffectAmount, makeCard, type ArchetypeId } from '../data/cards';
 import { hasStatus, modifiedDamage, statusValue } from './combat';
 import { type PendingPrep } from '../data/campfirePurchases';
@@ -11,14 +11,18 @@ import {
 import { InventoryItem, type InventoryItemDef, makeItem } from '../data/items';
 import { makeRelic, type RelicId } from '../data/relics';
 import type { ScenarioId } from '../data/scenarios';
-import { isEliteEligibleDepth, rollRoomEvent, type RoomEvent } from '../dungeon/rooms';
+import {
+  decadeForDepth,
+  isEliteEligibleDepth,
+  rollRoomEvent,
+  type RoomEvent,
+} from '../dungeon/rooms';
 import { RunState } from '../state';
 import { applyPendingPrepToRun } from './campfirePrep';
 import { createDefaultProgressionState } from '../meta';
 import { emitBattleWon } from './combatEvents';
 import { ensureRelicBehaviorsWired } from './relicBehaviors';
 import { relicBattleSetup } from './relicRegistry';
-import { commitDelve } from './delve';
 import { intentView } from './intentPatterns';
 import { convertGoldToEmbers } from './metaRewards';
 import {
@@ -37,7 +41,6 @@ import {
   shouldPreventPlayerBlock,
 } from './scenarioRules';
 import { startingCardIdsForRun } from './startingCards';
-import { isStratumBoundary, stratumForDepth } from './strata';
 import {
   cardCost,
   createBattle,
@@ -50,12 +53,6 @@ import {
 } from './turnEngine';
 import { upgradeCard } from './cardUpgrade';
 import { canUseRestAction, payRestAction } from './restEconomy';
-
-/**
- * How a simulated player treats each boss gate. The three lines bracket the
- * push-your-luck decision so the harness can prove no single line dominates (R14).
- */
-export type DelveStrategy = 'cautious' | 'moderate' | 'aggressive';
 
 /** Gold→Ember conversion used by the economy harness; injectable so tests can probe over-generous curves. */
 export type GoldConversion = (gold: number) => number;
@@ -81,25 +78,12 @@ export function createSimRng(seed: number, observer?: (frac: number) => void): S
   return new SeededRng(seed >>> 0, observer);
 }
 
-/** Safety cap on strata so a mis-tuned "push until death" line cannot loop unbounded (KTD8). */
-export const MAX_SIMULATED_STRATA = 12;
-
 interface SimRunOptions {
-  strategy: DelveStrategy;
-  maxStrata: number;
   convert: GoldConversion;
   /** Root RNG factory; the gate injects an observed RNG here (KTD4). Defaults to a plain seeded RNG. */
   createRng: SimRngFactory;
   /** Optional slant for the greedy card policy — the no-dominant-policy gate sweeps these. */
   emphasis: CardEmphasis | null;
-}
-
-/** Decide whether to delve the next stratum after clearing the boss of `stratumCleared`. */
-function shouldDelve(strategy: DelveStrategy, stratumCleared: number, maxStrata: number): boolean {
-  if (stratumCleared >= maxStrata) return false; // hard termination guard
-  if (strategy === 'cautious') return false; // always bank at the first gate
-  if (strategy === 'moderate') return stratumCleared < 2; // delve one stratum, then bank
-  return true; // aggressive: push until death (or the cap)
 }
 
 export interface BalanceScenario {
@@ -154,16 +138,14 @@ export interface BalanceSimulationSummary {
 }
 
 interface SimRunResult {
-  /** Banked successfully — the run's win condition. */
+  /** Escaped — defeated the room-100 boss, the run's only win condition (R1). */
   victory: boolean;
   reachedBoss: boolean;
-  /** Cleared the first stratum boss, so the run actually faced the bank-or-delve choice. */
-  clearedFirstGate: boolean;
+  /** Cleared the first boss (room 10) — retained as a determinism-signature signal. */
+  clearedFirstBoss: boolean;
   deathDepth: number | null;
-  /** Deepest stratum reached, whether banked or died. */
-  stratumReached: number;
   encounters: number;
-  /** How many times the per-stratum elite guarantee fired this run (KTD3 parity), regardless of whether it was fought. */
+  /** How many times the per-decade elite guarantee fired this run (KTD3 parity), regardless of whether it was fought. */
   eliteEligible: number;
   /** How many elite fights this run actually engaged. */
   eliteEncounters: number;
@@ -431,12 +413,12 @@ function roomEventScore(run: RunState, event: RoomEvent): number {
  * Engagement floor (KTD8) for an *unscouted* player who reaches the elite's
  * eligible window: the real game offers the guarantee through a specific door
  * among several (KTD3), so an unscouted player doesn't automatically walk
- * straight into it just because it's somewhere in the stratum — they still
+ * straight into it just because it's somewhere in the decade — they still
  * only take one door per room. This is the simulator's stand-in for "which
- * door did they happen to take," expressed as a flat per-stratum probability
+ * door did they happen to take," expressed as a flat per-decade probability
  * since the simulator has no branching doors to sample from directly. The
  * guarantee is *spent* the moment it's due regardless of the roll's outcome
- * (see chooseRoomEvent below) — exactly one flip per stratum, never retried
+ * (see chooseRoomEvent below) — exactly one flip per decade, never retried
  * across the rest of the window — so the measured engagement rate tracks this
  * constant directly rather than compounding across every eligible depth.
  * Reviewed under the U12 numeric rebaseline and left unchanged (measured
@@ -446,10 +428,10 @@ export const ELITE_ENGAGEMENT_FLOOR = 0.5;
 
 /**
  * KTD3 parity for the simulator: it has no doors/branching, so it replicates
- * "one elite offered per stratum, in the mid-stratum window" directly here,
- * reusing the same run.eliteOfferedForStratum field the real game's Dungeon
+ * "one elite offered per decade, in the mid-decade window" directly here,
+ * reusing the same run.eliteOfferedForDecade field the real game's Dungeon
  * scene uses. `eliteOffered` tells the caller whether this call's guarantee
- * fired this stratum (regardless of whether the elite was actually chosen —
+ * fired this decade (regardless of whether the elite was actually chosen —
  * KTD3's guarantee is "was reachable", not "was fought").
  */
 function chooseRoomEvent(
@@ -457,18 +439,18 @@ function chooseRoomEvent(
   rng: SimRng,
   depth: number,
 ): { event: RoomEvent; eliteOffered: boolean } {
-  const stratum = stratumForDepth(depth);
-  const eliteDue = isEliteEligibleDepth(depth) && run.eliteOfferedForStratum !== stratum;
+  const decade = decadeForDepth(depth);
+  const eliteDue = isEliteEligibleDepth(depth) && run.eliteOfferedForDecade !== decade;
 
   if (run.scoutCharges <= 0) {
     // No scouting means no foreknowledge to strategically route around it, but
     // an unscouted player still only walks through one door per room — the
     // guarantee being "due" doesn't guarantee THIS is the door behind it. Spend
-    // the guarantee now either way (one flip per stratum, KTD8's engagement
+    // the guarantee now either way (one flip per decade, KTD8's engagement
     // floor) so the rest of the window doesn't get repeated chances to convert
     // an "offered" into an "engaged".
     if (eliteDue) {
-      run.eliteOfferedForStratum = stratum;
+      run.eliteOfferedForDecade = decade;
       if (rng.frac() < ELITE_ENGAGEMENT_FLOOR) {
         return { event: 'elite', eliteOffered: true };
       }
@@ -480,7 +462,7 @@ function chooseRoomEvent(
   const options: RoomEvent[] = Array.from({ length: 3 }, () => rollRoomEvent(rng, depth));
   if (eliteDue) {
     options[0] = 'elite'; // one of the three scouted doors is the forced elite (KTD3)
-    run.eliteOfferedForStratum = stratum;
+    run.eliteOfferedForDecade = decade;
   }
   run.scoutCharges--;
 
@@ -788,8 +770,6 @@ export function simulateReferenceDeck(
 }
 
 const DEFAULT_RUN_OPTIONS: SimRunOptions = {
-  strategy: 'cautious',
-  maxStrata: MAX_SIMULATED_STRATA,
   convert: convertGoldToEmbers,
   createRng: (seed) => new SeededRng(seed >>> 0),
   emphasis: null,
@@ -800,7 +780,7 @@ export function simulateRun(
   scenario: BalanceScenario,
   options: Partial<SimRunOptions> = {},
 ): SimRunResult {
-  const { strategy, maxStrata, convert, createRng, emphasis } = {
+  const { convert, createRng, emphasis } = {
     ...DEFAULT_RUN_OPTIONS,
     ...options,
   };
@@ -814,20 +794,22 @@ export function simulateRun(
   let eliteWins = 0;
   const tierFights = emptyTierFights();
 
-  // Depth climbs forever; a boss sits at every stratum boundary and the loop only
-  // exits on a bank or a death. The maxStrata guard caps the boundary count.
-  for (let depth = 2; ; depth++) {
+  // The fixed 100-room descent (R1): a boss sits at every BOSS_ROOM_INTERVAL and
+  // the loop exits on death or on defeating the room-100 boss (the only victory).
+  // No exit choice and no between-boss heal — the run flows straight through.
+  // The RUN_LENGTH bound is a guard; the room-100 boss branch is the real
+  // terminus, so the trailing throw is unreachable.
+  for (let depth = 2; depth <= RUN_LENGTH; depth++) {
     run.depth = depth;
-    const atBoss = isStratumBoundary(depth);
+    const atBoss = depth % BOSS_ROOM_INTERVAL === 0;
     run.onRoomEntered();
     const poison = applyPoisonedRoomEntryDamage(run, rng);
     if (poison.died) {
       return {
         victory: false,
         reachedBoss: reachedBoss || atBoss,
-        clearedFirstGate: bossesCleared >= 1,
+        clearedFirstBoss: bossesCleared >= 1,
         deathDepth: depth,
-        stratumReached: stratumForDepth(depth),
         encounters,
         eliteEligible,
         eliteEncounters,
@@ -850,9 +832,8 @@ export function simulateRun(
         return {
           victory: false,
           reachedBoss: true,
-          clearedFirstGate: bossesCleared >= 1,
+          clearedFirstBoss: bossesCleared >= 1,
           deathDepth: depth,
-          stratumReached: stratumForDepth(depth),
           encounters,
           eliteEligible,
           eliteEncounters,
@@ -864,16 +845,14 @@ export function simulateRun(
       run.enemiesDefeated++;
       applySimulatedPostBattleRewards(run, rng, depth);
       bossesCleared++;
-      const stratumCleared = stratumForDepth(depth);
-      run.stratum = stratumCleared;
 
-      if (!shouldDelve(strategy, stratumCleared, maxStrata)) {
+      if (depth >= RUN_LENGTH) {
+        run.escaped = true;
         return {
           victory: true,
           reachedBoss: true,
-          clearedFirstGate: true,
+          clearedFirstBoss: true,
           deathDepth: null,
-          stratumReached: stratumCleared,
           encounters,
           eliteEligible,
           eliteEncounters,
@@ -882,8 +861,7 @@ export function simulateRun(
           tierFights,
         };
       }
-      commitDelve(run); // advance stratum + gate-clear breather, then keep descending
-      continue;
+      continue; // descend past the boss toward room 100
     }
 
     const { event, eliteOffered } = chooseRoomEvent(run, rng, depth);
@@ -901,9 +879,8 @@ export function simulateRun(
         return {
           victory: false,
           reachedBoss,
-          clearedFirstGate: bossesCleared >= 1,
+          clearedFirstBoss: bossesCleared >= 1,
           deathDepth: depth,
-          stratumReached: stratumForDepth(depth),
           encounters,
           eliteEligible,
           eliteEncounters,
@@ -932,9 +909,8 @@ export function simulateRun(
         return {
           victory: false,
           reachedBoss,
-          clearedFirstGate: bossesCleared >= 1,
+          clearedFirstBoss: bossesCleared >= 1,
           deathDepth: depth,
-          stratumReached: stratumForDepth(depth),
           encounters,
           eliteEligible,
           eliteEncounters,
@@ -965,6 +941,8 @@ export function simulateRun(
       if (reward.kind === 'inventory_full') replaceInventoryItem(run, reward.item);
     }
   }
+
+  throw new Error('simulateRun: reached RUN_LENGTH without a boss terminus');
 }
 
 export function simulateScenarioSummary(
@@ -1083,112 +1061,5 @@ export function assessCardEmphasisDominance(
     spread,
     dominantEmphasis,
     hasDominantEmphasis: dominantEmphasis !== null,
-  };
-}
-
-// ---------------------------------------------------------------- delve economy
-
-export interface DelveStrategySummary {
-  strategy: DelveStrategy;
-  /** Runs that actually reached the first gate, where the bank-or-delve choice applies. */
-  gateRuns: number;
-  /** Among gate-reachers: fraction that banked a win. */
-  bankRate: number;
-  /** Among gate-reachers: fraction that died chasing a deeper bank. */
-  deathRate: number;
-  /** Among gate-reachers: expected Embers minted from Gold (the line's payoff). */
-  avgConvertedEmbers: number;
-  /** Among gate-reachers: average deepest stratum reached. */
-  avgStratumReached: number;
-}
-
-export interface DelveEconomyOptions {
-  runs?: number;
-  maxStrata?: number;
-  convert?: GoldConversion;
-}
-
-export interface DelveEconomySummary {
-  maxStrata: number;
-  cautious: DelveStrategySummary;
-  moderate: DelveStrategySummary;
-  aggressive: DelveStrategySummary;
-}
-
-function summarizeStrategy(
-  strategy: DelveStrategy,
-  scenario: BalanceScenario,
-  runs: number,
-  maxStrata: number,
-  convert: GoldConversion,
-): DelveStrategySummary {
-  let gateRuns = 0;
-  let banked = 0;
-  let embersTotal = 0;
-  let strataTotal = 0;
-
-  for (let seed = 1; seed <= runs; seed++) {
-    const result = simulateRun(seed, scenario, { strategy, maxStrata, convert });
-    if (!result.clearedFirstGate) continue; // the line only diverges once the gate is reached
-    gateRuns++;
-    if (result.victory) banked++;
-    embersTotal += result.convertedEmbers;
-    strataTotal += result.stratumReached;
-  }
-
-  return {
-    strategy,
-    gateRuns,
-    bankRate: gateRuns === 0 ? 0 : banked / gateRuns,
-    deathRate: gateRuns === 0 ? 0 : (gateRuns - banked) / gateRuns,
-    avgConvertedEmbers: gateRuns === 0 ? 0 : embersTotal / gateRuns,
-    avgStratumReached: gateRuns === 0 ? 0 : strataTotal / gateRuns,
-  };
-}
-
-/**
- * Model the bank-or-delve economy across the three strategy lines. Conditioned on
- * reaching the first gate so the comparison isolates the push-your-luck decision
- * rather than the base run's difficulty.
- */
-export function simulateDelveEconomy(
-  scenario: BalanceScenario,
-  options: DelveEconomyOptions = {},
-): DelveEconomySummary {
-  const runs = options.runs ?? 240;
-  const maxStrata = options.maxStrata ?? MAX_SIMULATED_STRATA;
-  const convert = options.convert ?? convertGoldToEmbers;
-
-  return {
-    maxStrata,
-    cautious: summarizeStrategy('cautious', scenario, runs, maxStrata, convert),
-    moderate: summarizeStrategy('moderate', scenario, runs, maxStrata, convert),
-    aggressive: summarizeStrategy('aggressive', scenario, runs, maxStrata, convert),
-  };
-}
-
-export interface DelveDominance {
-  cautiousDominant: boolean;
-  aggressiveDominant: boolean;
-  hasDominantLine: boolean;
-}
-
-/**
- * A line "dominates" when its expected Ember payoff beats both rivals by more than
- * `margin` Embers — i.e. a rational player would always pick it, collapsing the
- * decision. Healthy tuning keeps the three lines within a margin of each other.
- */
-export function assessDelveDominance(economy: DelveEconomySummary, margin = 1): DelveDominance {
-  const c = economy.cautious.avgConvertedEmbers;
-  const m = economy.moderate.avgConvertedEmbers;
-  const a = economy.aggressive.avgConvertedEmbers;
-
-  const cautiousDominant = c > m + margin && c > a + margin;
-  const aggressiveDominant = a > m + margin && a > c + margin;
-
-  return {
-    cautiousDominant,
-    aggressiveDominant,
-    hasDominantLine: cautiousDominant || aggressiveDominant,
   };
 }
