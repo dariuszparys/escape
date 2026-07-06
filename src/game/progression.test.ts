@@ -1,282 +1,172 @@
 import { describe, expect, test } from 'vitest';
+import { createDefaultProgressionState, type MetaState } from '../meta';
+import { createDefaultProfileState, xpForLevel, type ProfileState } from '../profile';
 import {
-  buyRelicPathUnlock,
-  buyRelicUnlock,
-  buyStarterCardVarietyUnlock,
+  eligibleStartingRelics,
   formatArchetypeProgressionLine,
   formatArchetypeSelectionSummary,
   formatRelicProgressionLine,
   formatRelicProgressionSummary,
   formatStarterCardProgressionSummary,
+  hasStarterCardVariety,
+  isArchetypeUnlocked,
+  isStartingRelicEligible,
   setActiveArchetype,
   setActiveStartingRelic,
   type ProgressionState,
 } from './progression';
 
-describe('starter card progression', () => {
-  test('buys the starter-card variety unlock for four embers', () => {
-    const state: ProgressionState = {
-      embers: 4,
-      progression: {
-        starterCardVarietyUnlocked: false,
-        migrationBonusGranted: false,
-      },
-    };
+function profileAtLevel(
+  level: number,
+  discoveredRelicIds: ProfileState['discoveredRelicIds'] = [],
+) {
+  return {
+    ...createDefaultProfileState(),
+    xp: xpForLevel(level),
+    discoveredRelicIds,
+  };
+}
 
-    expect(buyStarterCardVarietyUnlock(state)).toEqual({
-      ok: true,
-      state: {
-        embers: 0,
-        progression: {
-          starterCardVarietyUnlocked: true,
-          migrationBonusGranted: false,
-        },
-      },
-    });
-  });
+function state(): ProgressionState {
+  return {
+    progression: createDefaultProgressionState(),
+  };
+}
 
-  test('rejects unaffordable and duplicate starter-card unlock purchases', () => {
-    const unaffordable = {
-      embers: 3,
-      progression: {
-        starterCardVarietyUnlocked: false,
-        migrationBonusGranted: false,
-      },
-    };
-    const unlocked = {
-      embers: 9,
-      progression: {
-        starterCardVarietyUnlocked: true,
-        migrationBonusGranted: true,
-      },
-    };
+describe('level-gated archetype selection', () => {
+  test('fresh profiles start neutral-only', () => {
+    const profile = profileAtLevel(1);
 
-    expect(buyStarterCardVarietyUnlock(unaffordable)).toEqual({
+    expect(isArchetypeUnlocked(profile, 'barbarian')).toBe(false);
+    expect(setActiveArchetype(state(), profile, 'barbarian')).toEqual({
       ok: false,
-      reason: 'Not enough Embers.',
-      state: unaffordable,
-    });
-    expect(buyStarterCardVarietyUnlock(unlocked)).toEqual({
-      ok: false,
-      reason: 'Starter variety already unlocked.',
-      state: unlocked,
+      reason: 'Archetype requires level 3.',
+      state: state(),
     });
   });
 
-  test('formats progression and migration bonus without new currency names', () => {
-    const summary = formatStarterCardProgressionSummary({
-      embers: 0,
-      progression: {
-        starterCardVarietyUnlocked: true,
-        migrationBonusGranted: true,
-      },
-    });
+  test('selects and clears an archetype once its level gate is met', () => {
+    const selected = setActiveArchetype(state(), profileAtLevel(3), 'barbarian');
 
-    expect(summary).toBe(
-      [
-        'Embers: 0',
-        'Starter variety: unlocked - four opening card options.',
-        'Migration bonus: starter variety granted for old Ember progress.',
-        'Relic path: locked - spend 5 Embers to unlock relic progression.',
-        'Starting relic: none selected.',
-      ].join('\n'),
-    );
-    expect(summary).not.toMatch(/Ash|Kindling/);
-  });
+    expect(selected.ok).toBe(true);
+    expect(selected.state.progression.activeArchetypeId).toBe('barbarian');
 
-  test('does not expose retired starter-kit progression text', () => {
-    const summary = formatStarterCardProgressionSummary({
-      embers: 8,
-      progression: {
-        starterCardVarietyUnlocked: true,
-        migrationBonusGranted: false,
-      },
-    });
-
-    expect(summary).not.toMatch(/Starter kit|Duelist|Warden|Hexbinder/);
-  });
-});
-
-describe('archetype selection', () => {
-  const base = (): ProgressionState => ({
-    embers: 5,
-    progression: {
-      starterCardVarietyUnlocked: false,
-      migrationBonusGranted: false,
-      activeArchetypeId: null,
-    },
-  });
-
-  test('selects an archetype for free (no ember cost, no unlock gate)', () => {
-    const result = setActiveArchetype(base(), 'barbarian');
-    expect(result.ok).toBe(true);
-    expect(result.state.embers).toBe(5);
-    expect(result.state.progression.activeArchetypeId).toBe('barbarian');
-  });
-
-  test('clears back to the neutral pool with null', () => {
-    const active = base();
-    active.progression.activeArchetypeId = 'ranger';
-    const result = setActiveArchetype(active, null);
-    expect(result.ok).toBe(true);
-    expect(result.state.progression.activeArchetypeId).toBeNull();
+    const cleared = setActiveArchetype(selected.state, profileAtLevel(3), null);
+    expect(cleared.ok).toBe(true);
+    expect(cleared.state.progression.activeArchetypeId).toBeNull();
   });
 
   test('rejects an unknown archetype and leaves state untouched', () => {
-    const state = base();
-    expect(setActiveArchetype(state, 'necrolord' as never)).toEqual({
+    const base = state();
+    expect(setActiveArchetype(base, profileAtLevel(20), 'necrolord' as never)).toEqual({
       ok: false,
       reason: 'Unknown archetype.',
-      state,
+      state: base,
     });
   });
 
-  test('summaries reflect the active archetype', () => {
-    expect(formatArchetypeSelectionSummary(base())).toContain('Archetype: none');
-    const active = base();
-    active.progression.activeArchetypeId = 'necromancer';
-    expect(formatArchetypeSelectionSummary(active)).toContain('Necromancer');
-    expect(formatArchetypeProgressionLine(active, 'necromancer')).toContain('active');
-    expect(formatArchetypeProgressionLine(active, 'barbarian')).toContain('Opens with');
+  test('summaries reflect active and locked archetypes without currency copy', () => {
+    const profile = profileAtLevel(3);
+    const active = state();
+    active.progression.activeArchetypeId = 'barbarian';
+
+    expect(formatArchetypeSelectionSummary(state())).toContain('Archetype: none');
+    expect(formatArchetypeSelectionSummary(active)).toContain('Barbarian');
+    expect(formatArchetypeProgressionLine(active, profile, 'barbarian')).toContain('active');
+    expect(formatArchetypeProgressionLine(state(), profileAtLevel(1), 'barbarian')).toContain(
+      'locked - level 3',
+    );
+    expect(formatArchetypeProgressionLine(active, profile, 'barbarian')).not.toMatch(/Ember/);
   });
 });
 
-describe('relic progression', () => {
-  const base = (): ProgressionState => ({
-    embers: 10,
-    progression: {
-      starterCardVarietyUnlocked: false,
-      migrationBonusGranted: false,
-      activeArchetypeId: null,
-      relicPathUnlocked: false,
-      unlockedRelicIds: [],
-      activeStartingRelicId: null,
-    },
+describe('starter card variety', () => {
+  test('is unlocked by level rather than purchase', () => {
+    expect(hasStarterCardVariety(profileAtLevel(3))).toBe(false);
+    expect(hasStarterCardVariety(profileAtLevel(4))).toBe(true);
+    expect(formatStarterCardProgressionSummary(profileAtLevel(4))).toContain(
+      'Starter variety: unlocked',
+    );
+    expect(formatStarterCardProgressionSummary(profileAtLevel(1))).not.toMatch(/Ember|spend/i);
+  });
+});
+
+describe('relic loadout access', () => {
+  test('requires discovery, level eligibility, and a starting-relic slot', () => {
+    expect(isStartingRelicEligible(profileAtLevel(1, ['swift_boots']), 'swift_boots')).toBe(false);
+    expect(isStartingRelicEligible(profileAtLevel(2), 'swift_boots')).toBe(false);
+    expect(isStartingRelicEligible(profileAtLevel(2, ['swift_boots']), 'swift_boots')).toBe(true);
+    expect(isStartingRelicEligible(profileAtLevel(4, ['spark_coil']), 'spark_coil')).toBe(false);
+    expect(isStartingRelicEligible(profileAtLevel(5, ['spark_coil']), 'spark_coil')).toBe(true);
+    expect(isStartingRelicEligible(profileAtLevel(8, ['stone_heart']), 'stone_heart')).toBe(false);
   });
 
-  test('unlocks the relic path for 5 Embers', () => {
-    const result = buyRelicPathUnlock(base());
-    expect(result.ok).toBe(true);
-    expect(result.state.embers).toBe(5);
-    expect(result.state.progression.relicPathUnlocked).toBe(true);
+  test('lists only discovered and eligible starting relics', () => {
+    const eligible = eligibleStartingRelics(profileAtLevel(5, ['swift_boots', 'spark_coil']));
+
+    expect(eligible.map((relic) => relic.id)).toEqual(['swift_boots', 'spark_coil']);
   });
 
-  test('rejects an unaffordable or duplicate relic-path purchase', () => {
-    const unaffordable = { ...base(), embers: 4 };
-    expect(buyRelicPathUnlock(unaffordable)).toEqual({
-      ok: false,
-      reason: 'Not enough Embers.',
-      state: unaffordable,
-    });
+  test('selects and clears an eligible starting relic', () => {
+    const selected = setActiveStartingRelic(
+      state(),
+      profileAtLevel(2, ['swift_boots']),
+      'swift_boots',
+    );
 
-    const alreadyUnlocked = base();
-    alreadyUnlocked.progression.relicPathUnlocked = true;
-    expect(buyRelicPathUnlock(alreadyUnlocked)).toEqual({
-      ok: false,
-      reason: 'Relic path already unlocked.',
-      state: alreadyUnlocked,
-    });
-  });
+    expect(selected.ok).toBe(true);
+    expect(selected.state.progression.activeStartingRelicId).toBe('swift_boots');
 
-  test('buying a paid relic requires the relic path to be unlocked first', () => {
-    const state = base();
-    expect(buyRelicUnlock(state, 'spark_coil')).toEqual({
-      ok: false,
-      reason: 'Unlock the relic path first.',
-      state,
-    });
-  });
-
-  test('buys a paid relic once the path is unlocked, and rejects buying it twice', () => {
-    const state = base();
-    state.progression.relicPathUnlocked = true;
-    const result = buyRelicUnlock(state, 'spark_coil');
-    expect(result.ok).toBe(true);
-    expect(result.state.embers).toBe(5); // 10 - spark_coil's 5-Ember unlock cost
-    expect(result.state.progression.unlockedRelicIds).toEqual(['spark_coil']);
-
-    expect(buyRelicUnlock(result.state, 'spark_coil')).toEqual({
-      ok: false,
-      reason: 'Relic already unlocked.',
-      state: result.state,
-    });
-  });
-
-  test('rejects buying a starter (cost-0) relic — it is always available, never purchased', () => {
-    const state = base();
-    state.progression.relicPathUnlocked = true;
-    expect(buyRelicUnlock(state, 'swift_boots')).toEqual({
-      ok: false,
-      reason: 'Starter relics are always available.',
-      state,
-    });
-  });
-
-  // Regression coverage for a bug found in review: `setActiveStartingRelic` let a player select
-  // a cost-0 starter relic (unconditionally "unlocked") without ever unlocking the relic path.
-  test('selecting a starting relic requires the relic path to be unlocked, even for a cost-0 relic', () => {
-    const state = base();
-    expect(setActiveStartingRelic(state, 'swift_boots')).toEqual({
-      ok: false,
-      reason: 'Unlock the relic path first.',
-      state,
-    });
-  });
-
-  test('selects a starting relic once the path is unlocked, and clears it with null', () => {
-    const state = base();
-    state.progression.relicPathUnlocked = true;
-    const result = setActiveStartingRelic(state, 'swift_boots');
-    expect(result.ok).toBe(true);
-    expect(result.state.progression.activeStartingRelicId).toBe('swift_boots');
-
-    const cleared = setActiveStartingRelic(result.state, null);
+    const cleared = setActiveStartingRelic(
+      selected.state,
+      profileAtLevel(2, ['swift_boots']),
+      null,
+    );
     expect(cleared.ok).toBe(true);
     expect(cleared.state.progression.activeStartingRelicId).toBeNull();
   });
 
-  test('rejects a starting relic that cannot start a run, or is not yet unlocked', () => {
-    const state = base();
-    state.progression.relicPathUnlocked = true;
+  test('rejects undiscovered, under-leveled, or run-only relics', () => {
+    const base = state();
 
-    // stone_heart is not `startingRelicEligible`.
-    expect(setActiveStartingRelic(state, 'stone_heart')).toEqual({
+    expect(setActiveStartingRelic(base, profileAtLevel(2), 'swift_boots')).toEqual({
       ok: false,
-      reason: 'This relic cannot start a run.',
-      state,
+      reason: 'Relic is not discovered.',
+      state: base,
     });
-    // vital_charm IS startingRelicEligible but costs Embers and hasn't been bought yet.
-    expect(setActiveStartingRelic(state, 'vital_charm')).toEqual({
+    expect(setActiveStartingRelic(base, profileAtLevel(4, ['spark_coil']), 'spark_coil')).toEqual({
       ok: false,
-      reason: 'Relic is locked.',
-      state,
+      reason: 'Relic requires level 5.',
+      state: base,
     });
+    expect(setActiveStartingRelic(base, profileAtLevel(8, ['stone_heart']), 'stone_heart')).toEqual(
+      {
+        ok: false,
+        reason: 'This relic cannot start a run.',
+        state: base,
+      },
+    );
   });
 
-  test('formats the relic progression summary and per-relic status lines', () => {
-    const locked = base();
-    expect(formatRelicProgressionSummary(locked)).toBe(
-      [
-        'Relic path: locked - spend 5 Embers to unlock relic progression.',
-        'Starting relic: none selected.',
-      ].join('\n'),
-    );
-    expect(formatRelicProgressionLine(locked, 'swift_boots')).toContain(
-      'locked - unlock relic path first',
-    );
+  test('formats relic status lines and summaries without purchase language', () => {
+    const active: MetaState = {
+      economyVersion: 4,
+      progression: {
+        ...createDefaultProgressionState(),
+        activeStartingRelicId: 'swift_boots',
+      },
+    };
+    const profile = profileAtLevel(5, ['swift_boots', 'spark_coil']);
 
-    const unlocked = base();
-    unlocked.progression.relicPathUnlocked = true;
-    unlocked.progression.activeStartingRelicId = 'swift_boots';
-    expect(formatRelicProgressionSummary(unlocked)).toBe(
-      [
-        'Relic path: unlocked - chests and elites can drop relics from your pool.',
-        'Starting relic: Swift Boots.',
-      ].join('\n'),
+    expect(formatRelicProgressionSummary(active, profile)).toContain('Discovered relics: 2/12');
+    expect(formatRelicProgressionSummary(active, profile)).toContain('Starting relic: Swift Boots');
+    expect(formatRelicProgressionLine(active, profile, 'swift_boots')).toContain('active');
+    expect(formatRelicProgressionLine(active, profileAtLevel(1), 'spark_coil')).toContain(
+      'undiscovered',
     );
-    expect(formatRelicProgressionLine(unlocked, 'swift_boots')).toContain(
-      'active - starts next normal run',
+    expect(formatRelicProgressionLine(active, profile, 'spark_coil')).toContain(
+      'available - select',
     );
-    expect(formatRelicProgressionLine(unlocked, 'stone_heart')).toContain('locked - 5 Embers');
+    expect(formatRelicProgressionSummary(active, profile)).not.toMatch(/Ember|buy|spend/i);
   });
 });

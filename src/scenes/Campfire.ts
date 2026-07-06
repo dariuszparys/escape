@@ -6,11 +6,13 @@ import {
   formatChronicleLine,
   formatCampfireProgressionSummary,
   formatDailyRecordLine,
-  formatPendingPrepSummary,
+  formatProfileProgressLine,
 } from '../game/campfireSummary';
 import { getMeta } from '../meta';
 import { newRun } from '../state';
 import { FONT_FAMILY, TEXT_COLOR } from '../gfx/theme';
+import { getProfile } from '../profile';
+import { applyLoadoutToRun } from '../game/campfirePrep';
 
 const TEXT_STYLE = {
   fontFamily: FONT_FAMILY,
@@ -138,6 +140,7 @@ export class CampfireScene extends Phaser.Scene {
   private redraw = (): void => {
     this.dynamic.removeAll(true);
     const meta = getMeta();
+    const profile = getProfile();
     const dailyRecord = loadDailyRecord();
     const chronicle = loadRunChronicle();
 
@@ -154,7 +157,7 @@ export class CampfireScene extends Phaser.Scene {
 
     this.dynamic.add(
       this.add
-        .text(GAME_W / 2, 94, `Embers: ${meta.embers}`, {
+        .text(GAME_W / 2, 94, formatProfileProgressLine(profile), {
           ...TEXT_STYLE,
           fontSize: '18px',
           color: TEXT_COLOR.primary,
@@ -172,7 +175,7 @@ export class CampfireScene extends Phaser.Scene {
     );
 
     this.dynamic.add(
-      this.add.text(STATUS_X, 174, 'PROGRESSION', {
+      this.add.text(STATUS_X, 174, 'LOADOUT', {
         ...TEXT_STYLE,
         fontSize: '18px',
         fontStyle: 'bold',
@@ -180,7 +183,7 @@ export class CampfireScene extends Phaser.Scene {
       }),
     );
     this.dynamic.add(
-      this.add.text(STATUS_X, 206, formatCampfireProgressionSummary(meta.progression), {
+      this.add.text(STATUS_X, 206, formatCampfireProgressionSummary(meta.progression, profile), {
         ...TEXT_STYLE,
         fontSize: '13px',
         color: TEXT_COLOR.muted,
@@ -190,7 +193,7 @@ export class CampfireScene extends Phaser.Scene {
       }),
     );
     this.dynamic.add(
-      this.add.text(STATUS_X, 320, 'NEXT RUN', {
+      this.add.text(STATUS_X, 354, 'RUN RECORD', {
         ...TEXT_STYLE,
         fontSize: '18px',
         fontStyle: 'bold',
@@ -198,11 +201,10 @@ export class CampfireScene extends Phaser.Scene {
       }),
     );
     this.dynamic.add(
-      this.add.text(STATUS_X, 354, formatPendingPrepSummary(meta.pendingPrep, meta.progression), {
+      this.add.text(STATUS_X, 388, formatChronicleLine(chronicle), {
         ...TEXT_STYLE,
         fontSize: '13px',
         color: TEXT_COLOR.muted,
-        lineSpacing: 8,
         fixedWidth: STATUS_W,
         wordWrap: { width: STATUS_W, useAdvancedWrap: true },
       }),
@@ -256,6 +258,7 @@ export class CampfireScene extends Phaser.Scene {
     const run = newRun(seed);
     run.isDaily = true;
     run.dailyKey = dailyKey();
+    applyLoadoutToRun(run, getMeta().progression, getProfile());
     this.scene.start('Dungeon');
   }
 }

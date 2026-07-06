@@ -3,9 +3,10 @@ import {
   makeRelic,
   randomRelic,
   relicDef,
+  allRelicPool,
   RELIC_DEFS,
   rollRelicOffers,
-  starterRelicPool,
+  type RelicId,
 } from './relics';
 import { GameRng } from '../game/rng';
 
@@ -60,38 +61,45 @@ describe('relic defs', () => {
   test('randomRelic returns a relic from available definitions', () => {
     const rng = makePredictableRng(1);
 
-    const relic = randomRelic(rng, new Set(), starterRelicPool());
+    const relic = randomRelic(rng, new Set(), allRelicPool());
 
     expect(RELIC_DEFS.map((def) => def.id)).toContain(relic?.id);
   });
 
   test('randomRelic returns null when all relics are owned', () => {
     const allRelics = new Set(RELIC_DEFS.map((relic) => relic.id));
-    const relic = randomRelic(makePredictableRng(0), allRelics, starterRelicPool());
+    const relic = randomRelic(makePredictableRng(0), allRelics, allRelicPool());
 
     expect(relic).toBeNull();
   });
 
   test('randomRelic excludes already owned relics', () => {
-    const relics = new Set(['swift_boots', 'iron_will', 'vampiric_blade'] as const);
+    const relics = new Set<RelicId>(['swift_boots', 'iron_will', 'vampiric_blade']);
     const rng = makePredictableRng(2);
 
-    const relic = randomRelic(rng, relics, starterRelicPool());
+    const relic = randomRelic(rng, relics, allRelicPool());
 
     expect(relic).not.toBeNull();
     if (relic === null) throw new Error('Expected a relic');
-    expect(relic.id).toBe('lucky_coin');
+    expect(relics.has(relic.id)).toBe(false);
+    expect(RELIC_DEFS.map((def) => def.id)).toContain(relic.id);
   });
 
   test('rollRelicOffers returns distinct unowned offers', () => {
     const offers = rollRelicOffers(
       makePredictableRng(0),
       new Set(['swift_boots']),
-      starterRelicPool(),
+      allRelicPool(),
       3,
     );
     expect(offers.length).toBeGreaterThan(0);
     expect(new Set(offers.map((relic) => relic.id)).size).toBe(offers.length);
     expect(offers.every((relic) => relic.id !== 'swift_boots')).toBe(true);
+  });
+
+  test('the default drop pool includes every relic, including non-starter discoveries', () => {
+    expect([...allRelicPool()].sort()).toEqual(RELIC_DEFS.map((relic) => relic.id).sort());
+    expect(allRelicPool().has('spark_coil')).toBe(true);
+    expect(allRelicPool().has('wanderers_flask')).toBe(true);
   });
 });

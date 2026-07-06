@@ -1,8 +1,7 @@
 import { MAX_ARMOR, MAX_INVENTORY, PLAYER_MAX_HP } from './config';
 import { Card, type ArchetypeId } from './data/cards';
-import type { CampfireCurseId } from './data/campfireBargains';
 import { InventoryItem, makeItem } from './data/items';
-import { MAX_RELICS_PER_RUN, type RelicId, type Relic, starterRelicPool } from './data/relics';
+import { MAX_RELICS_PER_RUN, type RelicId, type Relic, allRelicPool } from './data/relics';
 import type { ScenarioId } from './data/scenarios';
 import {
   RELIC_ON_ACQUIRE_FILLS_ARMOR,
@@ -12,6 +11,7 @@ import {
   relicRoomEnterHeal,
 } from './game/relicRegistry';
 import { DEFAULT_STARTING_CARD_CHOICES, DEFAULT_STARTING_CARD_PICKS } from './game/startingCards';
+import { discoverRelic, getProfile, setProfile } from './profile';
 
 let nextRunId = 1;
 
@@ -34,7 +34,7 @@ export class RunState {
   relics: Relic[] = [];
   maxArmor = MAX_ARMOR;
   /** Relic ids eligible for in-run drops (set at run start from meta or daily rules). */
-  relicPool: ReadonlySet<RelicId> = starterRelicPool();
+  relicPool: ReadonlySet<RelicId> = allRelicPool();
   startingCardChoices = DEFAULT_STARTING_CARD_CHOICES;
   startingCardPicks = DEFAULT_STARTING_CARD_PICKS;
   startingCardsTaken = 0;
@@ -43,7 +43,6 @@ export class RunState {
   /** The active archetype for this run (null = neutral pool). Drives starting picks and reward draws. */
   archetypeId: ArchetypeId | null = null;
   scoutCharges = 0;
-  curseIds: CampfireCurseId[] = [];
   bossDefeated = false;
   /** The 0-based decade index (see `decadeForDepth`) an elite room has already been offered for (KTD3), or null if none yet this run. Comparing against the current depth's decade is the reset — no explicit boundary reset needed. */
   eliteOfferedForDecade: number | null = null;
@@ -144,6 +143,10 @@ export class RunState {
     if (this.hasRelic(relic.id) || this.atRelicCap) return false;
 
     this.relics.push(relic);
+    const profile = getProfile();
+    if (!profile.discoveredRelicIds.includes(relic.id)) {
+      setProfile(discoverRelic(profile, relic.id));
+    }
     this.maxArmor = relicMaxArmor(MAX_ARMOR, this.relicIds);
     if (RELIC_ON_ACQUIRE_FILLS_ARMOR.has(relic.id)) this.armor = this.maxArmor;
     const maxHpBonus = RELIC_ON_ACQUIRE_MAX_HP[relic.id] ?? 0;

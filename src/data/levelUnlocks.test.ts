@@ -3,6 +3,8 @@ import {
   LEVEL_UNLOCKS,
   isArchetypeLevelEligible,
   isRelicLevelEligible,
+  requiredLevelForArchetype,
+  requiredLevelForRelic,
   unlocksForLevel,
 } from './levelUnlocks';
 
@@ -31,8 +33,16 @@ describe('level unlocks', () => {
   test('archetypes and relics are level-gated by the table', () => {
     expect(isArchetypeLevelEligible(1, 'barbarian')).toBe(false);
     expect(isArchetypeLevelEligible(3, 'barbarian')).toBe(true);
-    expect(isRelicLevelEligible(1, 'spark_coil')).toBe(false);
+    expect(isRelicLevelEligible(1, 'swift_boots')).toBe(false);
+    expect(isRelicLevelEligible(2, 'swift_boots')).toBe(true);
+    expect(isRelicLevelEligible(4, 'spark_coil')).toBe(false);
     expect(isRelicLevelEligible(5, 'spark_coil')).toBe(true);
+  });
+
+  test('reports the first level that grants each unlock', () => {
+    expect(requiredLevelForArchetype('barbarian')).toBe(3);
+    expect(requiredLevelForRelic('swift_boots')).toBe(2);
+    expect(requiredLevelForRelic('spark_coil')).toBe(5);
   });
 
   test('the table has one entry per unlock level', () => {

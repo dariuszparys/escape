@@ -7,7 +7,11 @@ import { getMeta, setMeta } from '../meta';
 import { getProfile, levelForXp, setProfile } from '../profile';
 import { getRun } from '../state';
 import { formatRelicSummary, relicDef } from '../data/relics';
-import { applyContractCompletions, evaluateNewContracts } from '../game/contracts';
+import {
+  applyContractCompletions,
+  applyContractDiscoveries,
+  evaluateNewContracts,
+} from '../game/contracts';
 import { CONTRACT_DEFS, contractDef } from '../data/contracts';
 import { awardRunXpOnce, type RunXpAwardResult } from '../game/runCompletion';
 
@@ -44,7 +48,9 @@ export class EndScene extends Phaser.Scene {
     });
     if (completions.length === 0) return [];
     setMeta(applyContractCompletions(meta, completions));
+    setProfile(applyContractDiscoveries(getProfile(), completions));
     this.game.events.emit('meta-update');
+    this.game.events.emit('profile-update', getProfile());
     return completions;
   }
 
@@ -60,7 +66,7 @@ export class EndScene extends Phaser.Scene {
         ? contractAward
             .map(
               (completion) =>
-                `Contract: ${contractDef(completion.contractId).name}${completion.unlockedRelicId ? `, unlocked ${relicDef(completion.unlockedRelicId).name}` : ''}`,
+                `Contract: ${contractDef(completion.contractId).name}${completion.unlockedRelicId ? `, discovered ${relicDef(completion.unlockedRelicId).name}` : ''}`,
             )
             .join('\n')
         : '';

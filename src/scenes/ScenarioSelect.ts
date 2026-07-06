@@ -1,10 +1,10 @@
 import Phaser from 'phaser';
 import { GAME_H, GAME_W } from '../config';
 import { SCENARIOS, type ScenarioId } from '../data/scenarios';
-import { applyPendingPrepToRun } from '../game/campfirePrep';
-import { PhaserGameRng } from '../game/rng';
+import { applyLoadoutToRun } from '../game/campfirePrep';
 import { createScenarioSelectLayout } from '../game/scenarioSelectLayout';
-import { getMeta, setMeta } from '../meta';
+import { getMeta } from '../meta';
+import { getProfile } from '../profile';
 import { newRun } from '../state';
 
 const TEXT_STYLE = {
@@ -226,15 +226,7 @@ export class ScenarioSelectScene extends Phaser.Scene {
     const run = newRun(seed);
     run.scenarioId = this.selectedId;
     const meta = getMeta();
-    const rng = new PhaserGameRng(new Phaser.Math.RandomDataGenerator([seed, 'prep']));
-    const nextPrep = applyPendingPrepToRun(
-      run,
-      meta.pendingPrep,
-      meta.progression,
-      rng,
-      this.selectedId,
-    );
-    setMeta({ ...meta, pendingPrep: nextPrep });
+    applyLoadoutToRun(run, meta.progression, getProfile(), this.selectedId);
     this.scene.start('Dungeon');
   }
 }

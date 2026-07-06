@@ -1,85 +1,56 @@
 import { describe, expect, test } from 'vitest';
-import { createDefaultPendingPrep } from '../data/campfirePurchases';
 import { createDefaultRunChronicle } from '../chronicle';
+import { createDefaultProgressionState } from '../meta';
+import { createDefaultProfileState, xpForLevel } from '../profile';
 import {
   formatChronicleLine,
   formatCampfireProgressionSummary,
   formatDailyRecordLine,
-  formatPendingPrepSummary,
+  formatProfileProgressLine,
 } from './campfireSummary';
 
 describe('campfire summary formatting', () => {
-  test('formats compact progression status for the campfire overview', () => {
-    const summary = formatCampfireProgressionSummary({
-      starterCardVarietyUnlocked: true,
-      migrationBonusGranted: true,
+  test('formats profile level and next threshold', () => {
+    expect(formatProfileProgressLine({ ...createDefaultProfileState(), xp: 120 })).toBe(
+      'Level 2 - 120/250 XP',
+    );
+  });
+
+  test('formats compact loadout status for the campfire overview', () => {
+    const summary = formatCampfireProgressionSummary(createDefaultProgressionState(), {
+      ...createDefaultProfileState(),
+      xp: xpForLevel(4),
+      discoveredRelicIds: ['swift_boots'],
+      personalBestRoom: 47,
     });
 
     expect(summary).toBe(
       [
         'Archetype: none',
         'Starter variety: unlocked',
-        'Relics: path locked',
+        'Discovered relics: 1',
+        'Starting relic choices: 1',
         'Starting relic: none',
+        'Personal best: room 47',
       ].join('\n'),
     );
-    expect(summary).not.toMatch(/Migration bonus|four opening card options/);
+    expect(summary).not.toMatch(/Ember|Migration bonus|purchase/i);
   });
 
-  test('names the active archetype in the campfire overview', () => {
-    const summary = formatCampfireProgressionSummary({
-      starterCardVarietyUnlocked: false,
-      migrationBonusGranted: false,
-      activeArchetypeId: 'necromancer',
+  test('names the active archetype and starting relic in the campfire overview', () => {
+    const progression = {
+      ...createDefaultProgressionState(),
+      activeArchetypeId: 'necromancer' as const,
+      activeStartingRelicId: 'swift_boots' as const,
+    };
+    const summary = formatCampfireProgressionSummary(progression, {
+      ...createDefaultProfileState(),
+      xp: xpForLevel(7),
+      discoveredRelicIds: ['swift_boots'],
     });
 
     expect(summary).toContain('Archetype: Necromancer');
-  });
-
-  test('formats empty pending prep for hub status', () => {
-    expect(formatPendingPrepSummary(createDefaultPendingPrep())).toBe(
-      [
-        'One-run prep: none (0/3)',
-        'Opening picks: 2 of 3',
-        'Scout flame: unlit',
-        'Relic charm: none',
-      ].join('\n'),
-    );
-  });
-
-  test('formats pending prep with item names and one-off bonuses', () => {
-    expect(
-      formatPendingPrepSummary({
-        itemIds: ['small_potion', 'bomb'],
-        extraStartingChoice: true,
-        scoutFlame: true,
-      }),
-    ).toBe(
-      [
-        'One-run prep: Small Potion, Bomb (2/3)',
-        'Opening picks: 3 of 4',
-        'Scout flame: ready',
-        'Relic charm: none',
-      ].join('\n'),
-    );
-  });
-
-  test('includes starter-card progression in opening choice summary without extra picks', () => {
-    const summary = formatPendingPrepSummary(createDefaultPendingPrep(), {
-      starterCardVarietyUnlocked: true,
-      migrationBonusGranted: true,
-    });
-
-    expect(summary).toBe(
-      [
-        'Archetype: none',
-        'One-run prep: none (0/3)',
-        'Opening picks: 2 of 4',
-        'Scout flame: unlit',
-        'Relic charm: none',
-      ].join('\n'),
-    );
-    expect(summary).not.toMatch(/Ash|Kindling/);
+    expect(summary).toContain('Starting relic: Swift Boots');
   });
 
   test('formats chronicle line for no completed runs', () => {

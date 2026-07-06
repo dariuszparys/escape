@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { makeCard } from '../data/cards';
 import { makeItem } from '../data/items';
-import { makeRelic, STARTER_RELIC_IDS } from '../data/relics';
+import { allRelicPool, makeRelic, rollRelicOffers } from '../data/relics';
 import { RunState } from '../state';
 import { applySimulatedPostBattleRewards, createSimRng } from './balanceSimulator';
 import {
@@ -15,7 +15,6 @@ import {
 } from './rewards';
 import { SequenceRng } from './test-rng';
 import { cardGrantsBlock, isScenarioAllowedRelic } from './scenarioRules';
-import { relicPoolFromUnlocked, rollRelicOffers } from '../data/relics';
 
 describe('rewards', () => {
   test('every added card stays in the collection — the deck IS the collection (R1)', () => {
@@ -150,20 +149,17 @@ describe('rewards', () => {
     if (result.kind !== 'relic') throw new Error(`Unexpected result: ${result.kind}`);
     expect(run.relics).toHaveLength(1);
     expect(run.relics[0]).toBe(result.relic);
-    // A fresh RunState defaults `relicPool` to the starter pool (state.ts) — assert the drawn
-    // relic actually came from `run.relicPool`, the real invariant `randomRelic`'s `poolIds`
-    // param exists to protect (a `toBeTruthy()` name check would pass for any relic at all).
-    expect(STARTER_RELIC_IDS).toContain(result.relic.id);
+    expect(run.relicPool.has(result.relic.id)).toBe(true);
   });
 
-  test('Left Arm relic offers exclude block-only relics but allow armor relics', () => {
-    const pool = relicPoolFromUnlocked(['stone_heart']);
+  test('Left Arm relic offers exclude block-only relics from the open pool', () => {
+    const pool = allRelicPool();
     const offers = rollRelicOffers(createSimRng(1), new Set(), pool, 5, (candidate) =>
       isScenarioAllowedRelic(candidate, 'lost_left_arm'),
     );
 
+    expect(offers.length).toBeGreaterThan(0);
     expect(offers.map((relic) => relic.id)).not.toContain('stone_heart');
-    expect(offers.map((relic) => relic.id)).toContain('iron_will');
   });
 
   test('lucky_coin increases all gold rewards by 50%', () => {

@@ -10,7 +10,6 @@ import {
   SIM_BATTLE_TURN_CAP,
   SIM_DECK_THIN_THRESHOLD,
   simulateBattle,
-  simulateRun,
   simulateScenarioSummary,
 } from './balanceSimulator';
 import { spawnEnemy } from '../data/enemies';
@@ -180,23 +179,14 @@ describe('balance simulator economy bands', () => {
     expect(summary.bossReachRate).toBeLessThanOrEqual(0.7);
   });
 
-  simulationTest('full prep materially improves survival over a bare loadout', () => {
+  simulationTest('a selected combat archetype runs through the full simulation', () => {
     const baseline = simulateScenarioSummary({}, 400);
-    const prepared = simulateScenarioSummary(
-      {
-        prepItemIds: ['bomb', 'bomb', 'bomb'],
-        extraStartingChoice: true,
-        scoutFlame: true,
-      },
-      400,
-    );
+    const barbarian = simulateScenarioSummary({ activeArchetypeId: 'barbarian' }, 400);
 
-    // U1 re-key: the "chance to escape" (winRate) comparison is U7's — over 100 rooms both loadouts
-    // escape ~never, so it can't discriminate here. Instead assert prep materially improves SURVIVAL:
-    // a prepped loadout reaches the first boss at least as often and dies strictly deeper on average
-    // (bombs/scout/extra card give it more resources every seed). U7 asserts the escape-rate lift.
-    expect(prepared.bossReachRate).toBeGreaterThanOrEqual(baseline.bossReachRate);
-    expect(prepared.avgDeathDepth).toBeGreaterThan(baseline.avgDeathDepth);
+    expect(barbarian.bossReachRate).toBeGreaterThan(0);
+    expect(barbarian.winRate).toBeGreaterThanOrEqual(0);
+    expect(barbarian.winRate).toBeLessThanOrEqual(1);
+    expect(barbarian.byTier.weak.total).toBeGreaterThanOrEqual(baseline.byTier.weak.total * 0.5);
   });
 
   simulationTest(
@@ -220,20 +210,15 @@ describe('balance simulator economy bands', () => {
     },
   );
 
-  simulationTest(
-    'Escape the Dungeon keeps the baseline combat shape but converts no progression reward',
-    () => {
-      const baseline = simulateScenarioSummary({}, 160);
-      const escape = simulateScenarioSummary({ playerScenarioId: 'escape_the_dungeon' }, 160);
+  simulationTest('Escape the Dungeon keeps the baseline combat shape', () => {
+    const baseline = simulateScenarioSummary({}, 160);
+    const escape = simulateScenarioSummary({ playerScenarioId: 'escape_the_dungeon' }, 160);
 
-      // Escape is the clean/default Scenario: same combat route as the baseline simulator, but no
-      // post-run progression conversion. Seed 7 is the committed runSignature golden seed.
-      expect(escape.winRate).toBe(baseline.winRate);
-      expect(escape.bossReachRate).toBe(baseline.bossReachRate);
-      expect(escape.byTier).toEqual(baseline.byTier);
-      expect(simulateRun(7, { playerScenarioId: 'escape_the_dungeon' }).convertedEmbers).toBe(0);
-    },
-  );
+    // Escape is the clean/default Scenario: same combat route as the baseline simulator.
+    expect(escape.winRate).toBe(baseline.winRate);
+    expect(escape.bossReachRate).toBe(baseline.bossReachRate);
+    expect(escape.byTier).toEqual(baseline.byTier);
+  });
 
   simulationTest(
     'hard player scenarios are deterministic and sit at or below the baseline band',

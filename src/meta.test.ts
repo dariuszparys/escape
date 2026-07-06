@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, test } from 'vitest';
-import { MAX_INVENTORY } from './config';
 import {
   META_STORAGE_KEY,
   META_ECONOMY_VERSION,
@@ -9,6 +8,7 @@ import {
   normalizeMetaState,
   saveMetaState,
   setMeta,
+  type MetaState,
 } from './meta';
 
 class MemoryStorage implements Storage {
@@ -44,205 +44,60 @@ describe('meta state', () => {
     setMeta(createDefaultMetaState());
   });
 
-  test('normalizes invalid saved data to defaults', () => {
-    expect(normalizeMetaState({ embers: -10, pendingPrep: null })).toEqual(
+  test('normalizes invalid and old unversioned saved data to defaults', () => {
+    expect(normalizeMetaState(null)).toEqual(createDefaultMetaState());
+    expect(normalizeMetaState({ embers: 23, pendingPrep: { itemIds: ['bomb'] } })).toEqual(
       createDefaultMetaState(),
     );
   });
 
-  test('resets old unversioned ember balances instead of migrating them', () => {
-    expect(
-      normalizeMetaState({
-        embers: 23,
-        pendingPrep: {
-          itemIds: [],
-          extraStartingChoice: false,
-          scoutFlame: false,
-          curseIds: [],
-        },
-        lastAwardedRunId: 'old-run',
-      }),
-    ).toEqual(createDefaultMetaState());
-  });
-
-  test('resets old pending prep instead of preserving a one-time migration', () => {
-    expect(
-      normalizeMetaState({
-        embers: 3,
-        pendingPrep: {
-          itemIds: ['small_potion'],
-          extraStartingChoice: true,
-          scoutFlame: true,
-          curseIds: ['narrow_opening'],
-        },
-        lastAwardedRunId: null,
-      }),
-    ).toEqual(createDefaultMetaState());
-  });
-
-  test('does not grant the migration bonus for malformed versioned data', () => {
-    expect(
-      normalizeMetaState({
-        economyVersion: 'bad',
-        embers: 11,
-        pendingPrep: {
-          itemIds: ['small_potion'],
-          extraStartingChoice: true,
-          scoutFlame: true,
-          curseIds: ['narrow_opening'],
-        },
-        lastAwardedRunId: 'run-1',
-      }),
-    ).toEqual(createDefaultMetaState());
-  });
-
-  test('normalizes old versioned progression without starter-kit fields', () => {
+  test('normalizes versioned loadout selections and contract ids', () => {
     expect(
       normalizeMetaState({
         economyVersion: META_ECONOMY_VERSION,
-        embers: 7,
         progression: {
-          starterCardVarietyUnlocked: true,
-          migrationBonusGranted: false,
+          activeArchetypeId: 'barbarian',
+          activeStartingRelicId: 'swift_boots',
+          completedContractIds: ['reach_depth_6', 'bad-contract', 'reach_depth_6'],
         },
-        pendingPrep: {
-          itemIds: [],
-          extraStartingChoice: false,
-          scoutFlame: false,
-          curseIds: [],
-        },
-        lastAwardedRunId: null,
-      }).progression,
+      }),
     ).toEqual({
-      starterCardVarietyUnlocked: true,
-      migrationBonusGranted: false,
-      activeArchetypeId: null,
-      relicPathUnlocked: false,
-      unlockedRelicIds: [],
-      activeStartingRelicId: null,
-      completedContractIds: [],
-    });
-  });
-
-  test('drops retired starter-kit fields from old saved progression', () => {
-    expect(
-      normalizeMetaState({
-        economyVersion: META_ECONOMY_VERSION,
-        embers: 7,
-        progression: {
-          starterCardVarietyUnlocked: true,
-          migrationBonusGranted: false,
-          unlockedStarterKitIds: ['duelist', 'bad-kit', 'warden', 'duelist'],
-          activeStarterKitId: 'warden',
-        },
-        pendingPrep: {
-          itemIds: [],
-          extraStartingChoice: false,
-          scoutFlame: false,
-          curseIds: [],
-        },
-        lastAwardedRunId: null,
-      }).progression,
-    ).toEqual({
-      starterCardVarietyUnlocked: true,
-      migrationBonusGranted: false,
-      activeArchetypeId: null,
-      relicPathUnlocked: false,
-      unlockedRelicIds: [],
-      activeStartingRelicId: null,
-      completedContractIds: [],
-    });
-  });
-
-  test('filters saved item ids to campfire items and inventory capacity', () => {
-    const savedItemIds = [
-      'small_potion',
-      'large_potion',
-      'smoke_bomb',
-      'bad_item',
-      'bomb',
-      ...Array.from({ length: MAX_INVENTORY }, () => 'small_potion'),
-    ];
-    const expectedItemIds = [
-      'small_potion',
-      'smoke_bomb',
-      'bomb',
-      ...Array.from({ length: MAX_INVENTORY }, () => 'small_potion'),
-    ].slice(0, MAX_INVENTORY);
-
-    expect(
-      normalizeMetaState({
-        economyVersion: META_ECONOMY_VERSION,
-        embers: 7,
-        pendingPrep: {
-          itemIds: savedItemIds,
-          extraStartingChoice: false,
-          scoutFlame: true,
-          curseIds: [],
-        },
-        lastAwardedRunId: null,
-      }).pendingPrep.itemIds,
-    ).toEqual(expectedItemIds);
-  });
-
-  test('keeps only the first valid saved curse id', () => {
-    expect(
-      normalizeMetaState({
-        economyVersion: META_ECONOMY_VERSION,
-        embers: 7,
-        pendingPrep: {
-          itemIds: [],
-          extraStartingChoice: false,
-          scoutFlame: false,
-          curseIds: ['blood_oath', 'bad'],
-        },
-        lastAwardedRunId: null,
-      }).pendingPrep.curseIds,
-    ).toEqual(['blood_oath']);
-  });
-
-  test('loads saved embers and pending prep', () => {
-    const storage = new MemoryStorage();
-    saveMetaState(
-      {
-        economyVersion: META_ECONOMY_VERSION,
-        embers: 12,
-        progression: {
-          starterCardVarietyUnlocked: true,
-          migrationBonusGranted: false,
-        },
-        pendingPrep: {
-          itemIds: ['small_potion'],
-          extraStartingChoice: true,
-          scoutFlame: false,
-          curseIds: [],
-        },
-        lastAwardedRunId: 'run-1',
-      },
-      storage,
-    );
-
-    expect(loadMetaState(storage)).toEqual({
       economyVersion: META_ECONOMY_VERSION,
-      embers: 12,
       progression: {
-        starterCardVarietyUnlocked: true,
-        migrationBonusGranted: false,
-        activeArchetypeId: null,
-        relicPathUnlocked: false,
-        unlockedRelicIds: [],
-        activeStartingRelicId: null,
-        completedContractIds: [],
+        activeArchetypeId: 'barbarian',
+        activeStartingRelicId: 'swift_boots',
+        completedContractIds: ['reach_depth_6'],
       },
-      pendingPrep: {
-        itemIds: ['small_potion'],
-        extraStartingChoice: true,
-        scoutFlame: false,
-        curseIds: [],
-        pendingRelicRoll: false,
-      },
-      lastAwardedRunId: 'run-1',
     });
+  });
+
+  test('drops invalid archetype and non-starting relic selections', () => {
+    expect(
+      normalizeMetaState({
+        economyVersion: META_ECONOMY_VERSION,
+        progression: {
+          activeArchetypeId: 'bad',
+          activeStartingRelicId: 'stone_heart',
+          completedContractIds: [],
+        },
+      }),
+    ).toEqual(createDefaultMetaState());
+  });
+
+  test('loads and saves selected loadout', () => {
+    const storage = new MemoryStorage();
+    const meta: MetaState = {
+      economyVersion: META_ECONOMY_VERSION,
+      progression: {
+        activeArchetypeId: 'ranger' as const,
+        activeStartingRelicId: 'swift_boots' as const,
+        completedContractIds: ['first_elite_kill' as const],
+      },
+    };
+
+    saveMetaState(meta, storage);
+
+    expect(loadMetaState(storage)).toEqual(meta);
   });
 
   test('falls back to defaults when storage contains malformed JSON', () => {
@@ -256,142 +111,46 @@ describe('meta state', () => {
     expect(
       setMeta({
         economyVersion: META_ECONOMY_VERSION,
-        embers: 4.8,
         progression: {
-          starterCardVarietyUnlocked: true,
-          migrationBonusGranted: false,
+          activeArchetypeId: 'ranger',
+          activeStartingRelicId: 'swift_boots',
+          completedContractIds: [],
         },
-        pendingPrep: {
-          itemIds: ['large_potion', 'bomb'],
-          extraStartingChoice: true,
-          scoutFlame: false,
-          curseIds: [],
-        },
-        lastAwardedRunId: null,
       }),
     ).toEqual({
       economyVersion: META_ECONOMY_VERSION,
-      embers: 4,
       progression: {
-        starterCardVarietyUnlocked: true,
-        migrationBonusGranted: false,
-        activeArchetypeId: null,
-        relicPathUnlocked: false,
-        unlockedRelicIds: [],
-        activeStartingRelicId: null,
+        activeArchetypeId: 'ranger',
+        activeStartingRelicId: 'swift_boots',
         completedContractIds: [],
       },
-      pendingPrep: {
-        itemIds: ['bomb'],
-        extraStartingChoice: true,
-        scoutFlame: false,
-        curseIds: [],
-        pendingRelicRoll: false,
-      },
-      lastAwardedRunId: null,
     });
 
     expect(
       setMeta({
         economyVersion: META_ECONOMY_VERSION,
-        embers: 7,
         progression: {
-          starterCardVarietyUnlocked: false,
-          migrationBonusGranted: false,
+          activeArchetypeId: 'bad' as never,
+          activeStartingRelicId: 'spark_coil',
+          completedContractIds: ['reach_room_20'],
         },
-        pendingPrep: {
-          itemIds: ['bomb'],
-          extraStartingChoice: true,
-          scoutFlame: true,
-          curseIds: [],
-        },
-        lastAwardedRunId: 'run-2',
       }),
     ).toEqual({
       economyVersion: META_ECONOMY_VERSION,
-      embers: 7,
       progression: {
-        starterCardVarietyUnlocked: false,
-        migrationBonusGranted: false,
         activeArchetypeId: null,
-        relicPathUnlocked: false,
-        unlockedRelicIds: [],
-        activeStartingRelicId: null,
-        completedContractIds: [],
+        activeStartingRelicId: 'spark_coil',
+        completedContractIds: ['reach_room_20'],
       },
-      pendingPrep: {
-        itemIds: ['bomb'],
-        extraStartingChoice: true,
-        scoutFlame: true,
-        curseIds: [],
-        pendingRelicRoll: false,
-      },
-      lastAwardedRunId: 'run-2',
     });
 
     expect(getMeta()).toEqual({
       economyVersion: META_ECONOMY_VERSION,
-      embers: 7,
       progression: {
-        starterCardVarietyUnlocked: false,
-        migrationBonusGranted: false,
         activeArchetypeId: null,
-        relicPathUnlocked: false,
-        unlockedRelicIds: [],
-        activeStartingRelicId: null,
-        completedContractIds: [],
-      },
-      pendingPrep: {
-        itemIds: ['bomb'],
-        extraStartingChoice: true,
-        scoutFlame: true,
-        curseIds: [],
-        pendingRelicRoll: false,
-      },
-      lastAwardedRunId: 'run-2',
-    });
-  });
-
-  // Regression coverage for a bug found in review: `normalizeProgression` used to reset
-  // `unlockedRelicIds` to `[]` whenever `relicPathUnlocked` was false, so a contract-granted
-  // relic unlock (earned before the path purchase) was silently discarded on the very next
-  // `setMeta` call — permanent, since the completed contract could never re-fire.
-  test('keeps a contract-granted relic unlock even before the relic path is purchased', () => {
-    const meta = setMeta({
-      ...createDefaultMetaState(),
-      progression: {
-        ...createDefaultMetaState().progression,
-        relicPathUnlocked: false,
-        unlockedRelicIds: ['merchants_seal'],
-        completedContractIds: ['first_elite_kill'],
+        activeStartingRelicId: 'spark_coil',
+        completedContractIds: ['reach_room_20'],
       },
     });
-
-    expect(meta.progression.relicPathUnlocked).toBe(false);
-    expect(meta.progression.unlockedRelicIds).toEqual(['merchants_seal']);
-    expect(meta.progression.completedContractIds).toEqual(['first_elite_kill']);
-
-    // Buying the path afterward must see the relic still unlocked, not lost.
-    const afterPathBuy = setMeta({
-      ...meta,
-      progression: { ...meta.progression, relicPathUnlocked: true },
-    });
-    expect(afterPathBuy.progression.unlockedRelicIds).toEqual(['merchants_seal']);
-  });
-
-  // Regression coverage: `normalizeActiveStartingRelicId` used to accept a cost-0 starter relic
-  // as the active starting relic regardless of `relicPathUnlocked`, letting a save (or a manually
-  // edited one) carry a starting relic that bypassed the Ember-gated relic path.
-  test('drops an active starting relic on load if the relic path is not unlocked', () => {
-    const meta = setMeta({
-      ...createDefaultMetaState(),
-      progression: {
-        ...createDefaultMetaState().progression,
-        relicPathUnlocked: false,
-        activeStartingRelicId: 'swift_boots',
-      },
-    });
-
-    expect(meta.progression.activeStartingRelicId).toBeNull();
   });
 });

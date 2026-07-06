@@ -2,16 +2,13 @@ import Phaser from 'phaser';
 import { GAME_H, GAME_W } from '../config';
 import { playSfx } from '../audio/sfx';
 import {
-  STARTER_CARD_VARIETY_UNLOCK_COST,
-  buyStarterCardVarietyUnlock,
-  buyRelicPathUnlock,
-  buyRelicUnlock,
   formatArchetypeProgressionLine,
   formatArchetypeSelectionSummary,
   formatRelicProgressionLine,
   formatRelicProgressionSummary,
   formatStarterCardProgressionSummary,
-  RELIC_PATH_UNLOCK_COST,
+  isArchetypeUnlocked,
+  isStartingRelicEligible,
   setActiveArchetype,
   setActiveStartingRelic,
 } from '../game/progression';
@@ -25,6 +22,7 @@ import { RELIC_DEFS, type RelicId } from '../data/relics';
 import { ARCHETYPES } from '../data/archetypes';
 import type { ArchetypeId } from '../data/cards';
 import { getMeta, setMeta } from '../meta';
+import { getProfile, levelForXp, type ProfileState } from '../profile';
 
 const TEXT_STYLE = {
   fontFamily: 'monospace',
@@ -50,8 +48,10 @@ export class ProgressionScene extends Phaser.Scene {
     this.drawRoom();
     this.dynamic = this.add.container(0, 0).setDepth(FOREGROUND_DEPTH);
     this.game.events.on('meta-update', this.redraw, this);
+    this.game.events.on('profile-update', this.redraw, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.game.events.off('meta-update', this.redraw, this);
+      this.game.events.off('profile-update', this.redraw, this);
       this.input.off('wheel', this.handleWheel, this);
       this.input.off('pointermove', this.handlePointerMove, this);
       this.input.off('pointerup', this.stopScrollbarDrag, this);
@@ -88,6 +88,7 @@ export class ProgressionScene extends Phaser.Scene {
     this.scrollContent = undefined;
     this.scrollbar = undefined;
     const meta = getMeta();
+    const profile = getProfile();
     const layout = createProgressionPanelLayout(ARCHETYPES.length, RELIC_DEFS.length);
     this.layout = layout;
     this.scrollOffset = clampScrollOffset(this.scrollOffset, layout.maxScrollOffset);
@@ -95,7 +96,7 @@ export class ProgressionScene extends Phaser.Scene {
     this.addBackButton();
     this.dynamic.add(
       this.add
-        .text(GAME_W / 2, 50, 'PROGRESSION', {
+        .text(GAME_W / 2, 50, 'LOADOUT', {
           ...TEXT_STYLE,
           fontSize: '34px',
           fontStyle: 'bold',
@@ -105,7 +106,7 @@ export class ProgressionScene extends Phaser.Scene {
     );
     this.dynamic.add(
       this.add
-        .text(GAME_W / 2, 94, 'Gold is for this run. Embers are for long-term progress.', {
+        .text(GAME_W / 2, 94, `Level ${levelForXp(profile.xp)} - ${profile.xp} lifetime XP`, {
           ...TEXT_STYLE,
           fontSize: '14px',
           color: '#b8b0c8',
@@ -153,6 +154,7 @@ export class ProgressionScene extends Phaser.Scene {
     for (const [index, archetype] of ARCHETYPES.entries()) {
       this.addArchetypeRow(
         archetype.id,
+        profile,
         layout.archetypeRowsStartY + index * layout.archetypeRowH,
         content,
         layout,
@@ -160,16 +162,7 @@ export class ProgressionScene extends Phaser.Scene {
     }
 
     this.addClearArchetypeButton(content, layout);
-
-    const archetypeDivider = this.add.graphics();
-    archetypeDivider.lineStyle(1, 0x6f687c, 0.55);
-    archetypeDivider.lineBetween(
-      0,
-      layout.archetypeDividerY,
-      layout.contentW - 22,
-      layout.archetypeDividerY,
-    );
-    content.add(archetypeDivider);
+    this.addDivider(content, 0, layout.archetypeDividerY, layout.contentW - 22);
 
     content.add(
       this.add.text(0, layout.starterHeadingY, 'STARTER VARIETY', {
@@ -180,7 +173,7 @@ export class ProgressionScene extends Phaser.Scene {
       }),
     );
     content.add(
-      this.add.text(0, layout.starterSummaryY, formatStarterCardProgressionSummary(meta), {
+      this.add.text(0, layout.starterSummaryY, formatStarterCardProgressionSummary(profile), {
         ...TEXT_STYLE,
         fontSize: '12px',
         color: '#d8d2e4',
@@ -190,17 +183,8 @@ export class ProgressionScene extends Phaser.Scene {
       }),
     );
 
-    this.addUnlockButton(meta.progression.starterCardVarietyUnlocked, meta.embers, content, layout);
-
-    const divider = this.add.graphics();
-    divider.lineStyle(1, 0x6f687c, 0.55);
-    divider.lineBetween(0, layout.dividerY, layout.contentW - 22, layout.dividerY);
-    content.add(divider);
-
-    const relicDivider = this.add.graphics();
-    relicDivider.lineStyle(1, 0x6f687c, 0.55);
-    relicDivider.lineBetween(0, layout.relicDividerY, layout.contentW - 22, layout.relicDividerY);
-    content.add(relicDivider);
+    this.addDivider(content, 0, layout.dividerY, layout.contentW - 22);
+    this.addDivider(content, 0, layout.relicDividerY, layout.contentW - 22);
 
     content.add(
       this.add.text(0, layout.relicHeadingY, 'RELICS', {
@@ -211,7 +195,7 @@ export class ProgressionScene extends Phaser.Scene {
       }),
     );
     content.add(
-      this.add.text(0, layout.relicSummaryY, formatRelicProgressionSummary(meta), {
+      this.add.text(0, layout.relicSummaryY, formatRelicProgressionSummary(meta, profile), {
         ...TEXT_STYLE,
         fontSize: '12px',
         color: '#d8d2e4',
@@ -220,20 +204,31 @@ export class ProgressionScene extends Phaser.Scene {
         lineSpacing: 5,
       }),
     );
-    this.addRelicPathButton(meta, content, layout);
 
     for (const [index, relic] of RELIC_DEFS.entries()) {
       this.addRelicRow(
         relic.id,
+        profile,
         layout.relicRowsStartY + index * layout.relicRowH,
         content,
         layout,
       );
     }
     this.addClearRelicButton(content, layout);
-
     this.addScrollbar(layout);
   };
+
+  private addDivider(
+    container: Phaser.GameObjects.Container,
+    x: number,
+    y: number,
+    w: number,
+  ): void {
+    const divider = this.add.graphics();
+    divider.lineStyle(1, 0x6f687c, 0.55);
+    divider.lineBetween(x, y, x + w, y);
+    container.add(divider);
+  }
 
   private addBackButton(): void {
     const button = this.add
@@ -286,40 +281,14 @@ export class ProgressionScene extends Phaser.Scene {
     container.add(button);
   }
 
-  private addUnlockButton(
-    unlocked: boolean,
-    embers: number,
-    container: Phaser.GameObjects.Container,
-    layout: ProgressionPanelLayout,
-  ): void {
-    const affordable = embers >= STARTER_CARD_VARIETY_UNLOCK_COST;
-    const enabled = !unlocked && affordable;
-    const label = unlocked
-      ? '[ UNLOCKED ]'
-      : affordable
-        ? `[ UNLOCK - ${STARTER_CARD_VARIETY_UNLOCK_COST} EMBERS ]`
-        : `[ NEED ${STARTER_CARD_VARIETY_UNLOCK_COST} EMBERS ]`;
-
-    this.addTextButton(
-      layout.unlockButtonX,
-      layout.unlockButtonY,
-      label,
-      enabled,
-      () => this.buyStarterUnlock(),
-      '15px',
-      container,
-      true,
-    );
-  }
-
   private addArchetypeRow(
     archetypeId: ArchetypeId,
+    profile: ProfileState,
     y: number,
     container: Phaser.GameObjects.Container,
     layout: ProgressionPanelLayout,
   ): void {
     const meta = getMeta();
-
     const rowBg = this.add.graphics();
     rowBg.fillStyle(0x0f0d15, 0.68);
     rowBg.fillRect(0, y - 12, layout.contentW - 22, layout.archetypeRowH - 12);
@@ -328,7 +297,7 @@ export class ProgressionScene extends Phaser.Scene {
     container.add(rowBg);
 
     container.add(
-      this.add.text(14, y, formatArchetypeProgressionLine(meta, archetypeId), {
+      this.add.text(14, y, formatArchetypeProgressionLine(meta, profile, archetypeId), {
         ...TEXT_STYLE,
         fontSize: '12px',
         color: '#d8d2e4',
@@ -339,11 +308,12 @@ export class ProgressionScene extends Phaser.Scene {
     );
 
     const active = meta.progression.activeArchetypeId === archetypeId;
+    const unlocked = isArchetypeUnlocked(profile, archetypeId);
     this.addTextButton(
       layout.rowButtonX,
       y + 34,
-      active ? '[ ACTIVE ]' : '[ SELECT ]',
-      !active,
+      active ? '[ ACTIVE ]' : unlocked ? '[ SELECT ]' : '[ LOCKED ]',
+      unlocked && !active,
       () => this.selectArchetype(archetypeId),
       '14px',
       container,
@@ -355,7 +325,7 @@ export class ProgressionScene extends Phaser.Scene {
     container: Phaser.GameObjects.Container,
     layout: ProgressionPanelLayout,
   ): void {
-    const active = getMeta().progression.activeArchetypeId != null;
+    const active = getMeta().progression.activeArchetypeId !== null;
     this.addTextButton(
       layout.contentW / 2 - 11,
       layout.clearArchetypeButtonY,
@@ -368,33 +338,9 @@ export class ProgressionScene extends Phaser.Scene {
     );
   }
 
-  private addRelicPathButton(
-    meta: ReturnType<typeof getMeta>,
-    container: Phaser.GameObjects.Container,
-    layout: ProgressionPanelLayout,
-  ): void {
-    const unlocked = meta.progression.relicPathUnlocked;
-    const affordable = meta.embers >= RELIC_PATH_UNLOCK_COST;
-    const enabled = !unlocked && affordable;
-    const label = unlocked
-      ? '[ RELIC PATH UNLOCKED ]'
-      : affordable
-        ? `[ UNLOCK PATH - ${RELIC_PATH_UNLOCK_COST} EMBERS ]`
-        : `[ NEED ${RELIC_PATH_UNLOCK_COST} EMBERS ]`;
-    this.addTextButton(
-      layout.unlockButtonX,
-      layout.relicUnlockButtonY,
-      label,
-      enabled,
-      () => this.buyRelicPath(),
-      '14px',
-      container,
-      true,
-    );
-  }
-
   private addRelicRow(
     relicId: RelicId,
+    profile: ProfileState,
     y: number,
     container: Phaser.GameObjects.Container,
     layout: ProgressionPanelLayout,
@@ -411,7 +357,7 @@ export class ProgressionScene extends Phaser.Scene {
     container.add(rowBg);
 
     container.add(
-      this.add.text(14, y, formatRelicProgressionLine(meta, relicId), {
+      this.add.text(14, y, formatRelicProgressionLine(meta, profile, relicId), {
         ...TEXT_STYLE,
         fontSize: '12px',
         color: '#d8d2e4',
@@ -421,40 +367,25 @@ export class ProgressionScene extends Phaser.Scene {
       }),
     );
 
-    const pathUnlocked = meta.progression.relicPathUnlocked === true;
-    // Gated on `pathUnlocked` to match `formatRelicProgressionLine`'s status text above (which
-    // always reads "locked - unlock relic path first" until the path is bought) and
-    // `setActiveStartingRelic`'s own gate — a relic can be contract-unlocked into
-    // `unlockedRelicIds` before the path purchase, but stays non-selectable until then.
-    const unlocked =
-      pathUnlocked &&
-      (relic.unlockCost === 0 || (meta.progression.unlockedRelicIds ?? []).includes(relic.id));
     const active = meta.progression.activeStartingRelicId === relic.id;
-    const canBuy = pathUnlocked && !unlocked && meta.embers >= relic.unlockCost;
-    const canSelect = unlocked && relic.startingRelicEligible === true;
+    const eligible = isStartingRelicEligible(profile, relic.id);
+    const discovered = profile.discoveredRelicIds.includes(relic.id);
     const label = active
       ? '[ ACTIVE ]'
-      : canSelect
+      : eligible
         ? '[ SELECT ]'
-        : unlocked
-          ? '[ UNLOCKED ]'
-          : canBuy
-            ? `[ BUY ${relic.unlockCost} ]`
-            : pathUnlocked
-              ? `[ NEED ${relic.unlockCost} ]`
-              : '[ LOCKED ]';
-    const enabled = active ? false : canSelect ? true : canBuy;
-    const onPointerDown =
-      canSelect && unlocked
-        ? () => this.selectStartingRelic(relic.id)
-        : () => this.buyRelic(relic.id);
+        : !discovered
+          ? '[ UNSEEN ]'
+          : relic.startingRelicEligible
+            ? '[ LOCKED ]'
+            : '[ RUN ONLY ]';
 
     this.addTextButton(
       layout.rowButtonX,
       y + 18,
       label,
-      enabled,
-      onPointerDown,
+      eligible && !active,
+      () => this.selectStartingRelic(relic.id),
       '14px',
       container,
       true,
@@ -596,59 +527,12 @@ export class ProgressionScene extends Phaser.Scene {
     );
   }
 
-  private buyStarterUnlock(): void {
-    const meta = getMeta();
-    const result = buyStarterCardVarietyUnlock(meta);
-    if (!result.ok) return;
-
-    const updated = setMeta({
-      ...meta,
-      embers: result.state.embers,
-      progression: result.state.progression,
-    });
-    this.game.events.emit('meta-update', updated);
-    playSfx(this, 'purchase');
-    this.redraw();
-  }
-
   private selectArchetype(archetypeId: ArchetypeId | null): void {
     const meta = getMeta();
-    const result = setActiveArchetype(meta, archetypeId);
+    const result = setActiveArchetype(meta, getProfile(), archetypeId);
     if (!result.ok) return;
 
-    const updated = setMeta({
-      ...meta,
-      embers: result.state.embers,
-      progression: result.state.progression,
-    });
-    this.game.events.emit('meta-update', updated);
-    playSfx(this, 'purchase');
-    this.redraw();
-  }
-
-  private buyRelicPath(): void {
-    const meta = getMeta();
-    const result = buyRelicPathUnlock(meta);
-    if (!result.ok) return;
-    const updated = setMeta({
-      ...meta,
-      embers: result.state.embers,
-      progression: result.state.progression,
-    });
-    this.game.events.emit('meta-update', updated);
-    playSfx(this, 'purchase');
-    this.redraw();
-  }
-
-  private buyRelic(relicId: RelicId): void {
-    const meta = getMeta();
-    const result = buyRelicUnlock(meta, relicId);
-    if (!result.ok) return;
-    const updated = setMeta({
-      ...meta,
-      embers: result.state.embers,
-      progression: result.state.progression,
-    });
+    const updated = setMeta(result.state);
     this.game.events.emit('meta-update', updated);
     playSfx(this, 'purchase');
     this.redraw();
@@ -656,13 +540,10 @@ export class ProgressionScene extends Phaser.Scene {
 
   private selectStartingRelic(relicId: RelicId | null): void {
     const meta = getMeta();
-    const result = setActiveStartingRelic(meta, relicId);
+    const result = setActiveStartingRelic(meta, getProfile(), relicId);
     if (!result.ok) return;
-    const updated = setMeta({
-      ...meta,
-      embers: result.state.embers,
-      progression: result.state.progression,
-    });
+
+    const updated = setMeta(result.state);
     this.game.events.emit('meta-update', updated);
     playSfx(this, 'purchase');
     this.redraw();

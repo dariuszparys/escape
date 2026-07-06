@@ -1,72 +1,139 @@
 import type { MetaProgressionState } from '../meta';
 import { CARD_DEFS, type ArchetypeId } from '../data/cards';
 import { ARCHETYPES, archetypeDef } from '../data/archetypes';
+import {
+  isArchetypeLevelEligible,
+  isRelicLevelEligible,
+  requiredLevelForArchetype,
+  requiredLevelForRelic,
+  unlocksForLevel,
+} from '../data/levelUnlocks';
+import { RELIC_DEFS, relicDef, type RelicDef, type RelicId } from '../data/relics';
+import { levelForXp, type ProfileState } from '../profile';
 import { ARCHETYPE_STARTING_CARD_IDS } from './startingCards';
-import { RELIC_DEFS, relicDef, type RelicId } from '../data/relics';
-
-export const STARTER_CARD_VARIETY_UNLOCK_COST = 4;
-export const RELIC_PATH_UNLOCK_COST = 5;
 
 export interface ProgressionState {
-  embers: number;
   progression: MetaProgressionState;
 }
 
-type ProgressionResult =
-  | { ok: true; state: ProgressionState }
-  | { ok: false; reason: string; state: ProgressionState };
+type ProgressionResult<T extends ProgressionState> =
+  | { ok: true; state: T }
+  | { ok: false; reason: string; state: T };
 
-export function buyStarterCardVarietyUnlock(state: ProgressionState): ProgressionResult {
-  if (state.progression.starterCardVarietyUnlocked) {
-    return {
-      ok: false,
-      reason: 'Starter variety already unlocked.',
-      state,
-    };
-  }
-
-  if (state.embers < STARTER_CARD_VARIETY_UNLOCK_COST) {
-    return {
-      ok: false,
-      reason: 'Not enough Embers.',
-      state,
-    };
-  }
-
+function withProgression<T extends ProgressionState>(
+  state: T,
+  progression: MetaProgressionState,
+): T {
   return {
-    ok: true,
-    state: {
-      embers: state.embers - STARTER_CARD_VARIETY_UNLOCK_COST,
-      progression: {
-        ...state.progression,
-        starterCardVarietyUnlocked: true,
-      },
-    },
+    ...state,
+    progression,
   };
 }
 
-/**
- * Select (or clear) the active archetype for the next normal run. Archetypes are a free, horizontal
- * playstyle choice — no Ember cost and no unlock gate — so this only validates the id and swaps it.
- * `null` clears back to the neutral (standard) card pool.
- */
-export function setActiveArchetype(
-  state: ProgressionState,
+export function hasStarterCardVariety(profile: ProfileState): boolean {
+  return unlocksForLevel(levelForXp(profile.xp)).starterCardVariety;
+}
+
+export function isArchetypeUnlocked(profile: ProfileState, archetypeId: ArchetypeId): boolean {
+  return isArchetypeLevelEligible(levelForXp(profile.xp), archetypeId);
+}
+
+export function isStartingRelicEligible(profile: ProfileState, relicId: RelicId): boolean {
+  const relic = RELIC_DEFS.find((candidate) => candidate.id === relicId);
+  if (!relic?.startingRelicEligible) return false;
+  const level = levelForXp(profile.xp);
+  if (unlocksForLevel(level).startingRelicSlots <= 0) return false;
+  return profile.discoveredRelicIds.includes(relicId) && isRelicLevelEligible(level, relicId);
+}
+
+export function eligibleStartingRelics(profile: ProfileState): RelicDef[] {
+  return RELIC_DEFS.filter((relic) => isStartingRelicEligible(profile, relic.id));
+}
+
+export function setActiveArchetype<T extends ProgressionState>(
+  state: T,
+  profile: ProfileState,
   archetypeId: ArchetypeId | null,
-): ProgressionResult {
-  if (archetypeId !== null && !ARCHETYPES.some((archetype) => archetype.id === archetypeId)) {
+): ProgressionResult<T> {
+  if (archetypeId === null) {
+    return {
+      ok: true,
+      state: withProgression(state, {
+        ...state.progression,
+        activeArchetypeId: null,
+      }),
+    };
+  }
+
+  if (!ARCHETYPES.some((archetype) => archetype.id === archetypeId)) {
     return { ok: false, reason: 'Unknown archetype.', state };
+  }
+
+  if (!isArchetypeUnlocked(profile, archetypeId)) {
+    const requiredLevel = requiredLevelForArchetype(archetypeId);
+    return {
+      ok: false,
+      reason: requiredLevel
+        ? `Archetype requires level ${requiredLevel}.`
+        : 'Archetype is not unlockable.',
+      state,
+    };
   }
 
   return {
     ok: true,
-    state: {
-      ...state,
-      progression: {
+    state: withProgression(state, {
+      ...state.progression,
+      activeArchetypeId: archetypeId,
+    }),
+  };
+}
+
+export function setActiveStartingRelic<T extends ProgressionState>(
+  state: T,
+  profile: ProfileState,
+  relicId: RelicId | null,
+): ProgressionResult<T> {
+  if (relicId === null) {
+    return {
+      ok: true,
+      state: withProgression(state, {
         ...state.progression,
-        activeArchetypeId: archetypeId,
-      },
-    },
+        activeStartingRelicId: null,
+      }),
+    };
+  }
+
+  const relic = RELIC_DEFS.find((candidate) => candidate.id === relicId);
+  if (!relic) return { ok: false, reason: 'Unknown relic.', state };
+  if (!relic.startingRelicEligible) {
+    return { ok: false, reason: 'This relic cannot start a run.', state };
+  }
+
+  const level = levelForXp(profile.xp);
+  if (unlocksForLevel(level).startingRelicSlots <= 0) {
+    return { ok: false, reason: 'No starting relic slot unlocked.', state };
+  }
+
+  if (!profile.discoveredRelicIds.includes(relicId)) {
+    return { ok: false, reason: 'Relic is not discovered.', state };
+  }
+
+  if (!isRelicLevelEligible(level, relicId)) {
+    const requiredLevel = requiredLevelForRelic(relicId);
+    return {
+      ok: false,
+      reason: requiredLevel ? `Relic requires level ${requiredLevel}.` : 'Relic is not unlockable.',
+      state,
+    };
+  }
+
+  return {
+    ok: true,
+    state: withProgression(state, {
+      ...state.progression,
+      activeStartingRelicId: relic.id,
+    }),
   };
 }
 
@@ -80,141 +147,75 @@ function archetypePickNames(archetypeId: ArchetypeId): string[] {
 
 export function formatArchetypeProgressionLine(
   state: ProgressionState,
+  profile: ProfileState,
   archetypeId: ArchetypeId,
 ): string {
   const def = archetypeDef(archetypeId);
   const active = state.progression.activeArchetypeId === archetypeId;
-  const status = active ? 'active - shapes next normal run' : 'select for next normal run';
+  const unlocked = isArchetypeUnlocked(profile, archetypeId);
+  const requiredLevel = requiredLevelForArchetype(archetypeId);
+  const status = active
+    ? 'active - shapes next run'
+    : unlocked
+      ? 'available - select for next run'
+      : `locked - level ${requiredLevel ?? '?'}`;
   return `${def.name} (${def.tagline}): ${status} | ${def.description} | Opens with: ${archetypePickNames(archetypeId).join(', ')}`;
 }
 
 export function formatArchetypeSelectionSummary(state: ProgressionState): string {
   const active = state.progression.activeArchetypeId;
-  const line = active
+  return active
     ? `Archetype: ${archetypeDef(active).name} - every card draw is ${archetypeDef(active).name}-flavored.`
-    : 'Archetype: none - standard cards only. Pick one to reshape the whole run.';
-  return line;
+    : 'Archetype: none - standard cards only.';
 }
 
-export function formatStarterCardProgressionSummary(state: ProgressionState): string {
-  const starterLine = state.progression.starterCardVarietyUnlocked
-    ? 'Starter variety: unlocked - four opening card options.'
-    : `Starter variety: locked - spend ${STARTER_CARD_VARIETY_UNLOCK_COST} Embers for a fourth opening card option.`;
-  const migrationLine = state.progression.migrationBonusGranted
-    ? 'Migration bonus: starter variety granted for old Ember progress.'
-    : 'Migration bonus: none.';
-
+export function formatStarterCardProgressionSummary(profile: ProfileState): string {
+  const level = levelForXp(profile.xp);
+  const unlocked = hasStarterCardVariety(profile);
   return [
-    `Embers: ${state.embers}`,
-    starterLine,
-    migrationLine,
-    formatRelicProgressionSummary(state),
+    `Level ${level} - ${profile.xp} lifetime XP.`,
+    unlocked
+      ? 'Starter variety: unlocked - four opening card options.'
+      : 'Starter variety: unlocks at level 4.',
   ].join('\n');
 }
 
-function findRelic(id: string) {
-  return RELIC_DEFS.find((relic) => relic.id === id) ?? null;
-}
-
-export function buyRelicPathUnlock(state: ProgressionState): ProgressionResult {
-  if (state.progression.relicPathUnlocked) {
-    return { ok: false, reason: 'Relic path already unlocked.', state };
-  }
-  if (state.embers < RELIC_PATH_UNLOCK_COST) {
-    return { ok: false, reason: 'Not enough Embers.', state };
-  }
-  return {
-    ok: true,
-    state: {
-      embers: state.embers - RELIC_PATH_UNLOCK_COST,
-      progression: {
-        ...state.progression,
-        relicPathUnlocked: true,
-      },
-    },
-  };
-}
-
-export function buyRelicUnlock(state: ProgressionState, relicId: string): ProgressionResult {
-  const relic = findRelic(relicId);
-  if (!relic) return { ok: false, reason: 'Unknown relic.', state };
-  if (!state.progression.relicPathUnlocked) {
-    return { ok: false, reason: 'Unlock the relic path first.', state };
-  }
-  if (relic.unlockCost === 0) {
-    return { ok: false, reason: 'Starter relics are always available.', state };
-  }
-  if (state.progression.unlockedRelicIds?.includes(relic.id)) {
-    return { ok: false, reason: 'Relic already unlocked.', state };
-  }
-  if (state.embers < relic.unlockCost) {
-    return { ok: false, reason: 'Not enough Embers.', state };
-  }
-  return {
-    ok: true,
-    state: {
-      embers: state.embers - relic.unlockCost,
-      progression: {
-        ...state.progression,
-        unlockedRelicIds: [...(state.progression.unlockedRelicIds ?? []), relic.id],
-      },
-    },
-  };
-}
-
-export function setActiveStartingRelic(
+export function formatRelicProgressionLine(
   state: ProgressionState,
-  relicId: RelicId | null,
-): ProgressionResult {
-  if (relicId === null) {
-    return {
-      ok: true,
-      state: {
-        ...state,
-        progression: { ...state.progression, activeStartingRelicId: null },
-      },
-    };
-  }
-  const relic = findRelic(relicId);
-  if (!relic) return { ok: false, reason: 'Unknown relic.', state };
-  if (!state.progression.relicPathUnlocked) {
-    return { ok: false, reason: 'Unlock the relic path first.', state };
-  }
-  if (!relic.startingRelicEligible) {
-    return { ok: false, reason: 'This relic cannot start a run.', state };
-  }
-  const unlocked =
-    relic.unlockCost === 0 || (state.progression.unlockedRelicIds ?? []).includes(relic.id);
-  if (!unlocked) return { ok: false, reason: 'Relic is locked.', state };
-  return {
-    ok: true,
-    state: {
-      ...state,
-      progression: { ...state.progression, activeStartingRelicId: relic.id },
-    },
-  };
-}
-
-export function formatRelicProgressionLine(state: ProgressionState, relicId: RelicId): string {
+  profile: ProfileState,
+  relicId: RelicId,
+): string {
   const relic = relicDef(relicId);
-  const status = !state.progression.relicPathUnlocked
-    ? 'locked - unlock relic path first'
-    : state.progression.activeStartingRelicId === relic.id
-      ? 'active - starts next normal run'
-      : relic.unlockCost === 0 || (state.progression.unlockedRelicIds ?? []).includes(relic.id)
-        ? relic.startingRelicEligible
-          ? 'unlocked - select as starting relic'
-          : 'unlocked - in-run drops only'
-        : `locked - ${relic.unlockCost} Embers`;
+  const level = levelForXp(profile.xp);
+  const active = state.progression.activeStartingRelicId === relic.id;
+  const discovered = profile.discoveredRelicIds.includes(relic.id);
+  const requiredLevel = requiredLevelForRelic(relic.id);
+  const levelEligible = isRelicLevelEligible(level, relic.id);
+  const status = active
+    ? 'active - starts next run'
+    : !discovered
+      ? 'undiscovered - find it during a run'
+      : !levelEligible
+        ? `discovered - requires level ${requiredLevel ?? '?'}`
+        : relic.startingRelicEligible
+          ? 'available - select as starting relic'
+          : 'discovered - in-run drops only';
   return `${relic.name} (${relic.family}): ${status} | ${relic.description}`;
 }
 
-export function formatRelicProgressionSummary(state: ProgressionState): string {
-  const pathLine = state.progression.relicPathUnlocked
-    ? 'Relic path: unlocked - chests and elites can drop relics from your pool.'
-    : `Relic path: locked - spend ${RELIC_PATH_UNLOCK_COST} Embers to unlock relic progression.`;
+export function formatRelicProgressionSummary(
+  state: ProgressionState,
+  profile: ProfileState,
+): string {
+  const discovered = profile.discoveredRelicIds.length;
   const active = state.progression.activeStartingRelicId
     ? `Starting relic: ${relicDef(state.progression.activeStartingRelicId).name}.`
     : 'Starting relic: none selected.';
-  return [pathLine, active].join('\n');
+  const eligibleCount = eligibleStartingRelics(profile).length;
+  return [
+    `Discovered relics: ${discovered}/${RELIC_DEFS.length}.`,
+    `Loadout choices: ${eligibleCount} starting relic${eligibleCount === 1 ? '' : 's'} available.`,
+    'Drop pool: all relics can appear during runs.',
+    active,
+  ].join('\n');
 }

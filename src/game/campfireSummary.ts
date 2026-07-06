@@ -1,17 +1,10 @@
-import { MAX_INVENTORY } from '../config';
-import type { PendingPrep } from '../data/campfirePurchases';
 import { ARCHETYPES } from '../data/archetypes';
-import { ITEM_DEFS } from '../data/items';
 import { relicDef } from '../data/relics';
 import type { DailyRecord } from '../daily';
 import type { RunChronicle } from '../chronicle';
 import type { MetaProgressionState } from '../meta';
-import {
-  BONUS_STARTING_CARD_CHOICES,
-  BONUS_STARTING_CARD_PICKS,
-  DEFAULT_STARTING_CARD_CHOICES,
-  DEFAULT_STARTING_CARD_PICKS,
-} from './startingCards';
+import { levelForXp, xpForLevel, type ProfileState } from '../profile';
+import { eligibleStartingRelics, hasStarterCardVariety } from './progression';
 
 function activeArchetypeName(progression: MetaProgressionState): string {
   const archetype = progression.activeArchetypeId
@@ -20,39 +13,28 @@ function activeArchetypeName(progression: MetaProgressionState): string {
   return archetype?.name ?? 'none';
 }
 
-export function formatCampfireProgressionSummary(progression: MetaProgressionState): string {
+export function formatProfileProgressLine(profile: ProfileState): string {
+  const level = levelForXp(profile.xp);
+  const nextLevelXp = xpForLevel(level + 1);
+  return nextLevelXp > profile.xp
+    ? `Level ${level} - ${profile.xp}/${nextLevelXp} XP`
+    : `Level ${level} - ${profile.xp} XP`;
+}
+
+export function formatCampfireProgressionSummary(
+  progression: MetaProgressionState,
+  profile: ProfileState,
+): string {
+  const eligibleRelics = eligibleStartingRelics(profile);
   return [
     `Archetype: ${activeArchetypeName(progression)}`,
-    `Starter variety: ${progression.starterCardVarietyUnlocked ? 'unlocked' : 'locked'}`,
-    progression.relicPathUnlocked
-      ? `Relics: ${(progression.unlockedRelicIds ?? []).length + 4} in pool`
-      : 'Relics: path locked',
+    `Starter variety: ${hasStarterCardVariety(profile) ? 'unlocked' : 'level 4'}`,
+    `Discovered relics: ${profile.discoveredRelicIds.length}`,
+    `Starting relic choices: ${eligibleRelics.length}`,
     progression.activeStartingRelicId
       ? `Starting relic: ${relicDef(progression.activeStartingRelicId).name}`
       : 'Starting relic: none',
-  ].join('\n');
-}
-
-export function formatPendingPrepSummary(
-  prep: PendingPrep,
-  progression?: MetaProgressionState,
-): string {
-  const names = prep.itemIds.map((id) => ITEM_DEFS.find((item) => item.id === id)?.name ?? id);
-  const openingChoices =
-    prep.extraStartingChoice || progression?.starterCardVarietyUnlocked
-      ? BONUS_STARTING_CARD_CHOICES
-      : DEFAULT_STARTING_CARD_CHOICES;
-  const openingPicks = prep.extraStartingChoice
-    ? BONUS_STARTING_CARD_PICKS
-    : DEFAULT_STARTING_CARD_PICKS;
-  const archetypeLine = progression ? `Archetype: ${activeArchetypeName(progression)}` : null;
-
-  return [
-    ...(archetypeLine ? [archetypeLine] : []),
-    `One-run prep: ${names.length > 0 ? names.join(', ') : 'none'} (${names.length}/${MAX_INVENTORY})`,
-    `Opening picks: ${openingPicks} of ${openingChoices}`,
-    `Scout flame: ${prep.scoutFlame ? 'ready' : 'unlit'}`,
-    `Relic charm: ${prep.pendingRelicRoll ? 'ready' : 'none'}`,
+    `Personal best: room ${profile.personalBestRoom}`,
   ].join('\n');
 }
 

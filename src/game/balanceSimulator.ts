@@ -1,14 +1,14 @@
 import { BOSS_ROOM_INTERVAL, MAX_DEPTH, RUN_LENGTH } from '../config';
 import { Card, CARD_DEFS, cardEffectAmount, makeCard, type ArchetypeId } from '../data/cards';
 import { hasStatus, modifiedDamage, statusValue } from './combat';
-import { type PendingPrep } from '../data/campfirePurchases';
 import {
   EnemyInstance,
   getEnemyTierForDepth,
   spawnScenarioEncounter,
   toEngineEnemies,
 } from '../data/enemies';
-import { InventoryItem, type InventoryItemDef, makeItem } from '../data/items';
+import { InventoryItem, makeItem } from '../data/items';
+import { requiredLevelForArchetype } from '../data/levelUnlocks';
 import { makeRelic, type RelicId } from '../data/relics';
 import type { ScenarioId } from '../data/scenarios';
 import {
@@ -18,8 +18,9 @@ import {
   type RoomEvent,
 } from '../dungeon/rooms';
 import { RunState } from '../state';
-import { applyPendingPrepToRun } from './campfirePrep';
+import { applyLoadoutToRun } from './campfirePrep';
 import { createDefaultProgressionState } from '../meta';
+import { createDefaultProfileState, xpForLevel } from '../profile';
 import { emitBattleWon } from './combatEvents';
 import { ensureRelicBehaviorsWired } from './relicBehaviors';
 import { relicBattleSetup } from './relicRegistry';
@@ -88,9 +89,6 @@ interface SimRunOptions {
 
 export interface BalanceScenario {
   playerScenarioId?: ScenarioId | null;
-  prepItemIds?: InventoryItemDef['id'][];
-  extraStartingChoice?: boolean;
-  scoutFlame?: boolean;
   starterCardVarietyUnlocked?: boolean;
   activeArchetypeId?: ArchetypeId | null;
   /** Relics granted directly at run start — the knob that lets the harness measure win-rate
@@ -252,27 +250,20 @@ function chooseStartingCards(run: RunState): void {
     });
 }
 
-function makePendingPrep(scenario: BalanceScenario): PendingPrep {
-  return {
-    itemIds: [...(scenario.prepItemIds ?? [])],
-    extraStartingChoice: scenario.extraStartingChoice === true,
-    scoutFlame: scenario.scoutFlame === true,
-  };
-}
-
 function createScenarioRun(seed: number, scenario: BalanceScenario): RunState {
   const run = new RunState(String(seed), `sim-${seed}`);
   run.scenarioId = scenario.playerScenarioId ?? null;
-  const prep = makePendingPrep(scenario);
-  applyPendingPrepToRun(
+  const requiredArchetypeLevel = scenario.activeArchetypeId
+    ? (requiredLevelForArchetype(scenario.activeArchetypeId) ?? 1)
+    : 1;
+  const level = Math.max(scenario.starterCardVarietyUnlocked ? 4 : 1, requiredArchetypeLevel);
+  applyLoadoutToRun(
     run,
-    prep,
     {
       ...createDefaultProgressionState(),
-      starterCardVarietyUnlocked: scenario.starterCardVarietyUnlocked === true,
       activeArchetypeId: scenario.activeArchetypeId ?? null,
     },
-    undefined,
+    { ...createDefaultProfileState(), xp: xpForLevel(level) },
     run.scenarioId,
   );
 

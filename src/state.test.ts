@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest';
 import { makeCard } from './data/cards';
 import { makeRelic } from './data/relics';
 import { RunState } from './state';
+import { createDefaultProfileState, getProfile, setProfile } from './profile';
 
 describe('RunState.removeCard', () => {
   test('stores a selected normal-run scenario independently from daily metadata', () => {
@@ -119,6 +120,15 @@ describe('RunState.removeCard', () => {
     // Its +1 draw applies inside the turn battle; here it is just owned.
     expect(run.hasRelic('swift_boots')).toBe(true);
     expect(run.maxArmor).toBe(3);
+  });
+
+  test('adding a relic records permanent profile discovery', () => {
+    setProfile(createDefaultProfileState());
+    const run = new RunState('seed');
+
+    run.addRelic(makeRelic('spark_coil'));
+
+    expect(getProfile().discoveredRelicIds).toContain('spark_coil');
   });
 
   test('adds iron will to increase max armor to 4 and fills armor immediately', () => {

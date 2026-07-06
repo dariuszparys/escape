@@ -2,10 +2,10 @@ import type { ContractId } from '../data/contracts';
 import { CONTRACT_DEFS, evaluateContract, type ContractRunSnapshot } from '../data/contracts';
 import type { RelicId } from '../data/relics';
 import type { MetaProgressionState, MetaState } from '../meta';
+import { discoverRelic, type ProfileState } from '../profile';
 
 export interface ContractCompletion {
   contractId: ContractId;
-  emberReward: number;
   unlockedRelicId: RelicId | null;
 }
 
@@ -21,7 +21,6 @@ export function evaluateNewContracts(
     if (!evaluateContract(contract.id, run)) continue;
     completions.push({
       contractId: contract.id,
-      emberReward: contract.emberReward ?? 0,
       unlockedRelicId: contract.unlockRelicId ?? null,
     });
   }
@@ -36,25 +35,28 @@ export function applyContractCompletions(
   if (completions.length === 0) return meta;
 
   const completedContractIds = [...(meta.progression.completedContractIds ?? [])];
-  const unlockedRelicIds = [...(meta.progression.unlockedRelicIds ?? [])];
-  let embers = meta.embers;
 
   for (const completion of completions) {
     if (completedContractIds.includes(completion.contractId)) continue;
     completedContractIds.push(completion.contractId);
-    embers += completion.emberReward;
-    if (completion.unlockedRelicId && !unlockedRelicIds.includes(completion.unlockedRelicId)) {
-      unlockedRelicIds.push(completion.unlockedRelicId);
-    }
   }
 
   return {
     ...meta,
-    embers,
     progression: {
       ...meta.progression,
       completedContractIds,
-      unlockedRelicIds,
     },
   };
+}
+
+export function applyContractDiscoveries(
+  profile: ProfileState,
+  completions: ContractCompletion[],
+): ProfileState {
+  let next = profile;
+  for (const completion of completions) {
+    if (completion.unlockedRelicId) next = discoverRelic(next, completion.unlockedRelicId);
+  }
+  return next;
 }

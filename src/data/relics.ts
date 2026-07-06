@@ -19,7 +19,7 @@ export type RelicId =
 /** Maximum unique relics a run can hold. */
 export const MAX_RELICS_PER_RUN = 6;
 
-/** Starter relic pool — always available once the relic path is unlocked (and on daily runs). */
+/** Relics that are eligible to be selected as level-gated starting relics. */
 export const STARTER_RELIC_IDS: RelicId[] = [
   'swift_boots',
   'iron_will',
@@ -33,8 +33,6 @@ export interface RelicDef {
   description: string;
   color: number;
   family: RelicFamily;
-  unlockCost: number;
-  unlockRequires?: RelicId[];
   startingRelicEligible?: boolean;
 }
 
@@ -51,7 +49,6 @@ export const RELIC_DEFS: RelicDef[] = [
     description: 'Draw 6 cards each battle turn instead of 5.',
     color: 0x7fb2e8,
     family: 'combat',
-    unlockCost: 0,
     startingRelicEligible: true,
   },
   {
@@ -60,7 +57,6 @@ export const RELIC_DEFS: RelicDef[] = [
     description: 'Armor raised to 4, gained immediately.',
     color: 0x90d8e8,
     family: 'survival',
-    unlockCost: 0,
     startingRelicEligible: true,
   },
   {
@@ -69,7 +65,6 @@ export const RELIC_DEFS: RelicDef[] = [
     description: 'Gain 50% more gold.',
     color: 0xf1c40f,
     family: 'economy',
-    unlockCost: 0,
     startingRelicEligible: true,
   },
   {
@@ -78,7 +73,6 @@ export const RELIC_DEFS: RelicDef[] = [
     description: 'Heal 2 HP after each victorious fight.',
     color: 0xc0392b,
     family: 'survival',
-    unlockCost: 0,
     startingRelicEligible: true,
   },
   {
@@ -87,7 +81,6 @@ export const RELIC_DEFS: RelicDef[] = [
     description: 'Start each battle with +1 energy on turn 1.',
     color: 0xf39c12,
     family: 'combat',
-    unlockCost: 5,
     startingRelicEligible: true,
   },
   {
@@ -96,7 +89,6 @@ export const RELIC_DEFS: RelicDef[] = [
     description: 'Retain up to 3 block between turns.',
     color: 0x95a5a6,
     family: 'combat',
-    unlockCost: 5,
   },
   {
     id: 'venom_ring',
@@ -104,7 +96,6 @@ export const RELIC_DEFS: RelicDef[] = [
     description: 'Poison you apply deals +1 damage.',
     color: 0x8e44ad,
     family: 'combat',
-    unlockCost: 6,
   },
   {
     id: 'hunter_charm',
@@ -112,7 +103,6 @@ export const RELIC_DEFS: RelicDef[] = [
     description: 'Draw 1 card when an enemy dies.',
     color: 0x27ae60,
     family: 'combat',
-    unlockCost: 6,
   },
   {
     id: 'merchants_seal',
@@ -120,7 +110,6 @@ export const RELIC_DEFS: RelicDef[] = [
     description: 'Gain +8 gold after defeating an elite.',
     color: 0xe67e22,
     family: 'economy',
-    unlockCost: 5,
   },
   {
     id: 'hoarders_map',
@@ -128,7 +117,6 @@ export const RELIC_DEFS: RelicDef[] = [
     description: 'Chest gold rewards are 25% higher.',
     color: 0xd4ac0d,
     family: 'economy',
-    unlockCost: 6,
   },
   {
     id: 'vital_charm',
@@ -136,7 +124,6 @@ export const RELIC_DEFS: RelicDef[] = [
     description: 'Gain +5 max HP when acquired.',
     color: 0xe74c3c,
     family: 'survival',
-    unlockCost: 5,
     startingRelicEligible: true,
   },
   {
@@ -145,7 +132,6 @@ export const RELIC_DEFS: RelicDef[] = [
     description: 'Heal 1 HP when entering a new room.',
     color: 0x3498db,
     family: 'survival',
-    unlockCost: 6,
   },
 ];
 
@@ -166,12 +152,8 @@ export function starterRelicPool(): ReadonlySet<RelicId> {
   return new Set(STARTER_RELIC_IDS);
 }
 
-export function relicPoolFromUnlocked(unlockedIds: readonly RelicId[]): ReadonlySet<RelicId> {
-  const pool = new Set<RelicId>(STARTER_RELIC_IDS);
-  for (const id of unlockedIds) {
-    if (RELIC_DEFS.some((def) => def.id === id)) pool.add(id);
-  }
-  return pool;
+export function allRelicPool(): ReadonlySet<RelicId> {
+  return new Set(RELIC_DEFS.map((relic) => relic.id));
 }
 
 /** Return a relic the run does not already own from the pool, or null if none remain. */

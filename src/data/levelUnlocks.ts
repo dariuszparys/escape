@@ -1,5 +1,5 @@
 import type { ArchetypeId } from './cards';
-import type { RelicId } from './relics';
+import { STARTER_RELIC_IDS, type RelicId } from './relics';
 
 export interface LevelUnlockEntry {
   level: number;
@@ -17,7 +17,7 @@ export interface ResolvedLevelUnlocks {
 }
 
 export const LEVEL_UNLOCKS: LevelUnlockEntry[] = [
-  { level: 2, startingRelicSlots: 1 },
+  { level: 2, startingRelicSlots: 1, relicIds: STARTER_RELIC_IDS },
   { level: 3, archetypeIds: ['barbarian'] },
   { level: 4, starterCardVariety: true },
   { level: 5, archetypeIds: ['ranger'], relicIds: ['spark_coil', 'vital_charm'] },
@@ -60,4 +60,18 @@ export function isArchetypeLevelEligible(level: number, archetypeId: ArchetypeId
 
 export function isRelicLevelEligible(level: number, relicId: RelicId): boolean {
   return unlocksForLevel(level).relicIds.includes(relicId);
+}
+
+export function requiredLevelForArchetype(archetypeId: ArchetypeId): number | null {
+  for (const entry of LEVEL_UNLOCKS) {
+    if (entry.archetypeIds?.includes(archetypeId)) return entry.level;
+  }
+  return null;
+}
+
+export function requiredLevelForRelic(relicId: RelicId): number | null {
+  for (const entry of LEVEL_UNLOCKS) {
+    if (entry.relicIds?.includes(relicId)) return entry.level;
+  }
+  return null;
 }

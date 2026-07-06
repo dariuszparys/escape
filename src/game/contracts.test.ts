@@ -1,7 +1,12 @@
 import { describe, expect, test } from 'vitest';
 import { evaluateContract } from '../data/contracts';
-import { applyContractCompletions, evaluateNewContracts } from './contracts';
+import {
+  applyContractCompletions,
+  applyContractDiscoveries,
+  evaluateNewContracts,
+} from './contracts';
 import { createDefaultMetaState } from '../meta';
+import { createDefaultProfileState } from '../profile';
 
 describe('contracts', () => {
   test('escape_with_3_relics requires escape and three relics', () => {
@@ -25,7 +30,7 @@ describe('contracts', () => {
     ).toBe(false);
   });
 
-  test('evaluateNewContracts awards once and unlocks relic', () => {
+  test('evaluateNewContracts awards once and force-discovers relic rewards', () => {
     const meta = createDefaultMetaState();
     const completions = evaluateNewContracts(meta.progression, {
       escaped: false,
@@ -34,16 +39,18 @@ describe('contracts', () => {
       elitesDefeated: 0,
       enemiesDefeated: 0,
     });
-    expect(completions).toHaveLength(1);
-    expect(completions[0]?.contractId).toBe('reach_depth_6');
+    expect(completions).toEqual([
+      { contractId: 'reach_depth_6', unlockedRelicId: 'wanderers_flask' },
+    ]);
 
     const updated = applyContractCompletions(meta, completions);
+    const profile = applyContractDiscoveries(createDefaultProfileState(), completions);
+
     expect(updated.progression.completedContractIds).toContain('reach_depth_6');
-    expect(updated.progression.unlockedRelicIds).toContain('wanderers_flask');
-    expect(updated.embers).toBeGreaterThan(meta.embers);
+    expect(profile.discoveredRelicIds).toContain('wanderers_flask');
   });
 
-  test('re-applying the same completions is a no-op', () => {
+  test('re-applying the same completions is a no-op for the contract ledger', () => {
     const meta = createDefaultMetaState();
     const completions = evaluateNewContracts(meta.progression, {
       escaped: false,
@@ -56,13 +63,7 @@ describe('contracts', () => {
     const once = applyContractCompletions(meta, completions);
     const twice = applyContractCompletions(once, completions);
 
-    expect(twice.embers).toBe(once.embers);
-    expect(twice.progression.completedContractIds?.length).toBe(
-      once.progression.completedContractIds?.length,
-    );
-    expect(twice.progression.unlockedRelicIds?.length).toBe(
-      once.progression.unlockedRelicIds?.length,
-    );
+    expect(twice.progression.completedContractIds).toEqual(once.progression.completedContractIds);
   });
 
   test('duplicate completions within one call count once', () => {
@@ -78,16 +79,10 @@ describe('contracts', () => {
 
     const updated = applyContractCompletions(meta, [completion, completion]);
 
-    expect(updated.embers).toBe(meta.embers + completion.emberReward);
-    expect(updated.progression.completedContractIds?.length).toBe(
-      (meta.progression.completedContractIds?.length ?? 0) + 1,
-    );
-    expect(updated.progression.unlockedRelicIds?.length).toBe(
-      (meta.progression.unlockedRelicIds?.length ?? 0) + 1,
-    );
+    expect(updated.progression.completedContractIds).toEqual(['reach_depth_6']);
   });
 
-  test('first_elite_kill awards ember and unlocks merchants_seal', () => {
+  test('first_elite_kill discovers merchants_seal', () => {
     const meta = createDefaultMetaState();
     const completions = evaluateNewContracts(meta.progression, {
       escaped: false,
@@ -97,12 +92,12 @@ describe('contracts', () => {
       enemiesDefeated: 0,
     });
 
-    expect(completions).toHaveLength(1);
-    expect(completions[0]?.contractId).toBe('first_elite_kill');
-
-    const updated = applyContractCompletions(meta, completions);
-    expect(updated.progression.unlockedRelicIds).toContain('merchants_seal');
-    expect(updated.embers).toBe(meta.embers + 1);
+    expect(completions).toEqual([
+      { contractId: 'first_elite_kill', unlockedRelicId: 'merchants_seal' },
+    ]);
+    expect(
+      applyContractDiscoveries(createDefaultProfileState(), completions).discoveredRelicIds,
+    ).toContain('merchants_seal');
   });
 
   test('slayer_25 requires at least 25 enemies defeated', () => {
@@ -147,9 +142,8 @@ describe('contracts', () => {
     ).toBe(true);
   });
 
-  test('reach_room_20 awards no embers and unlocks spark_coil', () => {
+  test('reach_room_20 discovers spark_coil', () => {
     const meta = createDefaultMetaState();
-    // reach_depth_6 (room 6) also fires at room 20; pre-complete it so only reach_room_20 is new.
     meta.progression.completedContractIds = ['reach_depth_6'];
     const completions = evaluateNewContracts(meta.progression, {
       escaped: false,
@@ -159,14 +153,12 @@ describe('contracts', () => {
       enemiesDefeated: 0,
     });
 
-    expect(completions).toHaveLength(1);
-    expect(completions[0]?.contractId).toBe('reach_room_20');
-    expect(completions[0]?.emberReward).toBe(0);
+    expect(completions).toEqual([{ contractId: 'reach_room_20', unlockedRelicId: 'spark_coil' }]);
 
     const updated = applyContractCompletions(meta, completions);
+    const profile = applyContractDiscoveries(createDefaultProfileState(), completions);
     expect(updated.progression.completedContractIds).toContain('reach_room_20');
-    expect(updated.progression.unlockedRelicIds).toContain('spark_coil');
-    expect(updated.embers).toBe(meta.embers);
+    expect(profile.discoveredRelicIds).toContain('spark_coil');
   });
 
   test('already-completed contracts are not re-evaluated', () => {
