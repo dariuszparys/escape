@@ -182,8 +182,8 @@ Campfire loadout.
 A normal-run premise selected before the dungeon starts. Scenario choice replaces
 the plain Descend handoff for normal runs: Escape the Dungeon is the clean/default
 premise, while hard Scenarios add a run rule such as poisoned room entry, no
-block, or doubled normal encounters. Daily Descents stay separate from Scenarios.
-Every Scenario awards XP at run end.
+block, or budgeted doubled normal encounters. Daily Descents stay separate from
+Scenarios. Every Scenario awards XP at run end.
 
 ### Daily Descent
 

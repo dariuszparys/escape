@@ -12,7 +12,9 @@ import {
   SIM_DECK_THIN_THRESHOLD,
   simulateBattle,
   simulateLoadoutTierSummary,
+  simulateScenarioProfileMatrix,
   simulateScenarioSummary,
+  SCENARIO_BALANCE_PROFILES,
 } from './balanceSimulator';
 import { spawnBoss, spawnEnemy } from '../data/enemies';
 import { restActionCost } from './restEconomy';
@@ -33,6 +35,26 @@ const minRng: GameRng = {
 
 const SIMULATION_TEST_TIMEOUT = 30_000;
 const simulationTest = (name: string, fn: () => void) => test(name, fn, SIMULATION_TEST_TIMEOUT);
+
+function expectWinRateInBand(
+  row: ReturnType<typeof simulateScenarioProfileMatrix>[number],
+  min: number,
+  max: number,
+): void {
+  const rate = row.summary.winRate;
+  if (rate < min || rate > max) {
+    throw new Error(`${row.profile.id} winRate ${rate.toFixed(3)} outside [${min}, ${max}]`);
+  }
+}
+
+function matrixRow(
+  matrix: ReturnType<typeof simulateScenarioProfileMatrix>,
+  id: (typeof SCENARIO_BALANCE_PROFILES)[number]['id'],
+) {
+  const row = matrix.find((candidate) => candidate.profile.id === id);
+  if (!row) throw new Error(`Missing scenario profile row: ${id}`);
+  return row;
+}
 
 describe('balance simulator battle kernel (U13)', () => {
   test('simulated battles run the real turn engine and terminate across seeds', () => {
@@ -137,6 +159,67 @@ describe('balance simulator battle kernel (U13)', () => {
 });
 
 describe('balance simulator survival bands', () => {
+  simulationTest(
+    'scenario profile matrix reports supported routes and diagnostics deterministically',
+    () => {
+      const first = simulateScenarioProfileMatrix(80);
+      const second = simulateScenarioProfileMatrix(80);
+
+      expect(second).toEqual(first);
+      expect(first.map((row) => row.profile.id)).toEqual(
+        SCENARIO_BALANCE_PROFILES.map((profile) => profile.id),
+      );
+      expect(first.map((row) => row.profile.id)).toEqual([
+        'clean_supported',
+        'poisoned_supported',
+        'lost_left_arm_supported',
+        'enemies_doubled_supported',
+        'lost_left_arm_fixed_strong_diagnostic',
+      ]);
+      expect(
+        first.find((row) => row.profile.id === 'lost_left_arm_supported')?.profile,
+      ).toMatchObject({
+        role: 'supported',
+        playerScenarioId: 'lost_left_arm',
+        scenario: { activeArchetypeId: 'barbarian' },
+      });
+      expect(
+        first.find((row) => row.profile.id === 'lost_left_arm_fixed_strong_diagnostic')?.profile,
+      ).toMatchObject({
+        role: 'diagnostic',
+        playerScenarioId: 'lost_left_arm',
+        scenario: { activeArchetypeId: 'necromancer' },
+      });
+
+      for (const row of first) {
+        expect(row.summary.runs).toBe(80);
+        expect(row.summary.winRate).toBeGreaterThanOrEqual(0);
+        expect(row.summary.winRate).toBeLessThanOrEqual(1);
+        expect(row.summary.bossReachRate).toBeGreaterThanOrEqual(0);
+        expect(row.summary.medianDeathDepth).toBeGreaterThanOrEqual(0);
+        expect(row.summary.decadeSurvivalRates).toHaveLength(10);
+      }
+    },
+  );
+
+  test('scenario profile run signatures are stable across seed spreads', () => {
+    for (const profile of SCENARIO_BALANCE_PROFILES) {
+      for (let seed = 1; seed <= 10; seed++) {
+        expect(runSignature(seed, profile.scenario)).toBe(runSignature(seed, profile.scenario));
+      }
+    }
+  });
+
+  simulationTest('legacy loadout-tier summaries remain available beside the profile matrix', () => {
+    const legacy = simulateLoadoutTierSummary('strong', 80);
+    const matrix = simulateScenarioProfileMatrix(80);
+    const clean = matrix.find((row) => row.profile.id === 'clean_supported');
+
+    expect(legacy.runs).toBe(80);
+    expect(clean?.summary.runs).toBe(80);
+    expect(clean?.profile.scenario).not.toBe(BALANCE_LOADOUT_SCENARIOS.strong);
+  });
+
   simulationTest('baseline runs reach the first boss inside the first-decade survival band', () => {
     const summary = simulateLoadoutTierSummary('bare', 400);
 
@@ -250,38 +333,30 @@ describe('balance simulator survival bands', () => {
     expect(escape.byTier).toEqual(baseline.byTier);
   });
 
-  simulationTest(
-    'hard player scenarios are deterministic and sit at or below the baseline band',
-    () => {
-      const baseline = simulateLoadoutTierSummary('strong', 160);
-      const hardScenarios = [
-        ['im_poisoned', 'room-entry attrition'],
-        ['lost_left_arm', 'no player block'],
-        ['enemies_doubled', 'two full normal enemies'],
-      ] as const;
+  simulationTest('scenario-supported profiles stay in explicit hard-but-viable bands', () => {
+    const first = simulateScenarioProfileMatrix(400);
+    const second = simulateScenarioProfileMatrix(400);
 
-      for (const [playerScenarioId] of hardScenarios) {
-        const scenario = { ...BALANCE_LOADOUT_SCENARIOS.strong, playerScenarioId };
-        const first = simulateScenarioSummary(scenario, 160);
-        const second = simulateScenarioSummary(scenario, 160);
+    expect(second).toEqual(first);
 
-        // These are intentionally harder routes, not new baseline bands. Keep the assertions broad:
-        // the product rule owns the difficulty shift; the survival-curve block owns the clean band.
-        expect(second).toEqual(first);
-        expect(first.winRate).toBeLessThanOrEqual(baseline.winRate);
-        expect(first.winRate).toBeGreaterThanOrEqual(0);
-      }
-    },
-  );
+    const clean = matrixRow(first, 'clean_supported');
+    const poisoned = matrixRow(first, 'poisoned_supported');
+    const leftArm = matrixRow(first, 'lost_left_arm_supported');
+    const doubled = matrixRow(first, 'enemies_doubled_supported');
+    const leftArmDiagnostic = matrixRow(first, 'lost_left_arm_fixed_strong_diagnostic');
 
-  simulationTest('poisoned strong loadouts have a nonzero escape rate after cadence tuning', () => {
-    const summary = simulateScenarioSummary(
-      { ...BALANCE_LOADOUT_SCENARIOS.strong, playerScenarioId: 'im_poisoned' },
-      400,
-    );
+    expectWinRateInBand(clean, 0.15, 0.35);
+    expectWinRateInBand(poisoned, 0.1, 0.25);
+    expect(poisoned.summary.winRate).toBeLessThan(clean.summary.winRate);
+    expect(poisoned.summary.medianDeathDepth).toBeGreaterThanOrEqual(30);
 
-    expect(summary.winRate).toBeGreaterThan(0);
-    expect(summary.medianDeathDepth).toBeGreaterThanOrEqual(30);
+    expectWinRateInBand(leftArm, 0.1, 0.3);
+    expect(leftArm.summary.winRate).toBeLessThanOrEqual(clean.summary.winRate + 0.03);
+    expect(leftArmDiagnostic.summary.winRate).toBeLessThan(leftArm.summary.winRate);
+
+    expectWinRateInBand(doubled, 0.03, 0.12);
+    expect(doubled.summary.winRate).toBeLessThan(poisoned.summary.winRate);
+    expect(doubled.summary.winRate).toBeLessThan(leftArm.summary.winRate);
   });
 });
 

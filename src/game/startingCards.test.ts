@@ -7,8 +7,15 @@ import {
   startingCardIdsForChoiceCount,
   startingCardIdsForRun,
 } from './startingCards';
-import { CARD_DEFS } from '../data/cards';
+import { CARD_DEFS, type ArchetypeId } from '../data/cards';
 import { cardGrantsBlock } from './scenarioRules';
+
+const LEFT_ARM_ARCHETYPE_CASES: readonly (ArchetypeId | null)[] = [
+  null,
+  'barbarian',
+  'necromancer',
+  'ranger',
+];
 
 describe('startingCardIdsForChoiceCount', () => {
   test('defaults to the three-card opening offer', () => {
@@ -86,23 +93,33 @@ describe('startingCardIdsForChoiceCount', () => {
   });
 
   test('Left Arm opening choices and deck pad exclude block cards with safe backfill', () => {
-    const choices = startingCardIdsForRun({
-      startingCardChoices: 4,
-      archetypeId: null,
-      isDaily: false,
-      scenarioId: 'lost_left_arm',
-    });
     const pad = startingDeckPadIdsForScenario('lost_left_arm');
-    const defs = [...choices, ...pad].map((id) => {
+    const padDefs = pad.map((id) => {
       const def = CARD_DEFS.find((card) => card.id === id);
       if (!def) throw new Error(`missing card def: ${id}`);
       return def;
     });
 
-    expect(choices).toHaveLength(4);
     expect(pad).toHaveLength(4);
-    expect(defs.every((card) => !cardGrantsBlock(card))).toBe(true);
+    expect(padDefs.every((card) => !cardGrantsBlock(card))).toBe(true);
     expect(pad).not.toContain('guard');
+
+    for (const archetypeId of LEFT_ARM_ARCHETYPE_CASES) {
+      const choices = startingCardIdsForRun({
+        startingCardChoices: 4,
+        archetypeId,
+        isDaily: false,
+        scenarioId: 'lost_left_arm',
+      });
+      const choiceDefs = choices.map((id) => {
+        const def = CARD_DEFS.find((card) => card.id === id);
+        if (!def) throw new Error(`missing card def: ${id}`);
+        return def;
+      });
+
+      expect(choices, `${archetypeId ?? 'neutral'} choices`).toHaveLength(4);
+      expect(choiceDefs.every((card) => !cardGrantsBlock(card))).toBe(true);
+    }
   });
 });
 

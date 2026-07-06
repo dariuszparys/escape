@@ -108,6 +108,79 @@ export const BALANCE_LOADOUT_SCENARIOS: Record<BalanceLoadoutTier, BalanceScenar
   },
 };
 
+export type ScenarioBalanceProfileId =
+  | 'clean_supported'
+  | 'poisoned_supported'
+  | 'lost_left_arm_supported'
+  | 'enemies_doubled_supported'
+  | 'lost_left_arm_fixed_strong_diagnostic';
+
+export type ScenarioBalanceProfileRole = 'supported' | 'diagnostic';
+
+export interface ScenarioBalanceProfile {
+  id: ScenarioBalanceProfileId;
+  label: string;
+  role: ScenarioBalanceProfileRole;
+  playerScenarioId: ScenarioId;
+  scenario: BalanceScenario;
+}
+
+function scenarioWithPlayerScenario(
+  base: BalanceScenario,
+  playerScenarioId: ScenarioId,
+): BalanceScenario {
+  return {
+    ...base,
+    startingRelicIds: base.startingRelicIds ? [...base.startingRelicIds] : undefined,
+    playerScenarioId,
+  };
+}
+
+/**
+ * Scenario-specific high-access routes used by the hard-Scenario contract.
+ * These are fixed profile data, not a dynamic "best route" search, so a band
+ * cannot pass by silently switching archetypes after a tuning regression.
+ */
+export const SCENARIO_BALANCE_PROFILES: readonly ScenarioBalanceProfile[] = [
+  {
+    id: 'clean_supported',
+    label: 'Clean supported',
+    role: 'supported',
+    playerScenarioId: 'escape_the_dungeon',
+    scenario: scenarioWithPlayerScenario(BALANCE_LOADOUT_SCENARIOS.strong, 'escape_the_dungeon'),
+  },
+  {
+    id: 'poisoned_supported',
+    label: 'Poisoned supported',
+    role: 'supported',
+    playerScenarioId: 'im_poisoned',
+    scenario: scenarioWithPlayerScenario(BALANCE_LOADOUT_SCENARIOS.strong, 'im_poisoned'),
+  },
+  {
+    id: 'lost_left_arm_supported',
+    label: 'Lost Left Arm supported',
+    role: 'supported',
+    playerScenarioId: 'lost_left_arm',
+    scenario: scenarioWithPlayerScenario(BALANCE_LOADOUT_SCENARIOS.mid, 'lost_left_arm'),
+  },
+  {
+    id: 'enemies_doubled_supported',
+    label: 'Enemies Are Doubled supported',
+    role: 'supported',
+    playerScenarioId: 'enemies_doubled',
+    // U1 characterization: Barbarian plus Iron Will had the best current boss reach
+    // among named high-access candidates before U2 retuned doubled encounters.
+    scenario: scenarioWithPlayerScenario(BALANCE_LOADOUT_SCENARIOS.mid, 'enemies_doubled'),
+  },
+  {
+    id: 'lost_left_arm_fixed_strong_diagnostic',
+    label: 'Lost Left Arm fixed strong diagnostic',
+    role: 'diagnostic',
+    playerScenarioId: 'lost_left_arm',
+    scenario: scenarioWithPlayerScenario(BALANCE_LOADOUT_SCENARIOS.strong, 'lost_left_arm'),
+  },
+];
+
 export interface EncounterBucketSummary {
   total: number;
   wins: number;
@@ -1026,6 +1099,22 @@ export function simulateScenarioSummary(
     byTier,
     weakTierWinRate: byTier.weak.total === 0 ? 0 : byTier.weak.wins / byTier.weak.total,
   };
+}
+
+export interface ScenarioBalanceMatrixRow {
+  profile: ScenarioBalanceProfile;
+  summary: BalanceSimulationSummary;
+}
+
+export function simulateScenarioProfileMatrix(
+  runs = 400,
+  options: Partial<SimRunOptions> = {},
+  profiles: readonly ScenarioBalanceProfile[] = SCENARIO_BALANCE_PROFILES,
+): ScenarioBalanceMatrixRow[] {
+  return profiles.map((profile) => ({
+    profile,
+    summary: simulateScenarioSummary(profile.scenario, runs, options),
+  }));
 }
 
 export function simulateLoadoutTierSummary(

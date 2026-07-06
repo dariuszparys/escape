@@ -997,12 +997,19 @@ const PACK_MIN_FOE_HP = 6;
  * neither soften the roguelike-hard band nor wall the weak-tier floor.
  */
 const PACK_HP_MULTIPLIER = 1.3;
+const DOUBLED_NORMAL_HP_MULTIPLIER = 1.0;
 
 /** The HP a pack should carry in total: a solo enemy of this depth's tier, scaled up (budget anchor). */
 function packHpBudget(depth: number): number {
   const tier = getEnemyTierForDepth(depth);
   const baseHp = tier === 'weak' ? 10 : tier === 'medium' ? 28 : 43;
   return Math.round(enemyHpForDepth(baseHp, depth) * PACK_HP_MULTIPLIER);
+}
+
+function doubledNormalHpBudget(depth: number): number {
+  const tier = getEnemyTierForDepth(depth);
+  const baseHp = tier === 'weak' ? 10 : tier === 'medium' ? 28 : 43;
+  return Math.round(enemyHpForDepth(baseHp, depth) * DOUBLED_NORMAL_HP_MULTIPLIER);
 }
 
 /**
@@ -1016,6 +1023,23 @@ export function spawnMinionPack(rng: GameRng, depth: number, size: number): Enem
   const perFoeBonus = Math.floor(intentBonusForDepth(depth) / size);
   return Array.from({ length: size }, () => {
     const def = rng.pick(MINIONS);
+    const pattern = empowerPattern(def.pattern, perFoeBonus);
+    return { def, hp: perHp, maxHp: perHp, armor: 0, statuses: [], pattern };
+  });
+}
+
+/**
+ * "Enemies Are Doubled" keeps normal enemy identity but uses an encounter-level
+ * budget. Two full normal enemies with two full intent bonuses is effectively
+ * two rooms at once; this pair shares the HP and post-depth pressure budget.
+ */
+function spawnDoubledNormalEncounter(rng: GameRng, depth: number): EnemyInstance[] {
+  const tier = getEnemyTierForDepth(depth);
+  const candidates = ENEMIES.filter((enemy) => enemy.tier === tier);
+  const perHp = Math.max(PACK_MIN_FOE_HP, Math.round(doubledNormalHpBudget(depth) / 2));
+  const perFoeBonus = Math.floor(intentBonusForDepth(depth) / 2);
+  return Array.from({ length: 2 }, () => {
+    const def = rng.pick(candidates);
     const pattern = empowerPattern(def.pattern, perFoeBonus);
     return { def, hp: perHp, maxHp: perHp, armor: 0, statuses: [], pattern };
   });
@@ -1046,8 +1070,7 @@ export function spawnScenarioEncounter(
 ): EnemyInstance[] {
   if (kind === 'boss') return [spawnBoss(rng, depth)];
   if (kind === 'elite') return [spawnElite(rng, depth)];
-  if (shouldDoubleNormalEncounters(scenarioId))
-    return [spawnEnemy(rng, depth), spawnEnemy(rng, depth)];
+  if (shouldDoubleNormalEncounters(scenarioId)) return spawnDoubledNormalEncounter(rng, depth);
   return spawnEncounter(rng, depth);
 }
 

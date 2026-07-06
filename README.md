@@ -29,8 +29,8 @@ npm run dev      # http://localhost:5173
   adjacent room types before committing.
 - Encounter rooms place one or more visible monsters in the room — most
   fights are solo, but some spawn a budget-anchored pack of 2-3 weaker foes.
-  In the Enemies Are Doubled Scenario, normal encounter rooms instead spawn two
-  full-strength normal enemies; elites and bosses stay single authored fights.
+  In the Enemies Are Doubled Scenario, normal encounter rooms instead spawn a
+  budgeted pair of normal enemies; elites and bosses stay single authored fights.
   Entering an uncleared room starts the card battle immediately — entry is
   commitment, so you avoid a fight by not entering the room, not by slipping
   past the monster(s). You play a card (or drink a potion), the enemies each

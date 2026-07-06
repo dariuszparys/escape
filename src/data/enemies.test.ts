@@ -580,26 +580,49 @@ describe('multi-enemy packs (spawnEncounter)', () => {
 });
 
 describe('scenario encounter spawning', () => {
-  test('Enemies Are Doubled turns normal rooms into two full normal enemies', () => {
-    const pack = spawnScenarioEncounter(new SequenceRng([0, 0.5]), 5, 'normal', 'enemies_doubled');
+  test('Enemies Are Doubled turns normal rooms into budgeted normal pairs', () => {
+    for (const depth of [3, 5, 8]) {
+      const pack = spawnScenarioEncounter(
+        new SequenceRng([0, 0.5]),
+        depth,
+        'normal',
+        'enemies_doubled',
+      );
 
-    expect(pack).toHaveLength(2);
-    for (const foe of pack) {
-      expect(MINIONS.some((def) => def.id === foe.def.id)).toBe(false);
-      expect(foe.hp).toBe(enemyHpForDepth(foe.def.baseHp, 5));
+      expect(pack).toHaveLength(2);
+      expect(pack.every((foe) => !MINIONS.some((def) => def.id === foe.def.id))).toBe(true);
+
+      const totalHp = pack.reduce((sum, foe) => sum + foe.hp, 0);
+      const fullSoloTotal = pack.reduce(
+        (sum, foe) => sum + enemyHpForDepth(foe.def.baseHp, depth),
+        0,
+      );
+      const representativeSolo = enemyHpForDepth(
+        spawnEnemy(new SequenceRng([0]), depth).def.baseHp,
+        depth,
+      );
+
+      expect(totalHp).toBeGreaterThan(representativeSolo);
+      expect(totalHp).toBeLessThan(fullSoloTotal);
+      for (const foe of pack) expect(foe.hp).toBeGreaterThanOrEqual(6);
     }
   });
 
-  test('doubled normals do not use the minion-pack budget branch', () => {
+  test('doubled normals split the depth intent bonus across the pair', () => {
+    const depth = 8;
     const pack = spawnScenarioEncounter(
-      new SequenceRng([0.9, 0.9, 0.1]),
-      5,
+      new SequenceRng([0.9, 0.1]),
+      depth,
       'normal',
       'enemies_doubled',
     );
+    const perFoeBonus = Math.floor(intentBonusForDepth(depth) / 2);
 
     expect(pack).toHaveLength(2);
-    expect(pack.every((foe) => MINIONS.some((def) => def.id === foe.def.id))).toBe(false);
+    for (const foe of pack) {
+      expect(foe.pattern).toEqual(empowerPattern(foe.def.pattern, perFoeBonus));
+      expect(foe.pattern).not.toEqual(empowerPattern(foe.def.pattern, intentBonusForDepth(depth)));
+    }
   });
 
   test('non-doubled normal scenarios keep the existing spawnEncounter shape', () => {
@@ -617,5 +640,21 @@ describe('scenario encounter spawning', () => {
     expect(elite[0].def.tier).toBe('elite');
     expect(boss).toHaveLength(1);
     expect(boss[0].def.boss).toBe(true);
+  });
+
+  test('budgeted doubled normal spawning is deterministic under a scripted rng', () => {
+    const seq = () => new SequenceRng([0.4, 0.9]);
+    const a = spawnScenarioEncounter(seq(), 6, 'normal', 'enemies_doubled').map((foe) => ({
+      id: foe.def.id,
+      hp: foe.hp,
+      pattern: foe.pattern,
+    }));
+    const b = spawnScenarioEncounter(seq(), 6, 'normal', 'enemies_doubled').map((foe) => ({
+      id: foe.def.id,
+      hp: foe.hp,
+      pattern: foe.pattern,
+    }));
+
+    expect(a).toEqual(b);
   });
 });

@@ -45,7 +45,7 @@ export const SCENARIOS: ScenarioDef[] = [
     backstory:
       'Every footstep answers twice. The ordinary rooms are crowded, but the great threats still wait alone.',
     ruleSummary:
-      'Normal encounters contain two full-strength normal enemies. Elites and bosses stay single fights.',
+      'Normal encounters contain two enemies sharing a harsher encounter budget. Elites and bosses stay single fights.',
   },
 ];
 

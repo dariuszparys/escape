@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { makeCard } from '../data/cards';
+import { makeCard, type ArchetypeId } from '../data/cards';
 import { makeItem } from '../data/items';
 import { allRelicPool, makeRelic, rollRelicOffers } from '../data/relics';
 import { RunState } from '../state';
@@ -14,7 +14,14 @@ import {
   rollVictoryCardOffers,
 } from './rewards';
 import { SequenceRng } from './test-rng';
-import { cardGrantsBlock, isScenarioAllowedRelic } from './scenarioRules';
+import { cardGrantsBlock, isScenarioAllowedItem, isScenarioAllowedRelic } from './scenarioRules';
+
+const LEFT_ARM_ARCHETYPE_CASES: readonly (ArchetypeId | null)[] = [
+  null,
+  'barbarian',
+  'necromancer',
+  'ranger',
+];
 
 describe('rewards', () => {
   test('every added card stays in the collection — the deck IS the collection (R1)', () => {
@@ -129,15 +136,41 @@ describe('rewards', () => {
   });
 
   test('Left Arm chest and victory card rewards exclude block cards', () => {
-    const run = new RunState('seed');
-    run.scenarioId = 'lost_left_arm';
-    const chest = rollChestReward(run, new SequenceRng([0, 0, 0]), 5);
-    const offers = rollVictoryCardOffers(createSimRng(2), 5, 4, 0, null, 'lost_left_arm');
+    for (const archetypeId of LEFT_ARM_ARCHETYPE_CASES) {
+      for (const depth of [2, 5, 9, 25, 75]) {
+        const run = new RunState(`seed-${archetypeId ?? 'neutral'}-${depth}`);
+        run.scenarioId = 'lost_left_arm';
+        run.archetypeId = archetypeId;
 
-    expect(chest.kind).toBe('card');
-    expect(run.cardCollection.every((card) => !cardGrantsBlock(card))).toBe(true);
-    expect(offers).toHaveLength(4);
-    expect(offers.every((card) => !cardGrantsBlock(card))).toBe(true);
+        const chest = rollChestReward(run, new SequenceRng([0, 0.2, 0.7]), depth);
+        const offers = rollVictoryCardOffers(
+          createSimRng(depth * 100 + 2),
+          depth,
+          4,
+          0,
+          archetypeId,
+          'lost_left_arm',
+        );
+
+        expect(chest.kind).toBe('card');
+        expect(run.cardCollection.every((card) => !cardGrantsBlock(card))).toBe(true);
+        expect(offers, `${archetypeId ?? 'neutral'} depth ${depth}`).toHaveLength(4);
+        expect(offers.every((card) => !cardGrantsBlock(card))).toBe(true);
+      }
+    }
+  });
+
+  test('Left Arm item rewards remain scenario-safe across shallow and deep potion drops', () => {
+    for (const depth of [2, 8]) {
+      const run = new RunState(`seed-item-${depth}`);
+      run.scenarioId = 'lost_left_arm';
+      const result = rollChestReward(run, new SequenceRng([0.6]), depth);
+
+      expect(result.kind).toBe('item');
+      if (result.kind !== 'item') throw new Error(`Unexpected result: ${result.kind}`);
+      expect(isScenarioAllowedItem(result.item, 'lost_left_arm')).toBe(true);
+      expect(result.item.kind).not.toBe('shield');
+    }
   });
 
   test('chest can award a relic and store it on the run', () => {

@@ -29,4 +29,13 @@ describe('scenarios', () => {
       'Unknown scenario: unknown-scenario',
     );
   });
+
+  test('Enemies Are Doubled describes budgeted pairs instead of full-strength solos', () => {
+    const doubled = scenarioDef('enemies_doubled');
+
+    expect(doubled.ruleSummary.toLowerCase()).not.toContain('full-strength');
+    expect(doubled.ruleSummary.toLowerCase()).toContain('two enemies');
+    expect(doubled.ruleSummary.toLowerCase()).toContain('budget');
+    expect(doubled.ruleSummary.toLowerCase()).toContain('elites and bosses');
+  });
 });
