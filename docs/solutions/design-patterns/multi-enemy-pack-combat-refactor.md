@@ -1,6 +1,7 @@
 ---
 title: Multi-Enemy Pack Combat via Collection-of-One Refactor
 date: 2026-07-04
+last_refreshed: 2026-07-06
 category: design-patterns
 module: combat-engine
 problem_type: design_pattern
@@ -10,7 +11,7 @@ applies_when:
   - 'Generalizing a single-target system to N targets without changing single-target behavior (model the solo case as a one-element collection).'
   - 'A deterministic test/reference/signature harness must pass byte-identically to prove a refactor changed shape, not math.'
   - 'Routing per-entity events by id, where duplicate ids of the same type would collide and mis-route telegraphs or damage.'
-  - 'Adding difficulty or content that must stay budget-anchored to a co-tuned economy rather than being a free power addition.'
+  - 'Adding difficulty or content that must stay budget-anchored to a co-tuned survival curve rather than being a free power addition.'
 symptoms:
   - 'A single enemy/intent shape cannot express a pack of foes that each telegraph and act on their own cycle.'
   - 'Focus-fire lets a player pick pack members off one at a time, so a naive multi-enemy fight is easier than the solo it replaces.'
@@ -52,7 +53,7 @@ The product goal was run variety: normal encounters should _sometimes_ be a pack
 but underneath it demands the engine model _many_ enemies — each telegraphing and
 beating on its own cycle, each a distinct click target — and it demands that adding
 those encounters not quietly soften (or wall) a difficulty curve that had been tuned
-across many prior units against a competent-policy win-rate harness.
+across many prior units against the 100-room survival harness.
 
 The naive path — fork a `MultiEnemyBattleState`, migrate callers one at a time, keep
 the two engines in sync during a transition — was exactly the kind of parallel
@@ -106,8 +107,9 @@ focus-fires and kills pack members one at a time; each kill removes an attacker,
 pack's incoming damage decays turn over turn in a way a full-HP solo's never does. An
 equal-HP pack is therefore strictly _easier_ than the solo it replaced. The multiplier
 buys back roughly the turn of attrition the player skips, restoring the tuned pressure.
-Crucially, the anchor + multiplier were **tuned against the existing win-rate harness**,
-not eyeballed: the base run held its roguelike-hard band (~0.36 win) after packs landed.
+Crucially, the anchor + multiplier were **tuned against the existing survival harness**,
+not eyeballed: bare, mid, and strong loadout bands stayed inside their 100-room targets
+after packs landed.
 
 ### 3. Focus-target with fallback: player input that degrades gracefully
 
@@ -140,7 +142,7 @@ slides to the next living enemy automatically when its target dies.
   multiplier, validated by the harness, was the entire balance surface — instead of
   hand-adjusting minion stats until "it feels right."
 
-- **Balance was re-validated, not re-guessed.** The win-rate simulator was generalized
+- **Balance was re-validated, not re-guessed.** The survival simulator was generalized
   (policy focuses the weakest living enemy; incoming damage is summed across the pack)
   so the _same_ harness that tuned every prior unit measured the new one. Content
   additions get a numeric verdict, not a vibe.
@@ -351,20 +353,20 @@ spawn distribution.
 
 ### `PACK_HP_MULTIPLIER` is a coupled constant — tune it against the whole harness
 
-The multiplier looks like a local knob, but it isn't. A naive-seeming 1.7× _broke a
-delve/gold-economy test_ that has nothing visibly to do with packs: a harder base run
-banks less gold before a gate, which tightened an already-brittle economy guard
-downstream. 1.3× keeps every balance invariant green. The lesson: **a difficulty
-constant can be silently coupled to a far-away economy test** — tune it against the
-full harness, never in isolation.
+The multiplier looks like a local knob, but it isn't. It composes with
+`enemyHpForDepth`, `intentBonusForDepth`, card-tier rewards, elite/boss scaling,
+scenario modifiers, and rest/reward pacing. A pack that feels local in
+`spawnMinionPack` can still move the full 100-room survival curve. The lesson:
+**a difficulty constant can be silently coupled to far-away survival tests** —
+tune it against the full harness, never in isolation.
 
-### Some player builds legitimately over-perform vs packs
+### Some player loadouts legitimately over-perform vs packs
 
-Block-heavy starter kits synergize disproportionately with packs: one big block absorbs
-a pack's turn-1 multi-hit salvo, and then the player picks members off with reduced
-incoming. This widened the warden kit's expected win-rate cap in the balance test
-(0.44 → 0.53). That's a real interaction, not a bug — the right response was to widen
-the _expected band_, not to nerf the kit or the packs.
+Block-heavy or control-heavy loadouts synergize disproportionately with packs: one
+big block absorbs a pack's turn-1 multi-hit salvo, and then the player picks
+members off with reduced incoming. That's a real interaction, not a bug. The
+right response is to encode the expected survival band for that loadout tier,
+not to nerf the kit or the packs by feel.
 
 ## Related
 
@@ -372,9 +374,9 @@ the _expected band_, not to nerf the kit or the packs.
   — the coupled-constant / balance-harness sibling; `PACK_HP_MULTIPLIER` joins that
   doc's set of difficulty constants that must be tuned together against the harness,
   not in isolation.
-- [Room Threat System](room-threat-system.md) — the pure-deterministic-logic,
-  Battle-is-the-sole-combat-authority sibling; the `enemies[]` generalization lives
-  entirely inside Battle, downstream of the dungeon → Battle handoff this doc describes.
+- [Hundred-Room Escape Vocabulary Sweep](../documentation-gaps/hundred-room-escape-vocabulary-sweep.md)
+  — current terminal vocabulary and active 100-room model; useful when old
+  Endless/Ember examples leak into balance docs.
 - [Phaser Screen Layout & Readability Regressions](../ui-bugs/phaser-screen-layout-readability-regressions.md)
   — the canonical "browser-smoke actual Phaser screens" prevention rule, directly
   applicable to this work's combat-screen declutter, 12-sprite reskin, and

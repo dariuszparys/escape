@@ -1,17 +1,17 @@
 ---
-title: Decouple Enemy Power from Player-Reward Scaling in Endless Difficulty Curves
+title: Decouple Enemy Power from Player-Reward Scaling in Difficulty Curves
 date: 2026-06-29
-last_refreshed: 2026-07-04
+last_refreshed: 2026-07-06
 category: design-patterns
 module: dungeon-loop
 problem_type: design_pattern
 component: tooling
 severity: high
 applies_when:
-  - 'Extending a depth/level/difficulty scaling function past its previously-tested range (endless or procedurally-unbounded modes).'
+  - 'Extending a depth/level/difficulty scaling function past its previously-tested range, including fixed long arcs or endless modes.'
   - 'One scaling function feeds both enemy stats and player rewards.'
-  - 'Designing a push-your-luck / risk-reward loop where "no dominant line" must hold.'
-  - 'Building roguelite escalation where difficulty and reward scale with the same progress variable.'
+  - 'Retiring one economy or run structure while preserving the underlying scaling lesson.'
+  - 'Building roguelite escalation where difficulty and reward scale with the same progress variable and must be validated by a harness.'
 related_components:
   - testing_framework
 tags:
@@ -25,7 +25,7 @@ tags:
   - determinism
 ---
 
-# Decouple Enemy Power from Player-Reward Scaling in Endless Difficulty Curves
+# Decouple Enemy Power from Player-Reward Scaling in Difficulty Curves
 
 ## Context
 
@@ -37,6 +37,13 @@ The problem was a _scaling seam_ we extended past its tested range. The dungeon'
 - **enemy deck generation** in `spawnEnemy` (`src/data/enemies.ts`), which builds each enemy's hand from the same card pool.
 
 Endless Descent quietly pushed `depth` well past 10 for the first time, and a separate enrichment change (unit U8) added a "deep tier shift" (`deepTierWeights`) to bias card tiers toward tier‑3 past depth 9. The intent was to make the _player's_ deep chests more exciting. Because the seam was shared, the same tier‑3 flood also armed every deep _enemy_. Nobody anticipated this, because no consumer audit was done before extending the curve into untested depth.
+
+Current status (2026-07-06): Endless Descent, banking, Embers,
+`src/game/delve.ts`, and `src/game/metaRewards.ts` are retired. The incident
+still documents the durable rule: enemy-power curves and player-reward curves
+must be audited independently, and their coupled constants must be validated by
+the active balance harness. The current game is a fixed 100-room escape whose
+survival bands live in `src/game/balanceSimulator.test.ts`.
 
 ## Guidance
 
@@ -80,61 +87,64 @@ export function spawnEnemy(rng: GameRng, depth: number): EnemyInstance {
 }
 ```
 
-The same principle applied to the rest of the difficulty curve, which was softened so "harder" stayed monotonic without becoming a wall. The two constants below were re-tuned in a later "roguelike-hard" rebalance — current values, not the doc's original ones:
+The same principle now applies to the rest of the 100-room difficulty curve:
+"harder" should stay monotonic without turning the later decades into a wall.
+Enemy HP and intent pressure are structurally separate from card rewards, but
+they still form one balance surface with pack HP, elite/boss scaling, scenario
+modifiers, and rest/reward policy.
 
 ```ts
-// src/data/enemies.ts
-const DEEP_HP_SLOPE = 0.03; // was 0.3 at original authoring; more than halved for the roguelike-hard rebaseline
 export function enemyHpForDepth(baseHp: number, depth: number): number {
-  if (depth <= MAX_DEPTH) return baseHp + depth; // stratum 1: linear
-  return baseHp + MAX_DEPTH + Math.round((depth - MAX_DEPTH) * DEEP_HP_SLOPE); // beyond: gentle
+  if (depth <= MAX_DEPTH) return baseHp + depth;
+  return baseHp + MAX_DEPTH + Math.round((depth - MAX_DEPTH) * DEEP_HP_SLOPE);
 }
 
-const BOSS_HP_PER_DEPTH_BEYOND_FIRST = 0.3; // was 1 at original authoring
+export function cardTierWeightsForDepth(depth: number): [number, number, number] {
+  if (depth <= 3) return [8, 2, 0];
+  if (depth <= 6) return [4, 5, 1];
+  if (depth <= 9) return [2, 5, 3];
+  const beyondFirst = Math.max(0, Math.floor((depth - 1) / BOSS_ROOM_INTERVAL));
+  const tier2 = Math.max(1, 5 - beyondFirst);
+  return [0, tier2, 10 - tier2];
+}
 ```
+
+**(c) Validate the active difficulty model against a headless balance harness before shipping.** The old Endless model used a "no dominant line" assertion across `cautious`, `moderate`, and `aggressive` delve strategies. The current fixed arc uses survival-band assertions instead: bare level-1 loadouts almost never escape, strong access loadouts land in the earned escape band, mid-tier loadouts usually die in the middle arc, and per-decade survival decreases across the 100 rooms. Both models serve the same purpose: turn balance intent into deterministic tests instead of relying on feel.
 
 ```ts
-// src/game/delve.ts — a gate-clear "breather" so each stratum starts recovered:
-export const STRATUM_CLEAR_HEAL = 20;
-export function commitDelve(run: RunState): RunState {
-  run.stratum += 1;
-  run.heal(STRATUM_CLEAR_HEAL); // run.heal caps at maxHp
-  return run;
-}
+const summary = simulateLoadoutTierSummary('strong', 400);
+
+expect(summary.winRate).toBeGreaterThanOrEqual(0.15);
+expect(summary.winRate).toBeLessThanOrEqual(0.35);
+expect(summary.decadeSurvivalRates).toHaveLength(10);
 ```
 
-```ts
-// src/game/metaRewards.ts — bounded Gold→Ember conversion so endless delving
-// can't trivialize the meta economy:
-export function convertGoldToEmbers(gold: number): number {
-  const raw = gold / GOLD_PER_EMBER;
-  // saturating hyperbolic guard: yield approaches CONVERSION_GUARD_CAP, never exceeds it
-  return Math.floor((CONVERSION_GUARD_CAP * raw) / (raw + CONVERSION_GUARD_CAP));
-}
-```
-
-**(c) Validate deep/endless difficulty against a headless balance harness with a "no dominant line" assertion before shipping.** The balance simulator (`src/game/balanceSimulator.ts`, unit U7) models three delve strategies — `cautious` (bank at gate 1), `moderate` (delve one stratum then bank), `aggressive` (push until death) — across many seeds, and asserts that no single strategy strictly dominates (requirement R14). This assertion is what caught the bug: it is the difference between "we think it's balanced" and "400 deterministic seeds say it's balanced."
-
-**(d) Tune coupled difficulty constants as a set against the harness, not individually.** The original five constants are co-dependent: deep HP slope, stratum-clear heal, boss HP escalation, the conversion guard, and (at the time) the enemy deck cap. Changing one in isolation re-introduces a dominant line. They were co-tuned together against the harness (this set is recorded as KTD8), and any future change must re-run the harness over the full seed set before landing.
-
-A later addition, `PACK_HP_MULTIPLIER` (the total-HP multiplier a multi-enemy pack carries over the solo encounter it replaces — see the [multi-enemy pack combat doc](multi-enemy-pack-combat-refactor.md)), joined this coupled set: it multiplies `enemyHpForDepth`'s output, the same curve `DEEP_HP_SLOPE` governs. A naive-seeming value for it broke a delve/gold-economy invariant that has nothing visibly to do with packs — the same "drift apart if edited one at a time" failure mode this rule warns about, just with a new member.
+**(d) Tune coupled difficulty constants as a set against the harness, not individually.** The retired Endless set was deep HP slope, stratum-clear heal, boss HP escalation, the conversion guard, and the enemy deck cap. The current set is different: enemy HP slope, intent bonus slope, card-tier rewards, boss/elite scaling, scenario modifiers, reward/rest pacing, and `PACK_HP_MULTIPLIER`. The membership changes as the game changes, but the rule does not: if a knob affects survival, rewards, or attrition, re-run the full harness and interpret it as part of a set.
 
 ## Why This Matters
 
 Without the harness, this feature would have shipped unplayable. Delving would have been a guaranteed death sentence — a full‑HP player lost single deep encounters because tier‑3-armed enemies out-DPSed any deck a marginal gate-1 survivor could field — making BANK the only viable play and collapsing the entire push-your-luck loop into a non-choice. The feature's whole reason to exist would have been broken on arrival, and likely shipped, because every encounter _looked_ survivable on paper (the player was at full HP).
 
-The **"no dominant line" assertion** is the specific mechanism that surfaced it. A win-rate check alone would not have: the base run still won at expected rates. It was only when the simulator compared _strategies_ — and saw `cautious` post both the highest expected Ember yield _and_ zero risk — that the degeneracy became visible. A dominant strictly-better line is exactly the failure mode push-your-luck designs must avoid, and it is invisible to per-run pass/fail testing.
+The **"no dominant line" assertion** was the mechanism that surfaced the
+historical push-your-luck bug. In the current fixed arc, the equivalent failure
+is a survival curve that lets bare loadouts escape too often, makes strong
+loadouts fail almost always, or produces non-monotonic decade survival. The test
+shape changed because the run structure changed; the discipline is the same.
 
-The coupled-constants point matters because these five values **drift apart if edited one at a time.** Raise the stratum-clear heal without re-checking the enemy deck cap and `aggressive` stops being punished; tighten the conversion guard without re-checking HP slopes and `moderate` collapses back into `cautious`. They only express a balanced design _as a set_, validated together.
+The coupled-constants point matters because these values **drift apart if edited
+one at a time.** Raise pack HP without re-checking intent pressure and strong
+loadouts may wall before the final boss; enrich deep card tiers without
+re-checking enemy scaling and later rooms may flatten. They only express a
+balanced design _as a set_, validated together.
 
 ## When to Apply
 
 Reach for this guidance whenever you:
 
-- **Extend any depth / level / difficulty scaling past its previously-tested range.** Endless and procedurally-unbounded modes are the classic trigger: the curve was validated on 1–10 and is now asked to behave at 30.
-- **Reuse one scaling function for both enemy stats and player rewards.** This is the seam to be suspicious of. Audit its consumers and consider decoupling (e.g., capping the input one side sees).
+- **Extend any depth / level / difficulty scaling past its previously-tested range.** Fixed long arcs and procedurally-unbounded modes both trigger the same audit.
+- **Reuse one scaling function for both enemy stats and player rewards.** This is the seam to be suspicious of. Audit its consumers and consider decoupling.
 - **Design any push-your-luck / risk-reward loop** (banking, ante-up, greed mechanics). The core invariant is "no dominant line" — encode it as an automated assertion, not a vibe.
-- **Build any endless / roguelite escalation** where difficulty and reward both scale with the same progress variable.
+- **Build any roguelite escalation** where difficulty and reward both scale with the same progress variable.
 
 ## Examples
 
@@ -156,19 +166,26 @@ share no function with the player's `randomCard`/`deepTierWeights` reward path. 
 seam this fix originally patched has been removed outright, which is the more durable
 version of the same "decouple enemy power from player reward" lesson.
 
-**Harness signal — before vs. after (400 seeds, deterministic).**
+**Historical harness signal — before vs. after (400 seeds, deterministic).**
 
 - **Before fix:** all three strategies died in stratum 2, even at full HP. `cautious` strictly dominated — highest expected Ember yield _and_ zero risk. The R14 "no dominant line" assertion failed.
 - **After fix:** `cautious` EV ≈ 2 Embers (safe), `moderate` ≈ 1 Ember (a real gamble — ~23% bank deeper for more, ~77% die forfeiting everything, landing inside the 1.5-Ember dominance margin), `aggressive` ≈ 0 (pushing forever is correctly punished). No strategy dominates.
 
-**Conversion guard — the harness as a guardrail.** Feeding the simulator an over-generous conversion (1 Ember per Gold, no cap) correctly _trips_ the dominance gate — endless delving becomes strictly best. The real bounded `convertGoldToEmbers` (rate `GOLD_PER_EMBER` plus the saturating `CONVERSION_GUARD_CAP`) passes. The assertion thus doubles as a regression guard against future economy tweaks.
+That Ember conversion guard no longer exists in the codebase. Keep it as
+historical evidence for why the harness needs to encode the design invariant, not
+as an implementation pointer.
 
-**Side finding (test re-baseline).** The simulator originally awarded Gold from chests only, not from defeated enemies — diverging from the live game. It now calls `awardEnemyGold` on encounter and boss wins to match. Better-funded runs fund better rest-action decks, which nudged base-run win rates up and forced a re-baseline of the existing win-rate bands in `balanceSimulator.test.ts` (the shift is documented inline in those tests). Worth noting because it means simulator fidelity changes can legitimately move _unrelated_ baselines.
+**Current harness signal (fixed 100-room model).** `simulateLoadoutTierSummary`
+is now the shared survival harness. It asserts the first-boss reach band, the
+near-zero bare escape band, the earned strong-loadout escape band, the mid-arc
+death band, and monotonic per-decade survival. Any difficulty/reward curve change
+should be judged against those tests before interpreting a local number as safe.
 
 ## Related
 
-- `docs/solutions/design-patterns/room-threat-system.md` — sibling pattern in the same dungeon loop that also keeps pure deterministic game logic with the balance simulator as the tuning source of truth. (That doc already documents its own `BALANCE_ENCOUNTER_POLICY` constant removal — the note previously here claiming it as a refresh candidate was itself stale and has been removed.)
+- [Hundred-Room Escape Vocabulary Sweep](../documentation-gaps/hundred-room-escape-vocabulary-sweep.md)
+  — current terminal vocabulary and active reward/run-shape model.
 - [Multi-Enemy Pack Combat via Collection-of-One Refactor](multi-enemy-pack-combat-refactor.md) — `PACK_HP_MULTIPLIER` extends this doc's KTD8 coupled-constant set (rule d) and reuses its enemy-power-anchoring principle for a new encounter shape.
-- `docs/plans/2026-06-29-002-feat-endless-descent-banking-plan.md` — the implementation plan (units U1–U8) this learning came out of; KTD8 records the coupled-constant tuning.
-- `docs/brainstorms/2026-06-29-push-your-luck-banking-requirements.md` — product framing and the R14 "no dominant line" requirement.
+- `docs/plans/2026-06-29-002-feat-endless-descent-banking-plan.md` — historical implementation plan (units U1–U8) this learning came out of; KTD8 records the retired coupled-constant tuning.
+- `docs/brainstorms/2026-06-29-push-your-luck-banking-requirements.md` — historical product framing and the R14 "no dominant line" requirement.
 - `docs/plans/2026-06-29-001-feat-reading-the-enemy-combat-plan.md` — sibling initiative sharing the enemy combat-script work (`src/data/enemies.ts`).

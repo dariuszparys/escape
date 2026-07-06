@@ -1,14 +1,15 @@
 ---
 title: Phaser Screen Layout Readability Regressions
 date: 2026-06-28
+last_refreshed: 2026-07-06
 category: ui-bugs
 module: escape-ui-layout
 problem_type: ui_bug
 component: frontend_stimulus
 symptoms:
-  - 'Campfire progression copy overlapped the NEXT RUN section after economy text grew.'
+  - 'Campfire progression copy overlapped the NEXT RUN section after progression copy grew.'
   - 'Title screen instructions collided with the start prompt.'
-  - 'Progression starter-kit copy overlapped the STARTER KITS heading and needed overflow handling.'
+  - 'Progression loadout copy overlapped later headings and needed overflow handling.'
 root_cause: logic_error
 resolution_type: code_fix
 severity: medium
@@ -28,10 +29,12 @@ tags:
 
 ## Problem
 
-The Gold/Embers economy and starter-kit unlocks made Escape's Campfire, Title,
-and Progression screens carry longer player-facing copy. Those Phaser scenes
-still used fixed Y coordinates sized for shorter text, so wrapped text occupied
-space that later sections assumed was empty.
+The retired Gold/Embers economy and starter-kit unlocks originally made
+Escape's Campfire, Title, and Progression screens carry longer player-facing
+copy. The current XP/Level/Discovery/Loadout model has different vocabulary, but
+the same layout pressure remains whenever progression copy grows. Those Phaser
+scenes still used fixed Y coordinates sized for shorter text, so wrapped text
+occupied space that later sections assumed was empty.
 
 The feature logic was correct. The bug was that canvas scene layout behaved like
 absolute positioning, not document flow.
@@ -41,8 +44,8 @@ absolute positioning, not document flow.
 - On Campfire, the detailed progression summary collided with the `NEXT RUN`
   heading.
 - On Title, the instruction block pushed into `[ PRESS SPACE OR CLICK TO ENTER ]`.
-- On Progression, wrapped starter-variety text collided with the `STARTER KITS`
-  heading.
+- On Progression, wrapped starter-variety/loadout text collided with later
+  headings.
 - The Progression panel had more content than the available viewport, but no
   scroll model.
 - Browser smoke showed only the existing `favicon.ico` 404; the relevant failure
@@ -54,8 +57,9 @@ Keeping the longer feature copy inside the old fixed scene layout did not work.
 Phaser text wrapping made each text object readable in isolation, but it did not
 push later text objects down.
 
-One-off Y-coordinate nudges would have been fragile because each new kit,
-summary line, or translated text block could recreate the same class of bug.
+One-off Y-coordinate nudges would have been fragile because each new loadout
+option, summary line, or translated text block could recreate the same class of
+bug.
 The first compact Campfire fix solved that screen, but the same fixed-coordinate
 pattern remained visible on Title and Progression.
 
@@ -67,18 +71,25 @@ container, wheel/key/drag input, and a drawn scrollbar thumb.
 ## Solution
 
 Campfire now renders a bounded status summary instead of the full progression
-explainer. `src/game/campfireSummary.ts` keeps the overview to three short lines:
+explainer. `src/game/campfireSummary.ts` keeps the overview compact and current
+with the XP/Level/Discovery/Loadout model:
 
 ```ts
 return [
-  `Starter variety: ${progression.starterCardVarietyUnlocked ? 'unlocked' : 'locked'}`,
-  `Starter kits: ${progression.unlockedStarterKitIds.length}/${STARTER_KITS.length} unlocked`,
-  `Active kit: ${activeKitName}`,
+  `Archetype: ${activeArchetypeName(progression)}`,
+  `Starter variety: ${hasStarterCardVariety(profile) ? 'unlocked' : 'level 4'}`,
+  `Discovered relics: ${profile.discoveredRelicIds.length}`,
+  `Starting relic choices: ${eligibleRelics.length}`,
+  progression.activeStartingRelicId
+    ? `Starting relic: ${relicDef(progression.activeStartingRelicId).name}`
+    : 'Starting relic: none',
+  `Personal best: room ${profile.personalBestRoom}`,
 ].join('\n');
 ```
 
 `src/scenes/Campfire.ts` uses that compact formatter for the hub overview while
-the richer copy stays on the dedicated Progression screen.
+the richer archetype, starter-variety, and relic copy stays on the dedicated
+Progression screen.
 
 Title moved its geometry into `src/game/titleLayout.ts` and replaced the long
 centered instruction block with three grouped columns. The layout helper exposes
@@ -94,7 +105,7 @@ helper calculates viewport bounds, content height, maximum scroll offset, and
 scrollbar track geometry:
 
 ```ts
-const contentHeight = clearKitButtonY + 32;
+const contentHeight = clearRelicButtonY + 32;
 
 return {
   viewportH: VIEWPORT_H,
@@ -160,7 +171,7 @@ Useful regression assertions from this fix:
 
 ```ts
 expect(layout.promptTop - layout.instructionsBottom).toBeGreaterThanOrEqual(24);
-expect(layout.starterKitHeadingY - layout.starterSummaryBottom).toBeGreaterThanOrEqual(24);
+expect(layout.relicHeadingY - layout.starterSummaryBottom).toBeGreaterThanOrEqual(40);
 expect(layout.maxScrollOffset).toBeGreaterThan(0);
 ```
 
@@ -179,6 +190,12 @@ back in:
 expect(summary).not.toMatch(/Migration bonus|four opening card options/);
 ```
 
+Current tests use the active wording guard from `src/game/campfireSummary.test.ts`:
+
+```ts
+expect(summary).not.toMatch(/Migration bonus|purchase/i);
+```
+
 Final verification for the merged fix included `npm test`, `npm run build`,
 `npm run lint`, `npm run format:check`, `git diff --check`, and browser smoke
 over Title, Progression top, wheel scroll, PageDown scroll, and Campfire.
@@ -186,12 +203,16 @@ over Title, Progression top, wheel scroll, PageDown scroll, and Campfire.
 ## Related Issues
 
 - `docs/plans/2026-06-27-001-feat-gold-embers-economy-plan.md` introduced the
-  Gold/Embers economy and the initial Progression screen.
+  retired Gold/Embers economy and the initial Progression screen.
 - `docs/plans/2026-06-27-002-feat-starter-kit-ember-unlocks-plan.md` added the
-  starter-kit progression surface whose copy exposed the layout problem.
+  retired starter-kit progression surface whose copy exposed the layout problem.
+- [Hundred-Room Escape Vocabulary Sweep](../documentation-gaps/hundred-room-escape-vocabulary-sweep.md)
+  tracks the current XP/Level/Discovery/Loadout terminology that replaced that
+  older copy.
 - Earlier campfire planning is historical context for the Campfire hub and its
   manual smoke expectations.
-- `src/meta.ts`, `src/game/progression.ts`, `src/game/campfirePrep.ts`, and
-  `src/state.ts` own the progression state and normal-run kit application.
+- `src/profile.ts`, `src/meta.ts`, `src/game/progression.ts`,
+  `src/game/campfirePrep.ts`, and `src/state.ts` own the current profile,
+  loadout, and run-prep state.
 
 No GitHub issue number was part of this capture.
