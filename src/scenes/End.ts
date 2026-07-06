@@ -2,14 +2,14 @@ import Phaser from 'phaser';
 import { GAME_W } from '../config';
 import { playSfx } from '../audio/sfx';
 import { loadDailyRecord, recordDailyAttempt, saveDailyRecord } from '../daily';
-import { calculateEmberReward, EmberRewardBreakdown } from '../game/metaRewards';
 import { loadRunChronicle, recordRunChronicleEntry, saveRunChronicle } from '../chronicle';
 import { getMeta, setMeta } from '../meta';
+import { getProfile, levelForXp, setProfile } from '../profile';
 import { getRun } from '../state';
 import { formatRelicSummary, relicDef } from '../data/relics';
 import { applyContractCompletions, evaluateNewContracts } from '../game/contracts';
 import { CONTRACT_DEFS, contractDef } from '../data/contracts';
-import { shouldResolveProgressionRewards } from '../game/runCompletion';
+import { awardRunXpOnce, type RunXpAwardResult } from '../game/runCompletion';
 
 export class EndScene extends Phaser.Scene {
   private victory = false;
@@ -22,53 +22,18 @@ export class EndScene extends Phaser.Scene {
     this.victory = data.victory;
   }
 
-  private awardEmbersOnce(): {
-    handled: boolean;
-    reward: EmberRewardBreakdown;
-    progressionSuppressed: boolean;
-  } {
+  private awardXpOnce(): RunXpAwardResult {
     const run = getRun();
-    const meta = getMeta();
-    const zeroReward: EmberRewardBreakdown = {
-      depthMilestoneEmbers: 0,
-      escapeEmbers: 0,
-      convertedEmbers: 0,
-      total: 0,
-    };
-
-    if (meta.lastAwardedRunId === run.runId) {
-      return { handled: false, reward: zeroReward, progressionSuppressed: false };
+    const result = awardRunXpOnce(getProfile(), run, this.victory);
+    if (result.handled) {
+      setProfile(result.profile);
+      this.game.events.emit('profile-update', result.profile);
     }
-
-    if (!shouldResolveProgressionRewards(run)) {
-      setMeta({
-        ...meta,
-        lastAwardedRunId: run.runId,
-      });
-      return { handled: true, reward: zeroReward, progressionSuppressed: true };
-    }
-
-    const reward = calculateEmberReward({
-      depth: run.depth,
-      enemiesDefeated: run.enemiesDefeated,
-      gold: run.gold,
-      escaped: this.victory,
-      convertGold: !run.isDaily,
-    });
-
-    setMeta({
-      ...meta,
-      embers: meta.embers + reward.total,
-      lastAwardedRunId: run.runId,
-    });
-
-    return { handled: true, reward, progressionSuppressed: false };
+    return result;
   }
 
   private awardContractsOnce() {
     const run = getRun();
-    if (!shouldResolveProgressionRewards(run)) return [];
-
     const meta = getMeta();
     const completions = evaluateNewContracts(meta.progression, {
       escaped: this.victory,
@@ -85,19 +50,17 @@ export class EndScene extends Phaser.Scene {
 
   create(): void {
     const run = getRun();
-    const emberAward = this.awardEmbersOnce();
+    const xpAward = this.awardXpOnce();
     const contractAward = this.awardContractsOnce();
-    const emberLine = !emberAward.handled
-      ? 'Embers already recovered.'
-      : emberAward.progressionSuppressed
-        ? 'Escape the Dungeon grants no progression rewards.'
-        : this.formatEmberLine(emberAward.reward);
+    const xpLine = this.formatXpLine(xpAward);
+    const levelLine = this.formatLevelLine(xpAward);
+    const bestRoomLine = `Personal best: room ${xpAward.profile.personalBestRoom}.`;
     const contractLine =
       contractAward.length > 0
         ? contractAward
             .map(
               (completion) =>
-                `Contract: ${contractDef(completion.contractId).name} (+${completion.emberReward} Embers${completion.unlockedRelicId ? `, unlocked ${relicDef(completion.unlockedRelicId).name}` : ''})`,
+                `Contract: ${contractDef(completion.contractId).name}${completion.unlockedRelicId ? `, unlocked ${relicDef(completion.unlockedRelicId).name}` : ''}`,
             )
             .join('\n')
         : '';
@@ -107,8 +70,8 @@ export class EndScene extends Phaser.Scene {
       run.relics.length > 0
         ? `Relics collected:\n${formatRelicSummary(run.relics)}`
         : 'No relics collected this run.';
-    if (emberAward.handled) {
-      this.recordChronicleEntry(emberAward.reward.total, emberAward.reward.convertedEmbers);
+    if (xpAward.handled) {
+      this.recordChronicleEntry();
       this.recordDailyAttemptOnce();
     }
     const cx = GAME_W / 2;
@@ -142,7 +105,9 @@ export class EndScene extends Phaser.Scene {
             'Sunlight. Fresh air. Freedom.',
             '',
             `Escaped with ${run.hp}/${run.maxHp} HP and ${run.cardCollection.length} cards.`,
-            emberLine,
+            xpLine,
+            levelLine,
+            bestRoomLine,
             contractLine,
             contractProgressLine,
             relicLine,
@@ -175,7 +140,9 @@ export class EndScene extends Phaser.Scene {
           390,
           [
             `The dungeon claims another soul in room ${run.depth}.`,
-            emberLine,
+            xpLine,
+            levelLine,
+            bestRoomLine,
             contractLine,
             contractProgressLine,
             relicLine,
@@ -210,13 +177,20 @@ export class EndScene extends Phaser.Scene {
     this.input.once('pointerdown', restart);
   }
 
-  private formatEmberLine(reward: EmberRewardBreakdown): string {
-    if (reward.total === 0) {
-      return 'No Embers recovered this run.';
+  private formatXpLine(award: RunXpAwardResult): string {
+    if (!award.handled) return 'XP already recorded for this run.';
+    const parts = [`${award.reward.roomsXp} room`, `${award.reward.bossXp} boss`];
+    if (award.reward.escapeXp > 0) parts.push(`${award.reward.escapeXp} escape`);
+    return `Earned ${award.reward.total} XP (${parts.join(' + ')}).`;
+  }
+
+  private formatLevelLine(award: RunXpAwardResult): string {
+    const level = levelForXp(award.profile.xp);
+    if (!award.handled) return `Level ${level} - ${award.profile.xp} lifetime XP.`;
+    if (award.levelsGained.length === 0) {
+      return `Level ${award.nextLevel} - ${award.profile.xp} lifetime XP.`;
     }
-    const detail =
-      reward.convertedEmbers > 0 ? ` (${reward.convertedEmbers} banked from Gold)` : '';
-    return `Recovered ${reward.total} Ember${reward.total === 1 ? '' : 's'}${detail}.`;
+    return `Level ${award.previousLevel} -> ${award.nextLevel}: reached ${award.levelsGained.join(', ')}.`;
   }
 
   private recordDailyAttemptOnce(): void {
@@ -229,7 +203,7 @@ export class EndScene extends Phaser.Scene {
     }
   }
 
-  private recordChronicleEntry(emberReward: number, convertedEmbers: number): void {
+  private recordChronicleEntry(): void {
     const run = getRun();
     const chronicle = loadRunChronicle();
 
@@ -243,8 +217,8 @@ export class EndScene extends Phaser.Scene {
         depth: run.depth,
         enemiesDefeated: run.enemiesDefeated,
         gold: run.gold,
-        emberReward,
-        convertedEmbers,
+        emberReward: 0,
+        convertedEmbers: 0,
       }),
     );
   }

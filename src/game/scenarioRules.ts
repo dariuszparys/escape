@@ -10,7 +10,8 @@ export function shouldUseFullProgressionPrep(scenarioId: ScenarioId | null): boo
 }
 
 export function shouldAwardProgressionRewards(scenarioId: ScenarioId | null): boolean {
-  return scenarioId !== 'escape_the_dungeon';
+  void scenarioId;
+  return true;
 }
 
 export function shouldApplyPoisonedRoomDamage(scenarioId: ScenarioId | null): boolean {

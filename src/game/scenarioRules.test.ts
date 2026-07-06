@@ -18,9 +18,9 @@ import { makeRelic, relicDef } from '../data/relics';
 import { SequenceRng } from './test-rng';
 
 describe('scenario rules', () => {
-  test('classifies Escape as archetype-only prep with no progression rewards', () => {
+  test('classifies Escape as archetype-only prep with universal progression rewards', () => {
     expect(shouldUseFullProgressionPrep('escape_the_dungeon')).toBe(false);
-    expect(shouldAwardProgressionRewards('escape_the_dungeon')).toBe(false);
+    expect(shouldAwardProgressionRewards('escape_the_dungeon')).toBe(true);
   });
 
   test('classifies hard scenarios as full-prep progression runs', () => {
