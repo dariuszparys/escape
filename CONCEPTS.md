@@ -24,13 +24,13 @@ informed-routing tool for choosing which rooms to commit to.
 
 ### Elite
 
-A hand-authored spike encounter placed before a Stratum's boss. Elite rooms
-are their own room type — Scout Charge reveals them distinctly, so fighting
-one is an informed opt-in for rewards clearly better than a normal
-encounter's. Each elite carries a signature mechanic that teaches a specific
-counterplay lesson. Each Stratum offers exactly one Elite room; the offer is
-satisfied when the room is generated and reachable — routing around it does
-not re-offer one later in the Stratum.
+A hand-authored spike encounter placed before a decade's boss. Elite rooms are
+their own room type — Scout Charge reveals them distinctly, so fighting one is
+an informed opt-in for rewards clearly better than a normal encounter's. Each
+elite carries a signature mechanic that teaches a specific counterplay lesson.
+Each decade offers at most one Elite room; the offer is satisfied when the room
+is generated and reachable, so routing around it does not re-offer one later in
+that decade.
 
 ### Card Battle
 
@@ -162,12 +162,20 @@ rules are already resolved by the time it plays.
 ### Run
 
 A single dungeon attempt with temporary state such as health, card collection
-(the battle deck), inventory, Gold, room progress, and escape outcome.
+(the battle deck), inventory, Gold, room progress, suspended snapshot, and escape
+outcome. A run is exactly 100 rooms long: every 10th room is a boss, and the
+room-100 boss is the only victory terminus.
+
+### Escape
+
+The successful end state for a Run: defeat the room-100 boss. Escaping records a
+win, awards the run's normal XP, and adds the escape XP bonus. Earlier boss kills
+keep the run moving; they are milestones, not cash-out points.
 
 ### Normal Run
 
-A non-daily descent that routes through Scenario selection and can use Campfire
-preparation according to the chosen Scenario.
+A non-daily attempt that routes through Scenario selection and uses the current
+Campfire loadout.
 
 ### Scenario
 
@@ -175,84 +183,80 @@ A normal-run premise selected before the dungeon starts. Scenario choice replace
 the plain Descend handoff for normal runs: Escape the Dungeon is the clean/default
 premise, while hard Scenarios add a run rule such as poisoned room entry, no
 block, or doubled normal encounters. Daily Descents stay separate from Scenarios.
-Escape the Dungeon keeps the selected Archetype but suppresses post-run
-progression rewards; hard Scenarios use eligible Campfire preparation and award
-normal progression rewards.
+Every Scenario awards XP at run end.
 
 ### Daily Descent
 
 A date-seeded challenge run tracked separately from normal progression. Daily
-Descents ignore Ember progression benefits so attempts stay comparable.
+Descents ignore loadout choices so attempts stay comparable, but still award XP
+when the run ends.
 
 ### Campfire
 
-The between-run hub for viewing persistent progression, choosing one-run
-preparation, and starting a normal or daily descent.
+The between-run hub for viewing persistent progression, choosing loadout, and
+starting a normal or daily run. If a suspended run exists, Campfire offers resume
+and abandon actions before starting a new attempt.
 
 ### Gold
 
-Run-local currency earned and spent during the current Run. Unbanked Gold is
-forfeited on death; Banking at a Gate converts the leftover Gold into Embers
-(see Endless Descent).
+Run-local currency earned and spent during the current Run, mainly on rest-room
+deck upgrades or removals. Gold never persists after a run and has no conversion
+path into progression.
 
-### Ember
+### XP
 
-Persistent progression currency spent at the Campfire on options that shape
-later normal runs. Earned from depth milestones, the escape bonus, and Gold
-Banked at a Gate.
+Lifetime progress awarded once when a run ends. XP comes from rooms reached,
+bosses defeated, and an escape bonus. It is never spent; accumulated XP only
+determines Level.
+
+### Level
+
+A derived value from lifetime XP. Level gates access to archetypes, starting
+relic choices, and starter variety. It never grants direct combat stats.
+
+### Discovery
+
+Permanent knowledge that a relic exists for this profile. Relics can be
+discovered from run pickups or contract rewards. A relic must be both discovered
+and level-eligible before it can be selected as a starting relic.
+
+### Loadout
+
+The Campfire choices applied to the next normal run: optional Archetype, optional
+starting Relic when the profile has an eligible slot, and level-gated starter
+variety. Loadout changes access and starting shape, not base stats.
 
 ### Starter Variety
 
-An Ember unlock that broadens the opening card choices for normal runs without
-changing the number of cards picked.
+A Level unlock that broadens the opening card choices for normal runs.
 
 ### Archetype
 
-A player class — Barbarian, Necromancer, or Ranger — selected for free on the
-Progression screen. Selecting one reshapes the whole run's card identity rather
-than adding a single card: the opening picks come from that archetype's pick
-pool, and every card reward/chest draw is rolled from the archetype's cards
-**plus** the shared neutral pool. With no archetype selected the pool is neutral
-only — the standard cards and nothing else. Archetype cards carry an `archetype`
-tag and never appear in a neutral (or enemy) draw, so the neutral game — and its
-determinism golden — is unchanged. The fixed starting deck body (2 Strike, 2
-Guard) stays neutral across archetypes so the picks can be fully thematic without
-leaving a deck defensively broken. Barbarian scales Strength and swings big;
-Necromancer stacks poison/burn damage-over-time and life-drain sustain; Ranger
-marks prey Vulnerable and sprays multi-hit volleys with card draw. Daily Descents
-ignore Archetype selection so attempts stay comparable. Only one archetype is
-active for future normal descents until the player changes it.
+A player class — Barbarian, Necromancer, or Ranger — selected on the Progression
+screen after Level unlocks it. Selecting one reshapes the whole run's card
+identity rather than adding a single card: the opening picks come from that
+archetype's pick pool, and every card reward/chest draw is rolled from the
+archetype's cards **plus** the shared neutral pool. With no archetype selected
+the pool is neutral only. The fixed starting deck body (2 Strike, 2 Guard) stays
+neutral across archetypes so the picks can be fully thematic without leaving a
+deck defensively broken. Barbarian scales Strength and swings big; Necromancer
+stacks poison/burn damage-over-time and life-drain sustain; Ranger marks prey
+Vulnerable and sprays multi-hit volleys with card draw. Daily Descents ignore
+Archetype selection so attempts stay comparable. Only one archetype is active for
+future normal runs until the player changes it.
 
-## Endless Descent
+### Suspend
 
-### Stratum
-
-A fixed-length band of dungeon depth ending in a boss Gate; the base run is the
-first stratum, and Delving continues into deeper, harder strata. Depth keeps
-climbing across strata rather than resetting, and difficulty escalates with it.
-
-### Gate
-
-The decision point after clearing a Stratum's boss, where the player chooses to
-Bank or Delve. Gates are the only points at which a Run can end in a win.
-
-### Delve
-
-Committing to descend into the next Stratum instead of Banking. Irreversible
-until the next Gate, and death anywhere in the Stratum forfeits all unbanked
-Gold — the risk half of the push-your-luck choice.
-
-### Bank
-
-Ending a Run a winner at a Gate by converting unbanked Gold into Embers and
-escaping. The safe terminus opposite death; in a Daily Descent, Banking still
-ends the run but mints no Embers from Gold.
+The browser-persisted snapshot of the current run. A suspended run stores the run
+state, current room, RNG states, player position, facing, and primed next-room
+options. Resume restores that snapshot; abandon clears it and records the run as
+failed at its current room.
 
 ### Relic
 
 A passive run modifier acquired during a dungeon run (chests, elite rewards,
-boss drops, meta starting picks, or Campfire prep). Each relic id is unique per
-run — at most one copy, up to six relics held. Relics persist for the whole run
-and explain their effect in pickup panels, HUD hover tooltips, and the `[R]`
-inspector. Meta progression unlocks additional relic types into the drop pool
-and can equip one eligible relic before a normal run starts.
+boss drops, or level-gated loadout). Each relic id is unique per run — at most
+one copy, up to six relics held. Relics persist for the whole run and explain
+their effect in pickup panels, HUD hover tooltips, and the `[R]` inspector.
+Relic drops come from the full pool; loadout selection additionally requires
+Discovery and Level eligibility.

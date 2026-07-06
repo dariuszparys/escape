@@ -46,7 +46,7 @@ describe('meta state', () => {
 
   test('normalizes invalid and old unversioned saved data to defaults', () => {
     expect(normalizeMetaState(null)).toEqual(createDefaultMetaState());
-    expect(normalizeMetaState({ embers: 23, pendingPrep: { itemIds: ['bomb'] } })).toEqual(
+    expect(normalizeMetaState({ oldWallet: 23, pendingPrep: { itemIds: ['bomb'] } })).toEqual(
       createDefaultMetaState(),
     );
   });

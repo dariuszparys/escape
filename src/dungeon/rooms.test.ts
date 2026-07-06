@@ -126,7 +126,7 @@ describe('chooseForcedEliteDoor (KTD3, scene side)', () => {
     ).toBeNull(); // pre-boss
   });
 
-  test('returns a member of openDoors when due', () => {
+  test('returns an entry from openDoors when due', () => {
     const door = chooseForcedEliteDoor(new SequenceRng([], [1]), 5, doors, null);
     expect(door).not.toBeNull();
     expect(doors).toContain(door);

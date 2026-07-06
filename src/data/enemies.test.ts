@@ -111,7 +111,7 @@ describe('elite encounter class (U5/R2)', () => {
     expect(eliteDelta).toBeGreaterThan(normalDelta);
   });
 
-  test('elite HP increases monotonically with depth across strata', () => {
+  test('elite HP increases monotonically with depth across the run', () => {
     const hpAt = (depth: number) => spawnElite(new SequenceRng([0]), depth).hp;
     expect(hpAt(8)).toBeLessThan(hpAt(18));
     expect(hpAt(18)).toBeLessThan(hpAt(28));
@@ -310,11 +310,11 @@ describe('U4 medium/strong pattern rebuild (R1)', () => {
 
     test('cultist: 4-entry cycle wraps cleanly', () => {
       expect(namesOverTurns(defById('cultist').pattern, 8)).toEqual([
-        'Ember Curse',
+        'Cinder Curse',
         'Talon Rake',
         'Venom Spit',
         'Blood Sigil',
-        'Ember Curse',
+        'Cinder Curse',
         'Talon Rake',
         'Venom Spit',
         'Blood Sigil',
@@ -400,7 +400,7 @@ describe('U4 medium/strong pattern rebuild (R1)', () => {
     test('cultist', () => {
       const empowered = empowerPattern(defById('cultist').pattern, 3);
       expect(empowered.cycle.map((entry) => entry.effects)).toEqual([
-        [{ kind: 'status', status: 'burn', amount: 3, duration: 2 }], // Ember Curse: no damage, untouched
+        [{ kind: 'status', status: 'burn', amount: 3, duration: 2 }], // Cinder Curse: no damage, untouched
         [{ kind: 'damage', amount: 10 }], // Talon Rake: 7 -> 10
         [
           { kind: 'damage', amount: 7 }, // Venom Spit: 4 -> 7
@@ -522,7 +522,7 @@ describe('multi-enemy packs (spawnEncounter)', () => {
   });
 
   test('a low solo roll keeps a single normal enemy past depth 2', () => {
-    // frac 0 < PACK_SOLO_CHANCE -> solo; the member is a normal-tier enemy, not a minion.
+    // frac 0 < PACK_SOLO_CHANCE -> solo; the foe is a normal-tier enemy, not a minion.
     const pack = spawnEncounter(new SequenceRng([0]), 5);
     expect(pack).toHaveLength(1);
     expect(MINIONS.some((def) => def.id === pack[0].def.id)).toBe(false);
@@ -533,8 +533,8 @@ describe('multi-enemy packs (spawnEncounter)', () => {
     const trio = spawnEncounter(new SequenceRng([0.9, 0.1]), 5); // pack, size roll 0.1 -> size 3
     expect(pair).toHaveLength(2);
     expect(trio).toHaveLength(3);
-    for (const member of [...pair, ...trio]) {
-      expect(MINIONS.some((def) => def.id === member.def.id)).toBe(true);
+    for (const foe of [...pair, ...trio]) {
+      expect(MINIONS.some((def) => def.id === foe.def.id)).toBe(true);
     }
   });
 
@@ -544,12 +544,12 @@ describe('multi-enemy packs (spawnEncounter)', () => {
       for (const size of [2, 3]) {
         const pack = spawnMinionPack(new SequenceRng([0.9]), depth, size);
         expect(pack).toHaveLength(size);
-        const totalHp = pack.reduce((sum, member) => sum + member.hp, 0);
+        const totalHp = pack.reduce((sum, foe) => sum + foe.hp, 0);
         // Total pack HP ~ 1.3x a solo (PACK_HP_MULTIPLIER offsets focus-fire), give or take rounding
-        // and the per-member floor. It is clearly in a solo's ballpark, never a runaway wall.
+        // and the per-foe floor. It is clearly in a solo's ballpark, never a runaway wall.
         expect(totalHp).toBeGreaterThan(solo);
         expect(totalHp).toBeLessThan(solo * 2.2 + size * 6);
-        for (const member of pack) expect(member.hp).toBeGreaterThanOrEqual(6);
+        for (const foe of pack) expect(foe.hp).toBeGreaterThanOrEqual(6);
       }
     }
   });
@@ -561,7 +561,7 @@ describe('multi-enemy packs (spawnEncounter)', () => {
     expect(a).toEqual(b);
   });
 
-  test('toEngineEnemies gives pack members unique ids but leaves a solo bare', () => {
+  test('toEngineEnemies gives pack foes unique ids but leaves a solo bare', () => {
     const pack = spawnMinionPack(new SequenceRng([0.9]), 5, 3);
     const ids = toEngineEnemies(pack).map((enemy) => enemy.id);
     expect(new Set(ids).size).toBe(3); // unique even when all three are the same minion type
@@ -584,9 +584,9 @@ describe('scenario encounter spawning', () => {
     const pack = spawnScenarioEncounter(new SequenceRng([0, 0.5]), 5, 'normal', 'enemies_doubled');
 
     expect(pack).toHaveLength(2);
-    for (const member of pack) {
-      expect(MINIONS.some((def) => def.id === member.def.id)).toBe(false);
-      expect(member.hp).toBe(enemyHpForDepth(member.def.baseHp, 5));
+    for (const foe of pack) {
+      expect(MINIONS.some((def) => def.id === foe.def.id)).toBe(false);
+      expect(foe.hp).toBe(enemyHpForDepth(foe.def.baseHp, 5));
     }
   });
 
@@ -599,14 +599,14 @@ describe('scenario encounter spawning', () => {
     );
 
     expect(pack).toHaveLength(2);
-    expect(pack.every((member) => MINIONS.some((def) => def.id === member.def.id))).toBe(false);
+    expect(pack.every((foe) => MINIONS.some((def) => def.id === foe.def.id))).toBe(false);
   });
 
   test('non-doubled normal scenarios keep the existing spawnEncounter shape', () => {
     const pack = spawnScenarioEncounter(new SequenceRng([0.9, 0.9, 0]), 5, 'normal', null);
 
     expect(pack).toHaveLength(2);
-    expect(pack.every((member) => MINIONS.some((def) => def.id === member.def.id))).toBe(true);
+    expect(pack.every((foe) => MINIONS.some((def) => def.id === foe.def.id))).toBe(true);
   });
 
   test('Enemies Are Doubled does not duplicate elites or bosses', () => {

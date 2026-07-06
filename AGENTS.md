@@ -10,8 +10,8 @@ starter kits, `src/dungeon/` for room generation, `src/audio/` for procedural mu
 `src/gfx/` for generated pixel-art rendering helpers. `src/game/` holds the headless rules
 engine — `turnEngine.ts` (combat rules over an `enemies[]` pack, RNG injected), `combatEvents.ts`
 (the deterministic event bus), `effectHandlers.ts` (the combat-effect handler registry),
-`balanceSimulator.ts` (the automated win-rate harness), `delve.ts`/`strata.ts` (Endless Descent
-bank/delve rules), and `progression.ts`/`campfirePrep.ts` (Ember spend and run prep) among other
+`balanceSimulator.ts` (the automated survival-curve harness), `runCompletion.ts`
+(run-end XP/profile awards), and `progression.ts`/`campfirePrep.ts` (level-gated loadout prep) among other
 pure rule modules — scene code renders and forwards input but never decides rules. `index.html`
 hosts the game container. `dist/` is build output and should not be edited by hand.
 
@@ -46,10 +46,10 @@ baseline validation before submitting changes. For gameplay changes, also run
 `npm run dev` and manually smoke test the affected loop, such as dungeon movement,
 encounters, card selection, treasure, potions, traps, or boss completion.
 
-Changes that touch combat numbers, enemy packs, statuses, or the Endless Descent
-economy are validated against `src/game/balanceSimulator.ts`, an automated policy-driven
-win-rate harness — re-run its tests and check the reported win rate still sits in the
-tuned band rather than eyeballing individual numbers.
+Changes that touch combat numbers, enemy packs, statuses, or the 100-room difficulty
+curve are validated against `src/game/balanceSimulator.ts`, an automated policy-driven
+survival harness — re-run its tests and check the bare/mid/strong escape and death-room
+bands still sit in range rather than eyeballing individual numbers.
 
 Use `docs/solutions/` for repo-local writeups of solved problems and reusable fixes;
 entries are organized by category with YAML frontmatter such as `module`, `tags`,

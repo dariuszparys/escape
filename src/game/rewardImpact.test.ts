@@ -44,7 +44,7 @@ describe('previewRewardImpact (KTD9 — deck vocabulary)', () => {
     expect(impact.drawOdds).toBeCloseTo(0.5);
     expect(impact.label).toContain('Thunder');
     expect(impact.label).toContain('10-card deck');
-    // No trace of the retired hand-membership vocabulary.
+    // No trace of the retired hand-count vocabulary.
     expect(impact.label).not.toMatch(/enters hand|replaces/i);
   });
 

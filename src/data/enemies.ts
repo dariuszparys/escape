@@ -30,7 +30,7 @@ export interface EnemyInstance {
 
 /**
  * Map spawned enemy instances to the turn engine's per-enemy config, assigning a
- * UNIQUE id to each pack member (`goblin#0`, `goblin#1`) so same-type duplicates
+ * UNIQUE id to each pack foe (`goblin#0`, `goblin#1`) so same-type duplicates
  * don't collide when the engine/scene address enemies by id. A solo enemy keeps
  * its bare def id, so single-enemy battles are byte-identical to before packs.
  */
@@ -190,7 +190,7 @@ export const ENEMIES: EnemyDef[] = [
     pattern: {
       cycle: [
         {
-          name: 'Ember Curse',
+          name: 'Cinder Curse',
           telegraph: 'chants a smoldering curse...',
           effects: [{ kind: 'status', status: 'burn', amount: 3, duration: 2 }],
         },
@@ -799,7 +799,7 @@ export const SLICE_ENEMIES: SliceEnemyDef[] = [
     pattern: {
       cycle: [
         {
-          name: 'Ember Curse',
+          name: 'Cinder Curse',
           telegraph: 'chants a smoldering curse...',
           effects: [{ kind: 'status', status: 'burn', amount: 2, duration: 2 }],
         },
@@ -952,8 +952,8 @@ export const MINIONS: EnemyDef[] = [
           effects: [{ kind: 'damage', amount: 3 }],
         },
         {
-          name: 'Ember',
-          telegraph: 'spits a small ember...',
+          name: 'Cinder',
+          telegraph: 'spits a small cinder...',
           effects: [{ kind: 'status', status: 'burn', amount: 2, duration: 2 }],
         },
       ],
@@ -987,10 +987,10 @@ export const MINIONS: EnemyDef[] = [
 export const PACK_SOLO_CHANCE = 0.6;
 /** Among the packs, the fraction that are size 3 (the rest are size 2). */
 export const PACK_TRIPLE_CHANCE = 0.35;
-const PACK_MIN_MEMBER_HP = 6;
+const PACK_MIN_FOE_HP = 6;
 /**
  * A pack carries MORE total HP than the solo it stands in for: because the player
- * focus-fires and picks members off (cutting the pack's incoming damage each turn),
+ * focus-fires and picks foes off (cutting the pack's incoming damage each turn),
  * an equal-HP pack is strictly easier than a solo that keeps hitting at full. This
  * multiplier restores the tuned attrition — the pack survives ~a turn longer, so more
  * of its (multi-attacker) damage lands. Tuned against the balance harness so packs
@@ -1007,16 +1007,16 @@ function packHpBudget(depth: number): number {
 
 /**
  * Build a pack of `size` minions whose COMBINED HP and per-turn damage ≈ one solo
- * enemy of this depth: total HP is split across members, and the tier's per-turn
- * damage bump is spread across them (each member gets `bonus / size`) so the pack's
- * scaling tracks a solo enemy's rather than multiplying it by the member count.
+ * enemy of this depth: total HP is split across foes, and the tier's per-turn
+ * damage bump is spread across them (each foe gets `bonus / size`) so the pack's
+ * scaling tracks a solo enemy's rather than multiplying it by the foe count.
  */
 export function spawnMinionPack(rng: GameRng, depth: number, size: number): EnemyInstance[] {
-  const perHp = Math.max(PACK_MIN_MEMBER_HP, Math.round(packHpBudget(depth) / size));
-  const perMemberBonus = Math.floor(intentBonusForDepth(depth) / size);
+  const perHp = Math.max(PACK_MIN_FOE_HP, Math.round(packHpBudget(depth) / size));
+  const perFoeBonus = Math.floor(intentBonusForDepth(depth) / size);
   return Array.from({ length: size }, () => {
     const def = rng.pick(MINIONS);
-    const pattern = empowerPattern(def.pattern, perMemberBonus);
+    const pattern = empowerPattern(def.pattern, perFoeBonus);
     return { def, hp: perHp, maxHp: perHp, armor: 0, statuses: [], pattern };
   });
 }

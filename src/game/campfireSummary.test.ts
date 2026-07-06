@@ -34,7 +34,7 @@ describe('campfire summary formatting', () => {
         'Personal best: room 47',
       ].join('\n'),
     );
-    expect(summary).not.toMatch(/Ember|Migration bonus|purchase/i);
+    expect(summary).not.toMatch(/Migration bonus|purchase/i);
   });
 
   test('names the active archetype and starting relic in the campfire overview', () => {

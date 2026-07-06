@@ -97,7 +97,7 @@ export function startingCardIdsForChoiceCount(
 }
 
 export function startingCardIdsForRun(run: StartingCardRun): string[] {
-  // Daily Descents ignore archetype selection (and Ember progression) so attempts stay comparable.
+  // Daily Descents ignore archetype selection so attempts stay comparable.
   const archetypeId = run.isDaily ? null : (run.archetypeId ?? null);
   const scenarioId = run.isDaily ? null : (run.scenarioId ?? null);
   if (run.isDaily) return startingCardIdsForChoiceCount(DEFAULT_STARTING_CARD_CHOICES, archetypeId);

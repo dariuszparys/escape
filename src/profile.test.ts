@@ -131,7 +131,7 @@ describe('profile state', () => {
 
   test('first profile boot clears legacy meta, chronicle, and daily saves', () => {
     const storage = new MemoryStorage();
-    storage.setItem(META_STORAGE_KEY, JSON.stringify({ embers: 99 }));
+    storage.setItem(META_STORAGE_KEY, JSON.stringify({ oldWallet: 99 }));
     storage.setItem(CHRONICLE_STORAGE_KEY, JSON.stringify({ runsCompleted: 3 }));
     storage.setItem(DAILY_STORAGE_KEY, JSON.stringify({ attempts: 2 }));
 

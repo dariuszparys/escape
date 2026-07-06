@@ -770,7 +770,7 @@ export class TurnBattleScene extends Phaser.Scene {
     }
   }
 
-  /** A downed pack member fades out where it stands and stops carrying an intent. */
+  /** A downed pack foe fades out where it stands and stops carrying an intent. */
   private markEnemyDown(view: EnemyView): void {
     if (view.sprite.getData('down')) return;
     view.sprite.setData('down', true);
@@ -1894,7 +1894,7 @@ export class TurnBattleScene extends Phaser.Scene {
         })
         .setOrigin(0.5),
     );
-    // Restart reuses the same pack; strip the per-member `#index` back to slice def ids.
+    // Restart reuses the same pack; strip the per-foe `#index` back to slice def ids.
     const packParam = this.displays.map((d) => d.id.split('#')[0]).join(',');
     const other = nextSliceEnemy(this.displays[0].id.split('#')[0]);
     const options: { label: string; action: () => void }[] = [

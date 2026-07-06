@@ -223,8 +223,6 @@ export class EndScene extends Phaser.Scene {
         depth: run.depth,
         enemiesDefeated: run.enemiesDefeated,
         gold: run.gold,
-        emberReward: 0,
-        convertedEmbers: 0,
       }),
     );
   }

@@ -15,19 +15,18 @@ npm run dev      # http://localhost:5173
 ## How it plays
 
 - Each normal run starts by choosing a **Scenario**. Escape the Dungeon is the
-  clean attempt with no progression rewards; I'm Poisoned, I Lost My Left Arm,
-  and Enemies Are Doubled are harder progression runs with explicit run rules.
-  On the Progression screen you can freely pick an **archetype** — Barbarian,
-  Necromancer, or Ranger — that reshapes the whole run's card pool instead of
-  adding a single card; skip it and the run draws from the neutral pool only.
-  The fire offers **two opening card picks from three options** (Ember
-  progression can add a fourth option to pick from, and a third pick).
+  clean attempt; I'm Poisoned, I Lost My Left Arm, and Enemies Are Doubled are
+  harder runs with explicit rules. Every finished run pays lifetime **XP**.
+  Level unlocks access to archetypes, starter variety, and eligible starting
+  relics; it never raises stats directly. On the Progression screen you can pick
+  an **archetype** — Barbarian, Necromancer, or Ranger — that reshapes the whole
+  run's card pool; skip it and the run draws from the neutral pool only.
 - Every later room has four doors — the one you came through is barred.
   Rooms are randomized: **encounters, elites, treasure chests, health
-  potions, paid rest rooms, or spike traps**. Each stratum guarantees exactly
-  one elite: a hand-authored spike fight with a signature mechanic, worth
-  clearly better rewards than a normal encounter. Scout Charges let you peek
-  at adjacent room types before committing.
+  potions, paid rest rooms, or spike traps**. Each 10-room decade can offer one
+  elite: a hand-authored spike fight with a signature mechanic, worth clearly
+  better rewards than a normal encounter. Scout Charges let you peek at
+  adjacent room types before committing.
 - Encounter rooms place one or more visible monsters in the room — most
   fights are solo, but some spawn a budget-anchored pack of 2-3 weaker foes.
   In the Enemies Are Doubled Scenario, normal encounter rooms instead spawn two
@@ -45,15 +44,12 @@ npm run dev      # http://localhost:5173
   rewards, chest cards, and rest-room upgrades or removals preview whether the
   next combat hand changes.
 - **Gold** is earned and spent inside the current run, including paid rest-room
-  deck upgrades or removals. **Embers** persist after the run and unlock
-  long-term Campfire progression (opening variety, relic paths, archetypes).
-- The 10th room of each stratum holds a boss fight. Boss fights are
-  mandatory: no escape hatch opens until the boss is defeated (elites, by
-  contrast, are an informed opt-in — you can route around one via a Scout
-  Charge reveal). Clearing a boss opens a **Gate**: bank your unbanked Gold
-  as Embers and end the run a winner, or delve into the next, harder stratum
-  and keep pushing your luck — dying anywhere in a stratum forfeits that
-  stratum's unbanked Gold.
+  deck upgrades or removals. Gold dies with the run; lifetime XP and discovery
+  flags are the persistent layer.
+- The run is a fixed **100-room escape**. Every 10th room holds a mandatory boss,
+  and the room-100 boss is the final wall. Defeat it to escape; die or abandon
+  before then and the run ends, still awarding XP for the room reached and bosses
+  cleared.
 
 ## Controls
 

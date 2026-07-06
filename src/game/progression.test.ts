@@ -76,7 +76,7 @@ describe('level-gated archetype selection', () => {
     expect(formatArchetypeProgressionLine(state(), profileAtLevel(1), 'barbarian')).toContain(
       'locked - level 3',
     );
-    expect(formatArchetypeProgressionLine(active, profile, 'barbarian')).not.toMatch(/Ember/);
+    expect(formatArchetypeProgressionLine(active, profile, 'barbarian')).not.toMatch(/spend/i);
   });
 });
 
@@ -87,7 +87,7 @@ describe('starter card variety', () => {
     expect(formatStarterCardProgressionSummary(profileAtLevel(4))).toContain(
       'Starter variety: unlocked',
     );
-    expect(formatStarterCardProgressionSummary(profileAtLevel(1))).not.toMatch(/Ember|spend/i);
+    expect(formatStarterCardProgressionSummary(profileAtLevel(1))).not.toMatch(/spend/i);
   });
 });
 
@@ -167,6 +167,6 @@ describe('relic loadout access', () => {
     expect(formatRelicProgressionLine(active, profile, 'spark_coil')).toContain(
       'available - select',
     );
-    expect(formatRelicProgressionSummary(active, profile)).not.toMatch(/Ember|buy|spend/i);
+    expect(formatRelicProgressionSummary(active, profile)).not.toMatch(/buy|spend/i);
   });
 });

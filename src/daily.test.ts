@@ -149,11 +149,11 @@ describe('daily challenge records', () => {
     expect(loadDailyRecord(storage)).toEqual(createDefaultDailyRecord(new Date()));
   });
 
-  test('records deep delve depth past 10 as the comparable metric', () => {
+  test('records room depth past 10 as the comparable metric', () => {
     const record = createDefaultDailyRecord(new Date('2026-06-27T00:00:00Z'));
     const recorded = recordDailyAttempt(record, { depth: 24, escaped: true });
 
-    // Depth climbs past 10 unchanged, giving finer leaderboard resolution than a stratum index.
+    // Depth climbs past 10 unchanged, giving room-level leaderboard resolution.
     expect(recorded.bestDepth).toBe(24);
     expect(recorded.attempts).toBe(1);
   });

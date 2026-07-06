@@ -9,15 +9,12 @@ export interface RunChronicleEntry {
   completedAt: string;
   seed: string;
   dailyKey: string | null;
-  /** Whether the run banked-and-escaped (true) or died (false). Bank-vs-death derives from this. */
+  /** Whether the run escaped at room 100 (true) or died/was abandoned (false). */
   escaped: boolean;
-  /** Deepest depth reached; climbs past 10 across strata for finer leaderboard resolution. */
+  /** Deepest room reached in the fixed 100-room run. */
   depth: number;
   enemiesDefeated: number;
   gold: number;
-  emberReward: number;
-  /** Embers gained from converting unbanked Gold at the bank (0 on death and in Daily). */
-  convertedEmbers: number;
 }
 
 export interface RunChronicle {
@@ -53,8 +50,6 @@ function normalizeChronicleEntry(value: unknown): RunChronicleEntry {
       depth: 0,
       enemiesDefeated: 0,
       gold: 0,
-      emberReward: 0,
-      convertedEmbers: 0,
     };
   }
 
@@ -67,9 +62,6 @@ function normalizeChronicleEntry(value: unknown): RunChronicleEntry {
     depth: clampNonNegativeInteger(value.depth),
     enemiesDefeated: clampNonNegativeInteger(value.enemiesDefeated),
     gold: clampNonNegativeInteger(value.gold),
-    emberReward: clampNonNegativeInteger(value.emberReward),
-    // Defaults to 0 for pre-delve saves that never recorded conversion (KTD6 migration).
-    convertedEmbers: clampNonNegativeInteger(value.convertedEmbers),
   };
 }
 
