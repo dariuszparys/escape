@@ -25,7 +25,6 @@ import { emitBattleWon } from './combatEvents';
 import { ensureRelicBehaviorsWired } from './relicBehaviors';
 import { relicBattleSetup } from './relicRegistry';
 import { intentView } from './intentPatterns';
-import { convertGoldToEmbers } from './metaRewards';
 import {
   awardEliteBonusGold,
   awardEnemyGold,
@@ -36,11 +35,7 @@ import {
   rollVictoryCardOffers,
 } from './rewards';
 import { GameRng } from './rng';
-import {
-  applyPoisonedRoomEntryDamage,
-  shouldAwardProgressionRewards,
-  shouldPreventPlayerBlock,
-} from './scenarioRules';
+import { applyPoisonedRoomEntryDamage, shouldPreventPlayerBlock } from './scenarioRules';
 import { startingCardIdsForRun } from './startingCards';
 import {
   cardCost,
@@ -55,11 +50,8 @@ import {
 import { upgradeCard } from './cardUpgrade';
 import { canUseRestAction, payRestAction } from './restEconomy';
 
-/** Gold→Ember conversion used by the economy harness; injectable so tests can probe over-generous curves. */
-export type GoldConversion = (gold: number) => number;
-
 /**
- * A cloneable RNG threaded through the simulation. The seed-stability gate (R5)
+ * A cloneable RNG threaded through the single-arc survival simulation. The seed-stability gate (R5)
  * injects an *observed* implementation via `SimRunOptions.createRng` so it can sample
  * RNG draw order without reaching into the module-private `SeededRng`.
  */
@@ -80,7 +72,6 @@ export function createSimRng(seed: number, observer?: (frac: number) => void): S
 }
 
 interface SimRunOptions {
-  convert: GoldConversion;
   /** Root RNG factory; the gate injects an observed RNG here (KTD4). Defaults to a plain seeded RNG. */
   createRng: SimRngFactory;
   /** Optional slant for the greedy card policy — the no-dominant-policy gate sweeps these. */
@@ -96,6 +87,26 @@ export interface BalanceScenario {
    * economy entirely; this harness cares about battle/economy effects, not acquisition odds). */
   startingRelicIds?: RelicId[];
 }
+
+export type BalanceLoadoutTier = 'bare' | 'mid' | 'strong';
+
+/**
+ * Harness-owned access tiers for the fixed 100-room arc. Level and discovery only gate access in
+ * the product, so these scenarios model the loadout a player can choose at those access bands; they
+ * do not grant hidden stats or extra resources beyond the selected archetype/starting relic.
+ */
+export const BALANCE_LOADOUT_SCENARIOS: Record<BalanceLoadoutTier, BalanceScenario> = {
+  bare: {},
+  mid: {
+    activeArchetypeId: 'barbarian',
+    startingRelicIds: ['iron_will'],
+  },
+  strong: {
+    activeArchetypeId: 'necromancer',
+    starterCardVarietyUnlocked: true,
+    startingRelicIds: ['iron_will'],
+  },
+};
 
 export interface EncounterBucketSummary {
   total: number;
@@ -123,6 +134,9 @@ export interface BalanceSimulationSummary {
   bossReachRate: number;
   bossKillGivenReach: number;
   avgDeathDepth: number;
+  medianDeathDepth: number;
+  /** Fraction of runs that reached rooms 1, 11, 21, ..., 91. */
+  decadeSurvivalRates: number[];
   byEncounter: Record<string, EncounterBucketSummary>;
   eliteBucket: EliteBucketSummary;
   /** engaged / offered — 0 if never offered across the sample. */
@@ -135,7 +149,7 @@ export interface BalanceSimulationSummary {
   weakTierWinRate: number;
 }
 
-interface SimRunResult {
+export interface SimRunResult {
   /** Escaped — defeated the room-100 boss, the run's only win condition (R1). */
   victory: boolean;
   reachedBoss: boolean;
@@ -148,7 +162,7 @@ interface SimRunResult {
   /** How many elite fights this run actually engaged. */
   eliteEncounters: number;
   eliteWins: number;
-  convertedEmbers: number;
+  finalGold: number;
   /** Individual 'encounter'-room battle outcomes this run, bucketed by tier (U12). */
   tierFights: Record<StandardTier, TierBucketSummary>;
 }
@@ -761,7 +775,6 @@ export function simulateReferenceDeck(
 }
 
 const DEFAULT_RUN_OPTIONS: SimRunOptions = {
-  convert: convertGoldToEmbers,
   createRng: (seed) => new SeededRng(seed >>> 0),
   emphasis: null,
 };
@@ -771,7 +784,7 @@ export function simulateRun(
   scenario: BalanceScenario,
   options: Partial<SimRunOptions> = {},
 ): SimRunResult {
-  const { convert, createRng, emphasis } = {
+  const { createRng, emphasis } = {
     ...DEFAULT_RUN_OPTIONS,
     ...options,
   };
@@ -805,7 +818,7 @@ export function simulateRun(
         eliteEligible,
         eliteEncounters,
         eliteWins,
-        convertedEmbers: 0,
+        finalGold: run.gold,
         tierFights,
       };
     }
@@ -829,7 +842,7 @@ export function simulateRun(
           eliteEligible,
           eliteEncounters,
           eliteWins,
-          convertedEmbers: 0,
+          finalGold: run.gold,
           tierFights,
         };
       }
@@ -848,7 +861,7 @@ export function simulateRun(
           eliteEligible,
           eliteEncounters,
           eliteWins,
-          convertedEmbers: shouldAwardProgressionRewards(run.scenarioId) ? convert(run.gold) : 0,
+          finalGold: run.gold,
           tierFights,
         };
       }
@@ -876,7 +889,7 @@ export function simulateRun(
           eliteEligible,
           eliteEncounters,
           eliteWins,
-          convertedEmbers: 0,
+          finalGold: run.gold,
           tierFights,
         };
       }
@@ -906,7 +919,7 @@ export function simulateRun(
           eliteEligible,
           eliteEncounters,
           eliteWins,
-          convertedEmbers: 0,
+          finalGold: run.gold,
           tierFights,
         };
       }
@@ -936,6 +949,14 @@ export function simulateRun(
   throw new Error('simulateRun: reached RUN_LENGTH without a boss terminus');
 }
 
+function median(values: readonly number[], fallback: number): number {
+  if (values.length === 0) return fallback;
+  const ordered = [...values].sort((left, right) => left - right);
+  const mid = Math.floor(ordered.length / 2);
+  if (ordered.length % 2 === 1) return ordered[mid];
+  return (ordered[mid - 1] + ordered[mid]) / 2;
+}
+
 export function simulateScenarioSummary(
   scenario: BalanceScenario,
   runs = 400,
@@ -945,6 +966,8 @@ export function simulateScenarioSummary(
   let bossReached = 0;
   let deaths = 0;
   let deathDepthTotal = 0;
+  const deathDepths: number[] = [];
+  const decadeSurvivors = Array.from({ length: RUN_LENGTH / BOSS_ROOM_INTERVAL }, () => 0);
   const byEncounter: Record<string, EncounterBucketSummary> = {};
   let eliteOfferedTotal = 0;
   let eliteEngagedTotal = 0;
@@ -957,7 +980,15 @@ export function simulateScenarioSummary(
     if (result.victory) wins++;
     if (!result.victory) {
       deaths++;
-      deathDepthTotal += result.deathDepth ?? MAX_DEPTH;
+      const deathDepth = result.deathDepth ?? MAX_DEPTH;
+      deathDepthTotal += deathDepth;
+      deathDepths.push(deathDepth);
+    }
+
+    const deepestReached = result.victory ? RUN_LENGTH : (result.deathDepth ?? 1);
+    for (let decade = 0; decade < decadeSurvivors.length; decade++) {
+      const decadeStart = decade * BOSS_ROOM_INTERVAL + 1;
+      if (deepestReached >= decadeStart) decadeSurvivors[decade]++;
     }
 
     const key = result.encounters >= 3 ? '3+' : String(result.encounters);
@@ -982,6 +1013,8 @@ export function simulateScenarioSummary(
     bossReachRate: bossReached / runs,
     bossKillGivenReach: bossReached === 0 ? 0 : wins / bossReached,
     avgDeathDepth: deaths === 0 ? MAX_DEPTH : deathDepthTotal / deaths,
+    medianDeathDepth: median(deathDepths, RUN_LENGTH),
+    decadeSurvivalRates: decadeSurvivors.map((count) => count / runs),
     byEncounter,
     eliteBucket: {
       offered: eliteOfferedTotal,
@@ -993,6 +1026,14 @@ export function simulateScenarioSummary(
     byTier,
     weakTierWinRate: byTier.weak.total === 0 ? 0 : byTier.weak.wins / byTier.weak.total,
   };
+}
+
+export function simulateLoadoutTierSummary(
+  tier: BalanceLoadoutTier,
+  runs = 400,
+  options: Partial<SimRunOptions> = {},
+): BalanceSimulationSummary {
+  return simulateScenarioSummary(BALANCE_LOADOUT_SCENARIOS[tier], runs, options);
 }
 
 export interface EmphasisPolicySummary {

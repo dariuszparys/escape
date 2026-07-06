@@ -55,7 +55,7 @@ export function runSignature(seed: number, scenario: BalanceScenario = {}): stri
     `firstBoss=${result.clearedFirstBoss ? 1 : 0}`,
     `death=${result.deathDepth ?? '-'}`,
     `enc=${result.encounters}`,
-    `embers=${result.convertedEmbers}`,
+    `gold=${result.finalGold}`,
     `draws=${digest.count}`,
     `hash=${digest.hash.toString(16)}`,
   ].join('|');

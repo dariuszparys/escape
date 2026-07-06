@@ -9,12 +9,10 @@ import { RngDrawDigest, runSignature } from './runSignature';
  */
 const GOLDEN_SEED = 7;
 const GOLDEN_SIGNATURE =
-  // Re-goldened for the Hundred-Room Escape U1 (2026-07-06). Deliberate, reviewed determinism change,
-  // not a regression: the old early exit retired, so seed 7 no longer ends a victory at the first
-  // boss — it runs the fixed 100-room descent and dies at room 44 (four bosses cleared). The old
-  // depth-band field also left the signature. The RNG draw kernel is unchanged; the run is simply
-  // longer, so draws grow.
-  'v=0|boss=1|firstBoss=1|death=44|enc=9|embers=0|draws=466|hash=7929fc90';
+  // Re-goldened for the Hundred-Room Escape U7 curve (2026-07-06). Deliberate, reviewed determinism
+  // change: post-first-decade pressure now uses the survival-curve tuning, and the retired meta
+  // payout field was replaced by final run Gold.
+  'v=0|boss=1|firstBoss=1|death=72|enc=12|gold=1349|draws=678|hash=1bdfc943';
 
 describe('RngDrawDigest', () => {
   test('samples draw order and count, not just the value set (the load-bearing property)', () => {

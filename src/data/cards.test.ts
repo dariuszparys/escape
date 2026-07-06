@@ -4,6 +4,7 @@ import {
   Card,
   CardDef,
   CardEffect,
+  cardTierWeightsForDepth,
   cardPoolForArchetype,
   makeCard,
   randomCard,
@@ -14,19 +15,29 @@ import { SequenceRng } from '../game/test-rng';
 import { createIntentState, IntentPattern, telegraphIntent } from '../game/intentPatterns';
 import { playCard, TurnBattleState } from '../game/turnEngine';
 
-describe('randomCard deep-stratum tier weights', () => {
+describe('randomCard deep-run tier weights', () => {
   // pickWeighted consumes one frac to choose the tier, then rng.pick consumes a
   // second frac to choose within the tier pool. A frac of 0 on the second pick
   // deterministically selects the first card of the chosen tier.
 
   test('tier odds keep shifting toward tier 3 past depth 9 instead of freezing', () => {
-    // r = 0.35 * 10 = 3.5. In stratum 2 weights [0,4,6] that lands in tier 2;
-    // in stratum 3 weights [0,3,7] the same roll lands in tier 3.
-    const stratum2 = randomCard(new SequenceRng([0.35, 0]), 15).tier;
-    const stratum3 = randomCard(new SequenceRng([0.35, 0]), 25).tier;
+    // r = 0.35 * 10 = 3.5. In decade 2 weights [0,4,6] that lands in tier 2;
+    // in decade 3 weights [0,3,7] the same roll lands in tier 3.
+    const decade2 = randomCard(new SequenceRng([0.35, 0]), 15).tier;
+    const decade3 = randomCard(new SequenceRng([0.35, 0]), 25).tier;
 
-    expect(stratum2).toBe(2);
-    expect(stratum3).toBe(3);
+    expect(decade2).toBe(2);
+    expect(decade3).toBe(3);
+  });
+
+  test('tier-3 share grows from the first boss toward late decades', () => {
+    const tier3Share = (depth: number) => {
+      const weights = cardTierWeightsForDepth(depth);
+      return weights[2] / weights.reduce((sum, weight) => sum + weight, 0);
+    };
+
+    expect(tier3Share(20)).toBeGreaterThan(tier3Share(10));
+    expect(tier3Share(40)).toBeGreaterThan(tier3Share(20));
   });
 
   test('depth 10 keeps the depth-9 baseline ([0,5,5]) so the base run is unchanged', () => {

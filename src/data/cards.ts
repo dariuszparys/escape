@@ -803,20 +803,22 @@ function pickWeighted(rng: GameRng, weights: [number, number, number]): 1 | 2 | 
 }
 
 /**
- * Tier weights past depth 9. The depth-9 baseline is [0, 5, 5]; each decade beyond
+ * Tier weights for the 100-room arc. The room-10 baseline is [0, 5, 5]; each decade beyond
  * the first shifts one point from tier 2 toward tier 3 (clamped so a sliver of tier 2
  * always remains), so deeper decades keep improving card quality rather than freezing.
- * Deterministic in depth — Daily reproducibility holds (KTD4). Values preserved from the
- * endless-descent era pending the U7 100-room curve re-tune.
+ * Deterministic in depth — Daily reproducibility holds (KTD4).
  */
-function deepTierWeights(depth: number): [number, number, number] {
+export function cardTierWeightsForDepth(depth: number): [number, number, number] {
+  if (depth <= 3) return [8, 2, 0];
+  if (depth <= 6) return [4, 5, 1];
+  if (depth <= 9) return [2, 5, 3];
   const beyondFirst = Math.max(0, Math.floor((depth - 1) / BOSS_ROOM_INTERVAL));
   const tier2 = Math.max(1, 5 - beyondFirst);
   return [0, tier2, 10 - tier2];
 }
 
 /**
- * Random card, tier odds shifting with dungeon depth and continuing to climb across strata.
+ * Random card, tier odds shifting with dungeon depth and continuing to climb across the run.
  * `archetype` widens the pool to that class's cards; `null` (the default) draws neutral only,
  * preserving the pre-archetype RNG draw order exactly.
  */
@@ -826,14 +828,7 @@ export function randomCard(
   archetype: ArchetypeId | null = null,
   predicate: (card: CardDef) => boolean = () => true,
 ): Card {
-  const t =
-    depth <= 3
-      ? pickWeighted(rng, [8, 2, 0])
-      : depth <= 6
-        ? pickWeighted(rng, [4, 5, 1])
-        : depth <= 9
-          ? pickWeighted(rng, [2, 5, 3])
-          : pickWeighted(rng, deepTierWeights(depth));
+  const t = pickWeighted(rng, cardTierWeightsForDepth(depth));
   const fullPool = cardPoolForArchetype(archetype).filter(predicate);
   const pool = fullPool.filter((c) => c.tier === t);
   if (pool.length === 0) return makeCard(rng.pick(fullPool));

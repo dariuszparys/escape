@@ -41,28 +41,28 @@ describe('enemy generation', () => {
     expect(boss.def.pattern.special?.interval).toBeGreaterThanOrEqual(2);
   });
 
-  test('a stratum-2 boss has more HP than a stratum-1 boss (depth term applied)', () => {
-    const stratum1 = spawnBoss(new SequenceRng([0]), 10);
-    const stratum2 = spawnBoss(new SequenceRng([0]), 20);
+  test('a room-20 boss has more HP than a room-10 boss (depth term applied)', () => {
+    const room10 = spawnBoss(new SequenceRng([0]), 10);
+    const room20 = spawnBoss(new SequenceRng([0]), 20);
 
-    expect(stratum2.def.id).toBe(stratum1.def.id); // same boss def for a fair comparison
-    expect(stratum2.hp).toBeGreaterThan(stratum1.hp);
-    expect(stratum2.maxHp).toBe(stratum2.hp);
+    expect(room20.def.id).toBe(room10.def.id); // same boss def for a fair comparison
+    expect(room20.hp).toBeGreaterThan(room10.hp);
+    expect(room20.maxHp).toBe(room20.hp);
   });
 
-  test('boss HP increases monotonically across deeper strata, deterministically', () => {
+  test('boss HP increases monotonically across later bosses, deterministically', () => {
     const hpAt = (depth: number) => spawnBoss(new SequenceRng([0]), depth).hp;
     expect(hpAt(10)).toBeLessThan(hpAt(20));
     expect(hpAt(20)).toBeLessThan(hpAt(30));
     expect(hpAt(30)).toBe(hpAt(30)); // deterministic for a fixed seed/depth
   });
 
-  test('the stratum-1 boss is unchanged by the depth term', () => {
+  test('the room-10 boss is unchanged by the depth term', () => {
     const boss = spawnBoss(new SequenceRng([0]), 10);
     expect(boss.hp).toBe(boss.def.baseHp);
   });
 
-  test('normal enemy HP increases monotonically with depth across strata', () => {
+  test('normal enemy HP increases monotonically with depth across the run', () => {
     const hpAt = (depth: number) => spawnEnemy(new SequenceRng([0]), depth).hp;
     expect(hpAt(8)).toBeLessThan(hpAt(18));
     expect(hpAt(18)).toBeLessThan(hpAt(28));
@@ -252,14 +252,15 @@ describe('elite intent patterns (U5, R2)', () => {
 });
 
 describe('depth-scaled intent damage (U13/R10)', () => {
-  test('the bonus climbs through the first stratum and keeps climbing gently past it', () => {
+  test('the bonus climbs through the first decade, then resets lower and climbs gently', () => {
     // Weak tier (depths 1-3) stays gentle; the medium tier on gets a flat +2 "punch" so fights
-    // cost real HP and a stratum accumulates attrition (combat-depth rebaseline).
+    // cost real HP and a decade accumulates attrition (combat-depth rebaseline).
     expect(intentBonusForDepth(2)).toBe(1);
     expect(intentBonusForDepth(6)).toBe(5);
     expect(intentBonusForDepth(10)).toBe(7);
-    expect(intentBonusForDepth(30)).toBeGreaterThan(intentBonusForDepth(10));
-    expect(intentBonusForDepth(30)).toBeLessThan(intentBonusForDepth(10) + 20);
+    expect(intentBonusForDepth(11)).toBeLessThan(intentBonusForDepth(10));
+    expect(intentBonusForDepth(100)).toBeGreaterThan(intentBonusForDepth(11));
+    expect(intentBonusForDepth(100)).toBeLessThan(intentBonusForDepth(10) + 1);
   });
 
   test('spawned instances carry an empowered pattern; the authored def stays pristine', () => {

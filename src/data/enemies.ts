@@ -839,17 +839,13 @@ export function getEnemyTierForDepth(depth: number): EnemyTier {
 }
 
 /**
- * Per-depth HP slope past the first stratum. The base run keeps the original
- * `baseHp + depth`; deeper strata still climb (R10) but at a gentler slope so the
- * delve stays winnable rather than a DPS wall. Re-tuned for U12: the stratum-1
- * base numbers now carry most of the difficulty (roguelike-hard band), so this
- * slope was more than halved from its pre-U12 value (0.3) — stacking the old
- * slope on top of the harder base collapsed the moderate delve line's bank rate
- * to near zero, wrongly crowning "always bank at the first gate" as dominant.
+ * Per-depth HP slope after the first boss interval. Rooms 1-10 keep the original
+ * `baseHp + depth` opener; later rooms climb gently so the 100-room arc can be
+ * escaped by a strong loadout without flattening the final decades.
  */
 const DEEP_HP_SLOPE = 0.03;
 
-/** Enemy HP for a depth: linear through stratum 1, gentler past it. */
+/** Enemy HP for a depth: linear through rooms 1-10, gentler past it. */
 export function enemyHpForDepth(baseHp: number, depth: number): number {
   if (depth <= MAX_DEPTH) return baseHp + depth;
   return baseHp + MAX_DEPTH + Math.round((depth - MAX_DEPTH) * DEEP_HP_SLOPE);
@@ -859,17 +855,17 @@ export function enemyHpForDepth(baseHp: number, depth: number): number {
  * Extra intent damage per depth. The old model scaled enemy pressure by rolling
  * depth-tiered decks; the turn model scales the authored intents instead. The
  * player's multi-card action economy outpaces flat intents entirely (U13 found
- * ~99% sim win rates without this axis). Same shape as HP: linear through the
- * first stratum, gentler beyond.
+ * ~99% sim win rates without this axis). Rooms 1-10 stay at the established
+ * baseline; after the first boss, ordinary-room pressure restarts lower and
+ * climbs slowly so the fixed arc has room for recovery before later walls.
  */
 export function intentBonusForDepth(depth: number): number {
   // Weak tier (depths 1-3) stays gentle so the opener is winnable; from the medium tier on, an
-  // extra +2 on the heaviest hit turns each fight into a real HP cost, so a stratum accumulates
+  // extra +2 on the heaviest hit turns each fight into a real HP cost, so a decade accumulates
   // attrition and clearing it is an achievement (combat-depth rebaseline, 2026-07-04).
-  const stratumOnePunch = depth >= 4 ? 2 : 0;
-  if (depth <= MAX_DEPTH) return Math.floor(depth / 2) + stratumOnePunch;
-  // Slope more than halved for U12 alongside DEEP_HP_SLOPE — same reason (see above).
-  return Math.floor(MAX_DEPTH / 2) + 2 + Math.round((depth - MAX_DEPTH) * 0.03);
+  const firstDecadePunch = depth >= 4 ? 2 : 0;
+  if (depth <= MAX_DEPTH) return Math.floor(depth / 2) + firstDecadePunch;
+  return 2 + Math.floor((depth - MAX_DEPTH) / 18);
 }
 
 /** Enemy behavior is its authored intent pattern (U9), empowered for depth; spawns roll no card decks. */
@@ -1055,16 +1051,12 @@ export function spawnScenarioEncounter(
   return spawnEncounter(rng, depth);
 }
 
-/**
- * Extra boss HP per depth past the first stratum boundary, so deeper bosses escalate
- * (R10). Softened for U12 (was 1) alongside the other deep-stratum slopes — see
- * `DEEP_HP_SLOPE`.
- */
+/** Extra boss HP per depth past the first boss interval, so later bosses escalate. */
 const BOSS_HP_PER_DEPTH_BEYOND_FIRST = 0.3;
 
 export function spawnBoss(rng: GameRng, depth: number = MAX_DEPTH): EnemyInstance {
   const def = rng.pick(BOSSES);
-  // Anchored at MAX_DEPTH so the stratum-1 boss is unchanged; deeper strata add HP.
+  // Anchored at MAX_DEPTH so the room-10 boss is unchanged; later bosses add HP.
   const hp = def.baseHp + Math.max(0, depth - MAX_DEPTH) * BOSS_HP_PER_DEPTH_BEYOND_FIRST;
   const pattern = empowerPattern(def.pattern, intentBonusForDepth(depth));
   return { def, hp, maxHp: hp, armor: 0, statuses: [], pattern };
@@ -1073,14 +1065,13 @@ export function spawnBoss(rng: GameRng, depth: number = MAX_DEPTH): EnemyInstanc
 /**
  * Per-depth HP slope for elites (U5): steeper than `enemyHpForDepth`'s normal-tier
  * shape at every stage, so elites read as clearly above-curve regardless of depth.
- * ELITE_DEEP_HP_SLOPE re-tuned for U12 (was 0.5) for the same reason as
- * `DEEP_HP_SLOPE`: stacked on top of the harder roguelike-hard base, the old slope
- * made a second stratum's elite an effective wall for the moderate delve line.
+ * ELITE_DEEP_HP_SLOPE is intentionally shallow: elites should stay above-curve
+ * without becoming a mandatory run-ending wall early in the 100-room arc.
  */
 const ELITE_HP_SLOPE = 1.5;
 const ELITE_DEEP_HP_SLOPE = 0.05;
 
-/** Elite HP for a depth: steeper linear term through stratum 1, steeper-than-normal gentling past it. */
+/** Elite HP for a depth: steeper linear term through rooms 1-10, gentler past it. */
 export function eliteHpForDepth(baseHp: number, depth: number): number {
   if (depth <= MAX_DEPTH) return baseHp + Math.round(depth * ELITE_HP_SLOPE);
   return (

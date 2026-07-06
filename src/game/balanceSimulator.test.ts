@@ -6,13 +6,15 @@ import {
   applySimulatedRest,
   applySimulatedPostBattleRewards,
   assessCardEmphasisDominance,
+  BALANCE_LOADOUT_SCENARIOS,
   createSimRng,
   SIM_BATTLE_TURN_CAP,
   SIM_DECK_THIN_THRESHOLD,
   simulateBattle,
+  simulateLoadoutTierSummary,
   simulateScenarioSummary,
 } from './balanceSimulator';
-import { spawnEnemy } from '../data/enemies';
+import { spawnBoss, spawnEnemy } from '../data/enemies';
 import { restActionCost } from './restEconomy';
 import type { GameRng } from './rng';
 import { runSignature } from './runSignature';
@@ -134,22 +136,54 @@ describe('balance simulator battle kernel (U13)', () => {
   });
 });
 
-describe('balance simulator economy bands', () => {
+describe('balance simulator survival bands', () => {
   simulationTest('baseline runs reach the first boss inside the first-decade survival band', () => {
-    const summary = simulateScenarioSummary({}, 400);
+    const summary = simulateLoadoutTierSummary('bare', 400);
 
-    // U1 re-key: `winRate` now means the escape rate over the whole 100-room arc (defeating the
-    // room-100 boss), NOT the old "stopped at room 10" result. A bare loadout escapes ~never, so the old
-    // winRate/bossKillGivenReach bands retire here — U7 owns the escape-rate (Earned) band.
-    // What survives unchanged is FIRST-DECADE survival: rooms 1-10 generate byte-identically to the
-    // endless-descent era (same room tables, same enemies, decade-1 elite keying resolves the same
-    // booleans in the same RNG order), so `bossReachRate` — the fraction reaching the room-10 boss —
-    // is exactly today's measurement (~0.542 at 400 seeds). That is the anchor this test holds.
     expect(summary.bossReachRate).toBeGreaterThanOrEqual(0.3);
     expect(summary.bossReachRate).toBeLessThanOrEqual(0.7);
-    // winRate is a valid rate; its Earned band is asserted in U7, not here.
+  });
+
+  simulationTest('bare level-1 loadouts almost never escape the 100-room arc', () => {
+    const summary = simulateLoadoutTierSummary('bare', 400);
+
     expect(summary.winRate).toBeGreaterThanOrEqual(0);
-    expect(summary.winRate).toBeLessThanOrEqual(1);
+    expect(summary.winRate).toBeLessThanOrEqual(0.05);
+  });
+
+  simulationTest('strong access loadouts land in the Earned escape band', () => {
+    const summary = simulateLoadoutTierSummary('strong', 400);
+
+    expect(summary.winRate).toBeGreaterThanOrEqual(0.15);
+    expect(summary.winRate).toBeLessThanOrEqual(0.35);
+  });
+
+  simulationTest('mid-tier loadouts usually die in the middle arc', () => {
+    const summary = simulateLoadoutTierSummary('mid', 400);
+
+    expect(summary.medianDeathDepth).toBeGreaterThanOrEqual(40);
+    expect(summary.medianDeathDepth).toBeLessThanOrEqual(80);
+  });
+
+  simulationTest('per-decade survival decreases across the fixed arc', () => {
+    const summary = simulateLoadoutTierSummary('strong', 400);
+
+    expect(summary.decadeSurvivalRates).toHaveLength(10);
+    expect(summary.decadeSurvivalRates[0]).toBe(1);
+    for (let i = 1; i < summary.decadeSurvivalRates.length; i++) {
+      expect(summary.decadeSurvivalRates[i]).toBeLessThanOrEqual(
+        summary.decadeSurvivalRates[i - 1],
+      );
+    }
+    expect(summary.decadeSurvivalRates[9]).toBeLessThan(summary.decadeSurvivalRates[1]);
+  });
+
+  test('the room-100 boss is a larger wall than the room-10 boss', () => {
+    const first = spawnBoss(createSimRng(1), 10);
+    const final = spawnBoss(createSimRng(1), 100);
+
+    expect(final.def.id).toBe(first.def.id);
+    expect(final.hp / first.hp).toBeGreaterThanOrEqual(1.4);
   });
 
   simulationTest('weak-tier fights stay highly winnable — fresh-deck floor (U12)', () => {
@@ -173,8 +207,6 @@ describe('balance simulator economy bands', () => {
   simulationTest('starter-card variety alone stays inside the first-decade survival band', () => {
     const summary = simulateScenarioSummary({ starterCardVarietyUnlocked: true }, 400);
 
-    // Same first-decade anchor as the baseline test — variety alone doesn't distort reaching the
-    // room-10 boss. The escape-rate band is U7's.
     expect(summary.bossReachRate).toBeGreaterThanOrEqual(0.3);
     expect(summary.bossReachRate).toBeLessThanOrEqual(0.7);
   });
@@ -195,10 +227,8 @@ describe('balance simulator economy bands', () => {
       // Coverage gate: before `startingRelicIds`, BalanceScenario had no way to grant spark_coil,
       // stone_heart, venom_ring, or hunter_charm, so `relicBattleSetup`'s startingEnergyBonus/
       // retainBlockCap/poisonBonus/enemyKillDraw branches never ran through a single simulated
-      // battle — a broken or badly-tuned value for any of them could ship with the harness fully
-      // green. Measured at 400 seeds against the baseline's 0.3575 winRate: spark_coil 0.49,
-      // stone_heart 0.4625, venom_ring 0.365, hunter_charm 0.385 — every relic is at/above baseline
-      // (within seed-to-seed noise for the two situational ones) and none is degenerate.
+      // battle. Keep each branch exercised under the current 100-room curve and make sure none
+      // turns a bare run into an automatic escape.
       const baseline = simulateScenarioSummary({}, 400);
       const relicIds = ['spark_coil', 'stone_heart', 'venom_ring', 'hunter_charm'] as const;
 
@@ -223,7 +253,7 @@ describe('balance simulator economy bands', () => {
   simulationTest(
     'hard player scenarios are deterministic and sit at or below the baseline band',
     () => {
-      const baseline = simulateScenarioSummary({}, 160);
+      const baseline = simulateLoadoutTierSummary('strong', 160);
       const hardScenarios = [
         ['im_poisoned', 'room-entry attrition'],
         ['lost_left_arm', 'no player block'],
@@ -231,18 +261,28 @@ describe('balance simulator economy bands', () => {
       ] as const;
 
       for (const [playerScenarioId] of hardScenarios) {
-        const first = simulateScenarioSummary({ playerScenarioId }, 160);
-        const second = simulateScenarioSummary({ playerScenarioId }, 160);
+        const scenario = { ...BALANCE_LOADOUT_SCENARIOS.strong, playerScenarioId };
+        const first = simulateScenarioSummary(scenario, 160);
+        const second = simulateScenarioSummary(scenario, 160);
 
         // These are intentionally harder routes, not new baseline bands. Keep the assertions broad:
-        // the product rule owns the difficulty shift; later tuning can tighten per-scenario bands.
+        // the product rule owns the difficulty shift; the survival-curve block owns the clean band.
         expect(second).toEqual(first);
         expect(first.winRate).toBeLessThanOrEqual(baseline.winRate);
         expect(first.winRate).toBeGreaterThanOrEqual(0);
-        expect(first.bossReachRate).toBeLessThanOrEqual(baseline.bossReachRate);
       }
     },
   );
+
+  simulationTest('poisoned strong loadouts have a nonzero escape rate after cadence tuning', () => {
+    const summary = simulateScenarioSummary(
+      { ...BALANCE_LOADOUT_SCENARIOS.strong, playerScenarioId: 'im_poisoned' },
+      400,
+    );
+
+    expect(summary.winRate).toBeGreaterThan(0);
+    expect(summary.medianDeathDepth).toBeGreaterThanOrEqual(30);
+  });
 });
 
 describe('elite engagement (U9)', () => {

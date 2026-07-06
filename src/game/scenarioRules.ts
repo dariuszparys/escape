@@ -18,6 +18,8 @@ export function shouldApplyPoisonedRoomDamage(scenarioId: ScenarioId | null): bo
   return scenarioId === 'im_poisoned';
 }
 
+export const POISONED_ROOM_DAMAGE_INTERVAL = 3;
+
 export function shouldPreventPlayerBlock(scenarioId: ScenarioId | null): boolean {
   return scenarioId === 'lost_left_arm';
 }
@@ -66,7 +68,12 @@ export function applyPoisonedRoomEntryDamage(
   rng: Pick<GameRng, 'between'>,
 ): PoisonedRoomEntryResult {
   const hpBefore = run.hp;
-  if (!shouldApplyPoisonedRoomDamage(run.scenarioId) || run.depth <= 1 || run.hp <= 0) {
+  if (
+    !shouldApplyPoisonedRoomDamage(run.scenarioId) ||
+    run.depth <= 1 ||
+    (run.depth - 1) % POISONED_ROOM_DAMAGE_INTERVAL !== 0 ||
+    run.hp <= 0
+  ) {
     return { applied: false, amount: 0, hpBefore, hpAfter: run.hp, died: run.hp <= 0 };
   }
 

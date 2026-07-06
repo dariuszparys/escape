@@ -10,6 +10,7 @@ import {
   shouldDoubleNormalEncounters,
   shouldPreventPlayerBlock,
   shouldUseFullProgressionPrep,
+  POISONED_ROOM_DAMAGE_INTERVAL,
 } from './scenarioRules';
 import { RunState } from '../state';
 import { CARD_DEFS } from '../data/cards';
@@ -49,7 +50,7 @@ describe('scenario rules', () => {
     expect(shouldDoubleNormalEncounters('im_poisoned')).toBe(false);
   });
 
-  test('applies poisoned room damage only after the start room', () => {
+  test('applies poisoned room damage only on its post-start cadence', () => {
     const run = new RunState('seed');
     run.scenarioId = 'im_poisoned';
     run.hp = 10;
@@ -61,6 +62,13 @@ describe('scenario rules', () => {
     });
 
     run.depth = 2;
+    expect(applyPoisonedRoomEntryDamage(run, new SequenceRng([], [2]))).toMatchObject({
+      applied: false,
+      amount: 0,
+      hpAfter: 10,
+    });
+
+    run.depth = 1 + POISONED_ROOM_DAMAGE_INTERVAL;
     expect(applyPoisonedRoomEntryDamage(run, new SequenceRng([], [2]))).toEqual({
       applied: true,
       amount: 2,
@@ -73,7 +81,7 @@ describe('scenario rules', () => {
   test('poisoned room damage can kill before the room resolves', () => {
     const run = new RunState('seed');
     run.scenarioId = 'im_poisoned';
-    run.depth = 2;
+    run.depth = 1 + POISONED_ROOM_DAMAGE_INTERVAL;
     run.hp = 1;
 
     expect(applyPoisonedRoomEntryDamage(run, new SequenceRng([], [1]))).toEqual({
@@ -109,7 +117,7 @@ describe('scenario rules', () => {
   test("Wanderer's Flask healing resolves before poisoned room damage", () => {
     const run = new RunState('seed');
     run.scenarioId = 'im_poisoned';
-    run.depth = 2;
+    run.depth = 1 + POISONED_ROOM_DAMAGE_INTERVAL;
     run.hp = 1;
     run.addRelic(makeRelic('wanderers_flask'));
 
