@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
-import { makeCard } from './data/cards';
+import { CARD_DEFS, makeCard } from './data/cards';
 import { makeRelic } from './data/relics';
+import { makeItem } from './data/items';
 import { RunState } from './state';
 import { createDefaultProfileState, getProfile, setProfile } from './profile';
 
@@ -166,5 +167,38 @@ describe('RunState.removeCard', () => {
 
     expect(run.maxArmor).toBe(3);
     expect(added).toEqual([true, true, true, false]);
+  });
+
+  test('round-trips serialized run state without losing deck, items, relics, or ids', () => {
+    const run = new RunState('seed', 'run-serialize');
+    const strike = CARD_DEFS.find((card) => card.id === 'strike');
+    if (!strike) throw new Error('Missing strike');
+    run.addCard(makeCard(strike));
+    run.addItem(makeItem('bomb'));
+    run.addRelic(makeRelic('swift_boots'));
+    run.hp = 12;
+    run.maxHp = 40;
+    run.gold = 25;
+    run.depth = 47;
+    run.enemiesDefeated = 12;
+    run.scenarioId = 'im_poisoned';
+    run.archetypeId = 'barbarian';
+    run.startingCardChoices = 4;
+    run.startingCardPicks = 2;
+    run.startingCardsTaken = 2;
+    run.bossDefeated = false;
+    run.eliteOfferedForDecade = 4;
+    run.isDaily = true;
+    run.dailyKey = '2026-07-06';
+    run.elitesDefeated = 2;
+
+    const hydrated = RunState.fromJSON(JSON.parse(JSON.stringify(run.toJSON())));
+
+    expect(hydrated).not.toBeNull();
+    if (!hydrated) throw new Error('Expected hydrated run');
+    expect(hydrated.toJSON()).toEqual(run.toJSON());
+
+    const laterCard = makeCard(strike);
+    expect(hydrated.cardCollection.map((card) => card.uid)).not.toContain(laterCard.uid);
   });
 });

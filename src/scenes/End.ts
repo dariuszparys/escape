@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_W } from '../config';
 import { playSfx } from '../audio/sfx';
-import { loadDailyRecord, recordDailyAttempt, saveDailyRecord } from '../daily';
+import { loadDailyRecordForKey, recordDailyAttempt, saveDailyRecord } from '../daily';
 import { loadRunChronicle, recordRunChronicleEntry, saveRunChronicle } from '../chronicle';
 import { getMeta, setMeta } from '../meta';
 import { getProfile, levelForXp, setProfile } from '../profile';
@@ -14,6 +14,7 @@ import {
 } from '../game/contracts';
 import { CONTRACT_DEFS, contractDef } from '../data/contracts';
 import { awardRunXpOnce, type RunXpAwardResult } from '../game/runCompletion';
+import { clearRunSnapshot } from '../game/runSnapshot';
 
 export class EndScene extends Phaser.Scene {
   private victory = false;
@@ -55,6 +56,7 @@ export class EndScene extends Phaser.Scene {
   }
 
   create(): void {
+    clearRunSnapshot();
     const run = getRun();
     const xpAward = this.awardXpOnce();
     const contractAward = this.awardContractsOnce();
@@ -203,10 +205,8 @@ export class EndScene extends Phaser.Scene {
     const run = getRun();
     if (!run.isDaily || !run.dailyKey) return;
 
-    const record = loadDailyRecord();
-    if (record.date === run.dailyKey) {
-      saveDailyRecord(recordDailyAttempt(record, { depth: run.depth, escaped: this.victory }));
-    }
+    const record = loadDailyRecordForKey(run.dailyKey);
+    saveDailyRecord(recordDailyAttempt(record, { depth: run.depth, escaped: this.victory }));
   }
 
   private recordChronicleEntry(): void {

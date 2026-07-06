@@ -777,6 +777,11 @@ export function makeCard(def: CardDef): Card {
   return { ...def, uid: nextUid++ };
 }
 
+export function reserveCardUids(cards: readonly Pick<Card, 'uid'>[]): void {
+  const maxUid = cards.reduce((max, card) => Math.max(max, card.uid), 0);
+  nextUid = Math.max(nextUid, maxUid + 1);
+}
+
 export function primaryCardValue(card: Pick<CardDef, 'effects'>): number {
   const damage = cardEffectAmount(card, 'damage');
   if (damage > 0) return damage;

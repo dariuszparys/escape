@@ -9,10 +9,11 @@ import {
   formatProfileProgressLine,
 } from '../game/campfireSummary';
 import { getMeta } from '../meta';
-import { newRun } from '../state';
+import { newRun, setRun } from '../state';
 import { FONT_FAMILY, TEXT_COLOR } from '../gfx/theme';
 import { getProfile } from '../profile';
 import { applyLoadoutToRun } from '../game/campfirePrep';
+import { clearRunSnapshot, loadRunSnapshot } from '../game/runSnapshot';
 
 const TEXT_STYLE = {
   fontFamily: FONT_FAMILY,
@@ -141,6 +142,7 @@ export class CampfireScene extends Phaser.Scene {
     this.dynamic.removeAll(true);
     const meta = getMeta();
     const profile = getProfile();
+    const snapshot = loadRunSnapshot();
     const dailyRecord = loadDailyRecord();
     const chronicle = loadRunChronicle();
 
@@ -209,6 +211,17 @@ export class CampfireScene extends Phaser.Scene {
         wordWrap: { width: STATUS_W, useAdvancedWrap: true },
       }),
     );
+    if (snapshot) {
+      this.dynamic.add(
+        this.add.text(STATUS_X, 426, `Suspended run: room ${snapshot.run.depth}`, {
+          ...TEXT_STYLE,
+          fontSize: '13px',
+          color: TEXT_COLOR.gold,
+          fixedWidth: STATUS_W,
+          wordWrap: { width: STATUS_W, useAdvancedWrap: true },
+        }),
+      );
+    }
     this.dynamic.add(
       this.add.text(STATUS_X, 468, 'TODAY', {
         ...TEXT_STYLE,
@@ -228,8 +241,13 @@ export class CampfireScene extends Phaser.Scene {
     );
 
     this.addActionButton(142, '[ PROGRESSION ]', () => this.scene.start('Progression'));
-    this.addActionButton(378, '[ DESCEND ]', () => this.startRun());
-    this.addActionButton(596, '[ DAILY DESCENT ]', () => this.startDailyRun());
+    if (snapshot) {
+      this.addActionButton(378, '[ RESUME ]', () => this.resumeRun());
+      this.addActionButton(596, '[ ABANDON ]', () => this.abandonRun());
+    } else {
+      this.addActionButton(378, '[ DESCEND ]', () => this.startRun());
+      this.addActionButton(596, '[ DAILY DESCENT ]', () => this.startDailyRun());
+    }
   };
 
   private addActionButton(x: number, label: string, onPointerDown: () => void): void {
@@ -251,6 +269,22 @@ export class CampfireScene extends Phaser.Scene {
 
   private startRun(): void {
     this.scene.start('ScenarioSelect');
+  }
+
+  private resumeRun(): void {
+    const snapshot = loadRunSnapshot();
+    if (!snapshot) return;
+    setRun(snapshot.run);
+    this.scene.start('Dungeon');
+  }
+
+  private abandonRun(): void {
+    const snapshot = loadRunSnapshot();
+    if (!snapshot) return;
+    const run = setRun(snapshot.run);
+    run.escaped = false;
+    clearRunSnapshot();
+    this.scene.start('End', { victory: false });
   }
 
   private startDailyRun(): void {

@@ -47,7 +47,8 @@ import {
 } from '../game/restEconomy';
 import { applyTrapDamage } from '../game/hazards';
 import { applyPoisonedRoomEntryDamage } from '../game/scenarioRules';
-import { getRun } from '../state';
+import { getRun, setRun } from '../state';
+import { loadRunSnapshot, saveRunSnapshot } from '../game/runSnapshot';
 import type { RunBattleSceneData } from './TurnBattle';
 
 const DOOR_CELL: Record<Dir, { col: number; row: number }> = {
@@ -117,6 +118,7 @@ export class DungeonScene extends Phaser.Scene {
   private facing: Dir = 'S';
   private transitioning = false;
   private battleActive = false;
+  private roomBuildRngState = '';
   private invulnUntil = 0;
   private lastHintAt = 0;
   private nextRoomOptions: Partial<Record<Dir, NextRoomOption>> = {};
@@ -138,7 +140,8 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   create(): void {
-    const run = getRun();
+    const snapshot = loadRunSnapshot();
+    const run = snapshot ? setRun(snapshot.run) : getRun();
     this.rng = new Phaser.Math.RandomDataGenerator([run.seed]);
     this.gameRng = new PhaserGameRng(this.rng);
     this.transitioning = false;
@@ -146,12 +149,26 @@ export class DungeonScene extends Phaser.Scene {
     this.exitHatch = null;
     this.scoutRevealText = null;
 
-    this.room = makeStartRoom();
-    this.origin = { x: 0, y: 0 };
-    this.built = this.buildRoom(this.room, this.origin);
-    this.primeNextRoomOptions();
+    let spawn: { x: number; y: number };
+    if (snapshot) {
+      this.room = snapshot.room;
+      this.origin = snapshot.origin;
+      this.facing = snapshot.facing;
+      this.roomBuildRngState = snapshot.roomBuildRngState;
+      this.rng.state(snapshot.roomBuildRngState);
+      this.built = this.buildRoom(this.room, this.origin);
+      this.rng.state(snapshot.rngState);
+      this.nextRoomOptions = snapshot.nextRoomOptions;
+      spawn = snapshot.player;
+    } else {
+      this.room = makeStartRoom();
+      this.origin = { x: 0, y: 0 };
+      this.roomBuildRngState = this.rng.state();
+      this.built = this.buildRoom(this.room, this.origin);
+      this.primeNextRoomOptions();
+      spawn = this.cellXY(7, 7);
+    }
 
-    const spawn = this.cellXY(7, 7);
     this.player = this.physics.add.sprite(spawn.x, spawn.y, 'hero_down_0');
     this.player.setScale(3);
     this.player.body.setSize(10, 9).setOffset(3, 6);
@@ -177,7 +194,12 @@ export class DungeonScene extends Phaser.Scene {
 
     this.scene.launch('Hud');
     this.hud();
-    this.tryRevealScoutOptions();
+    this.saveCurrentSnapshot();
+    if (snapshot && this.room.event !== 'start') {
+      this.onRoomEntered();
+    } else {
+      this.tryRevealScoutOptions();
+    }
 
     this.game.events.off('battle-end');
     this.game.events.on('battle-end', (won: boolean) => this.onBattleEnd(won));
@@ -204,6 +226,20 @@ export class DungeonScene extends Phaser.Scene {
 
   private hud(): void {
     this.game.events.emit('hud-update');
+  }
+
+  private saveCurrentSnapshot(): void {
+    saveRunSnapshot({
+      version: 1,
+      run: getRun(),
+      room: this.room,
+      origin: this.origin,
+      player: { x: this.player.x, y: this.player.y },
+      facing: this.facing,
+      rngState: this.rng.state(),
+      roomBuildRngState: this.roomBuildRngState,
+      nextRoomOptions: this.nextRoomOptions,
+    });
   }
 
   private floatText(x: number, y: number, msg: string, color = '#f5edd8'): Phaser.GameObjects.Text {
@@ -816,6 +852,7 @@ export class DungeonScene extends Phaser.Scene {
     const oldBuilt = this.built;
     const oldOrigin = this.origin;
     this.origin = newOrigin;
+    const nextRoomBuildRngState = this.rng.state();
     const nextBuilt = this.buildRoom(nextRoom, newOrigin);
     this.origin = oldOrigin; // restored until the pan lands
 
@@ -857,6 +894,7 @@ export class DungeonScene extends Phaser.Scene {
         this.attachWalls();
         this.room = nextRoom;
         this.origin = newOrigin;
+        this.roomBuildRngState = nextRoomBuildRngState;
         if (nextRoomOption) {
           this.rng.state(nextRoomOption.rngState);
         }
@@ -867,6 +905,7 @@ export class DungeonScene extends Phaser.Scene {
         this.player.body.reset(target.x, target.y);
         this.transitioning = false;
         this.hud();
+        this.saveCurrentSnapshot();
         this.onRoomEntered();
       },
     });
@@ -1527,6 +1566,7 @@ export class DungeonScene extends Phaser.Scene {
     const descentSeed = [run.seed, 'descent', String(nextDepth)].join(':');
     this.rng = new Phaser.Math.RandomDataGenerator([descentSeed]);
     this.gameRng = new PhaserGameRng(this.rng);
+    const descentBuildRngState = this.rng.state();
 
     const dir: Dir = 'S';
     this.cameras.main.fadeOut(420, 11, 10, 18);
@@ -1538,6 +1578,7 @@ export class DungeonScene extends Phaser.Scene {
       this.wallCollider = null;
       this.destroyBuilt(this.built);
       this.origin = newOrigin;
+      this.roomBuildRngState = descentBuildRngState;
       this.built = this.buildRoom(nextRoom, newOrigin);
       this.room = nextRoom;
       this.attachWalls();
@@ -1558,6 +1599,7 @@ export class DungeonScene extends Phaser.Scene {
       this.cameras.main.fadeIn(420, 11, 10, 18);
       this.transitioning = false;
       this.hud();
+      this.saveCurrentSnapshot();
       this.onRoomEntered();
     });
   }

@@ -22,9 +22,13 @@ export function dailySeed(date: Date = new Date()): string {
 }
 
 export function createDefaultDailyRecord(date: Date = new Date()): DailyRecord {
+  return createDefaultDailyRecordForKey(dailyKey(date));
+}
+
+export function createDefaultDailyRecordForKey(key: string): DailyRecord {
   return {
-    date: dailyKey(date),
-    seed: dailySeed(date),
+    date: key,
+    seed: `daily-${key}`,
     bestDepth: 0,
     escaped: false,
     attempts: 0,
@@ -36,7 +40,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export function normalizeDailyRecord(value: unknown, date: Date = new Date()): DailyRecord {
-  const current = createDefaultDailyRecord(date);
+  return normalizeDailyRecordForKey(value, dailyKey(date));
+}
+
+export function normalizeDailyRecordForKey(value: unknown, key: string): DailyRecord {
+  const current = createDefaultDailyRecordForKey(key);
 
   if (!isRecord(value) || value.date !== current.date) {
     return current;
@@ -71,13 +79,22 @@ function browserStorage(): Storage | null {
 }
 
 export function loadDailyRecord(storage: Storage | null = browserStorage()): DailyRecord {
-  if (!storage) return createDefaultDailyRecord();
+  return loadDailyRecordForKey(dailyKey(), storage);
+}
+
+export function loadDailyRecordForKey(
+  key: string,
+  storage: Storage | null = browserStorage(),
+): DailyRecord {
+  if (!storage) return createDefaultDailyRecordForKey(key);
 
   try {
     const raw = storage.getItem(DAILY_STORAGE_KEY);
-    return raw ? normalizeDailyRecord(JSON.parse(raw)) : createDefaultDailyRecord();
+    return raw
+      ? normalizeDailyRecordForKey(JSON.parse(raw), key)
+      : createDefaultDailyRecordForKey(key);
   } catch {
-    return createDefaultDailyRecord();
+    return createDefaultDailyRecordForKey(key);
   }
 }
 
@@ -87,7 +104,10 @@ export function saveDailyRecord(
 ): void {
   if (!storage) return;
   try {
-    storage.setItem(DAILY_STORAGE_KEY, JSON.stringify(normalizeDailyRecord(record)));
+    storage.setItem(
+      DAILY_STORAGE_KEY,
+      JSON.stringify(normalizeDailyRecordForKey(record, record.date)),
+    );
   } catch {
     // Keep runtime state alive when browser storage is unavailable.
   }

@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
   createDefaultDailyRecord,
+  createDefaultDailyRecordForKey,
   dailyKey,
   dailySeed,
   loadDailyRecord,
+  loadDailyRecordForKey,
   normalizeDailyRecord,
+  normalizeDailyRecordForKey,
   recordDailyAttempt,
   saveDailyRecord,
 } from './daily';
@@ -90,6 +93,27 @@ describe('daily challenge records', () => {
     });
   });
 
+  test('normalizes records for an explicit key independent of the current date', () => {
+    expect(
+      normalizeDailyRecordForKey(
+        {
+          date: '2026-07-05',
+          seed: 'daily-2026-07-05',
+          bestDepth: 30,
+          escaped: false,
+          attempts: 1,
+        },
+        '2026-07-05',
+      ),
+    ).toEqual({
+      date: '2026-07-05',
+      seed: 'daily-2026-07-05',
+      bestDepth: 30,
+      escaped: false,
+      attempts: 1,
+    });
+  });
+
   test('falls back to default when storage unavailable', () => {
     expect(loadDailyRecord(null)).toEqual(createDefaultDailyRecord());
   });
@@ -109,6 +133,20 @@ describe('daily challenge records', () => {
 
     saveDailyRecord(record, storage);
     expect(loadDailyRecord(storage)).toEqual(record);
+  });
+
+  test('loads and saves a suspended daily against its start key after midnight', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-06T12:00:00Z'));
+
+    const storage = new MemoryStorage();
+    const startedYesterday = createDefaultDailyRecordForKey('2026-07-05');
+    const recorded = recordDailyAttempt(startedYesterday, { depth: 30, escaped: false });
+
+    saveDailyRecord(recorded, storage);
+
+    expect(loadDailyRecordForKey('2026-07-05', storage)).toEqual(recorded);
+    expect(loadDailyRecord(storage)).toEqual(createDefaultDailyRecord(new Date()));
   });
 
   test('records deep delve depth past 10 as the comparable metric', () => {

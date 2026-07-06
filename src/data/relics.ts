@@ -148,6 +148,11 @@ export function makeRelic(id: RelicId): Relic {
   return { ...relicDef(id), uid: nextRelicUid++ };
 }
 
+export function reserveRelicUids(relics: readonly Pick<Relic, 'uid'>[]): void {
+  const maxUid = relics.reduce((max, relic) => Math.max(max, relic.uid), 0);
+  nextRelicUid = Math.max(nextRelicUid, maxUid + 1);
+}
+
 export function starterRelicPool(): ReadonlySet<RelicId> {
   return new Set(STARTER_RELIC_IDS);
 }

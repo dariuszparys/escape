@@ -70,6 +70,11 @@ export function makeItem(id: string): InventoryItem {
   return { ...def, uid: nextItemUid++ };
 }
 
+export function reserveItemUids(items: readonly Pick<InventoryItem, 'uid'>[]): void {
+  const maxUid = items.reduce((max, item) => Math.max(max, item.uid), 0);
+  nextItemUid = Math.max(nextItemUid, maxUid + 1);
+}
+
 export function randomItemIdForDepth(depth: number): string {
   if (depth >= 7) return 'large_potion';
   return 'small_potion';
