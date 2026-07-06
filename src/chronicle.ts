@@ -1,4 +1,7 @@
-export const CHRONICLE_STORAGE_KEY = 'escape.chronicle.v1';
+import { CHRONICLE_STORAGE_KEY } from './storageKeys';
+
+export { CHRONICLE_STORAGE_KEY } from './storageKeys';
+
 const MAX_RECENT_RUNS = 10;
 
 export interface RunChronicleEntry {

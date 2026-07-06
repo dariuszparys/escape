@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from 'vitest';
 import { MAX_INVENTORY } from './config';
 import {
+  META_STORAGE_KEY,
   META_ECONOMY_VERSION,
   createDefaultMetaState,
   getMeta,
@@ -49,7 +50,7 @@ describe('meta state', () => {
     );
   });
 
-  test('migrates old positive ember balances into the starter card unlock bonus', () => {
+  test('resets old unversioned ember balances instead of migrating them', () => {
     expect(
       normalizeMetaState({
         embers: 23,
@@ -61,30 +62,10 @@ describe('meta state', () => {
         },
         lastAwardedRunId: 'old-run',
       }),
-    ).toEqual({
-      economyVersion: META_ECONOMY_VERSION,
-      embers: 0,
-      progression: {
-        starterCardVarietyUnlocked: true,
-        migrationBonusGranted: true,
-        activeArchetypeId: null,
-        relicPathUnlocked: false,
-        unlockedRelicIds: [],
-        activeStartingRelicId: null,
-        completedContractIds: [],
-      },
-      pendingPrep: {
-        itemIds: [],
-        extraStartingChoice: false,
-        scoutFlame: false,
-        curseIds: [],
-        pendingRelicRoll: false,
-      },
-      lastAwardedRunId: 'old-run',
-    });
+    ).toEqual(createDefaultMetaState());
   });
 
-  test('preserves pending prep once while migrating old saved data', () => {
+  test('resets old pending prep instead of preserving a one-time migration', () => {
     expect(
       normalizeMetaState({
         embers: 3,
@@ -96,27 +77,7 @@ describe('meta state', () => {
         },
         lastAwardedRunId: null,
       }),
-    ).toEqual({
-      economyVersion: META_ECONOMY_VERSION,
-      embers: 0,
-      progression: {
-        starterCardVarietyUnlocked: true,
-        migrationBonusGranted: true,
-        activeArchetypeId: null,
-        relicPathUnlocked: false,
-        unlockedRelicIds: [],
-        activeStartingRelicId: null,
-        completedContractIds: [],
-      },
-      pendingPrep: {
-        itemIds: ['small_potion'],
-        extraStartingChoice: true,
-        scoutFlame: true,
-        curseIds: ['narrow_opening'],
-        pendingRelicRoll: false,
-      },
-      lastAwardedRunId: null,
-    });
+    ).toEqual(createDefaultMetaState());
   });
 
   test('does not grant the migration bonus for malformed versioned data', () => {
@@ -211,6 +172,7 @@ describe('meta state', () => {
 
     expect(
       normalizeMetaState({
+        economyVersion: META_ECONOMY_VERSION,
         embers: 7,
         pendingPrep: {
           itemIds: savedItemIds,
@@ -226,6 +188,7 @@ describe('meta state', () => {
   test('keeps only the first valid saved curse id', () => {
     expect(
       normalizeMetaState({
+        economyVersion: META_ECONOMY_VERSION,
         embers: 7,
         pendingPrep: {
           itemIds: [],
@@ -284,7 +247,7 @@ describe('meta state', () => {
 
   test('falls back to defaults when storage contains malformed JSON', () => {
     const storage = new MemoryStorage();
-    storage.setItem('escape.meta.v1', '{bad json');
+    storage.setItem(META_STORAGE_KEY, '{bad json');
 
     expect(loadMetaState(storage)).toEqual(createDefaultMetaState());
   });

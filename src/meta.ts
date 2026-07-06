@@ -16,9 +16,10 @@ import {
   normalizeUnlockedRelicIds,
   type ContractId,
 } from './data/contracts';
+import { META_STORAGE_KEY } from './storageKeys';
 
-export const META_STORAGE_KEY = 'escape.meta.v1';
-export const META_ECONOMY_VERSION = 3;
+export { META_STORAGE_KEY } from './storageKeys';
+export const META_ECONOMY_VERSION = 4;
 
 /** The selectable player archetype ids, derived from the one canonical `ARCHETYPES` list so a new
  * archetype can never be added there yet silently rejected here by save normalization. */
@@ -142,56 +143,20 @@ function normalizeProgression(value: unknown): MetaProgressionState {
   };
 }
 
-function createMigratedProgressionState(grantsStarterBonus: boolean): MetaProgressionState {
-  return {
-    starterCardVarietyUnlocked: grantsStarterBonus,
-    migrationBonusGranted: grantsStarterBonus,
-    activeArchetypeId: null,
-    relicPathUnlocked: false,
-    unlockedRelicIds: [],
-    activeStartingRelicId: null,
-    completedContractIds: [],
-  };
-}
-
-function migrateMetaV2ToV3(value: Record<string, unknown>): MetaState {
-  const pending = isRecord(value.pendingPrep) ? value.pendingPrep : {};
-  return {
-    economyVersion: META_ECONOMY_VERSION,
-    embers: normalizeEmbers(value.embers),
-    progression: normalizeProgression(value.progression),
-    pendingPrep: {
-      itemIds: normalizeItemIds(pending.itemIds),
-      extraStartingChoice: pending.extraStartingChoice === true,
-      scoutFlame: pending.scoutFlame === true,
-      curseIds: normalizeCurseIds(pending.curseIds),
-      pendingRelicRoll: pending.pendingRelicRoll === true,
-    },
-    lastAwardedRunId: typeof value.lastAwardedRunId === 'string' ? value.lastAwardedRunId : null,
-  };
-}
-
 export function normalizeMetaState(value: unknown): MetaState {
   if (!isRecord(value)) return createDefaultMetaState();
 
   const hasEconomyVersion = Object.prototype.hasOwnProperty.call(value, 'economyVersion');
-  if (hasEconomyVersion && value.economyVersion === 2) {
-    return migrateMetaV2ToV3(value);
-  }
-  if (hasEconomyVersion && value.economyVersion !== META_ECONOMY_VERSION) {
+  if (!hasEconomyVersion || value.economyVersion !== META_ECONOMY_VERSION) {
     return createDefaultMetaState();
   }
 
-  const legacyEmbers = normalizeEmbers(value.embers);
-  const grantsStarterBonus = !hasEconomyVersion && legacyEmbers > 0;
   const pending = isRecord(value.pendingPrep) ? value.pendingPrep : {};
 
   return {
     economyVersion: META_ECONOMY_VERSION,
-    embers: hasEconomyVersion ? legacyEmbers : 0,
-    progression: hasEconomyVersion
-      ? normalizeProgression(value.progression)
-      : createMigratedProgressionState(grantsStarterBonus),
+    embers: normalizeEmbers(value.embers),
+    progression: normalizeProgression(value.progression),
     pendingPrep: {
       itemIds: normalizeItemIds(pending.itemIds),
       extraStartingChoice: pending.extraStartingChoice === true,

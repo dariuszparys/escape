@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { GAME_H, GAME_W } from './config';
 import { saveAudioSettings } from './audio/settings';
 import { startAmbience } from './audio/sfx';
+import { getProfile, setProfile } from './profile';
 import { getMeta, setMeta } from './meta';
 import { BootScene } from './scenes/Boot';
 import { TitleScene } from './scenes/Title';
@@ -15,6 +16,7 @@ import { EndScene } from './scenes/End';
 import { getRun } from './state';
 
 type DebugSetMeta = (next: Parameters<typeof setMeta>[0]) => ReturnType<typeof setMeta>;
+type DebugSetProfile = (next: Parameters<typeof setProfile>[0]) => ReturnType<typeof setProfile>;
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -80,11 +82,15 @@ const debugWindow = window as unknown as {
   __getRun: typeof getRun;
   __getMeta: typeof getMeta;
   __setMeta: DebugSetMeta;
+  __getProfile: typeof getProfile;
+  __setProfile: DebugSetProfile;
 };
 
 debugWindow.__game = game;
 debugWindow.__getRun = getRun;
+debugWindow.__getProfile = getProfile;
 debugWindow.__getMeta = getMeta;
+debugWindow.__setProfile = setProfile;
 debugWindow.__setMeta = (next) => {
   const updated = setMeta(next);
   game.events.emit('meta-update', updated);

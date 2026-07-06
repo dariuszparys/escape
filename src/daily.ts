@@ -1,4 +1,6 @@
-export const DAILY_STORAGE_KEY = 'escape:daily-record';
+import { DAILY_STORAGE_KEY } from './storageKeys';
+
+export { DAILY_STORAGE_KEY } from './storageKeys';
 
 export interface DailyRecord {
   date: string; // 'YYYY-MM-DD' (UTC) this record is for
