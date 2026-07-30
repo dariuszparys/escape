@@ -3,6 +3,8 @@
 A roguelite mashup: 2D top-down dungeon crawler (Zelda-style rooms and
 walking) where every fight is a card battle.
 
+**[Play it in the browser](https://dariuszparys.github.io/escape/)**
+
 ## Run it
 
 ```sh
@@ -11,6 +13,13 @@ npm run dev      # http://localhost:5173
 ```
 
 `npm run build` type-checks and produces a static bundle in `dist/`.
+
+## Deploy
+
+Every push to `main` builds and publishes `dist/` to GitHub Pages via
+`.github/workflows/deploy.yml` (also runnable manually from the Actions tab).
+Vite's `base` is `./`, so the bundle works both at a domain root and under the
+`/escape/` project subpath.
 
 ## How it plays
 
