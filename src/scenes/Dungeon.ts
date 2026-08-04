@@ -39,11 +39,12 @@ import { playSfx } from '../audio/sfx';
 import { awardPotionItem, rollChestReward } from '../game/rewards';
 import { previewRewardImpact } from '../game/rewardImpact';
 import { startingCardIdsForRun } from '../game/startingCards';
-import { isCardUpgradable, upgradeCard } from '../game/cardUpgrade';
+import { upgradeCard } from '../game/cardUpgrade';
 import {
   canUseRestAction,
   payRestAction,
   restActionCost,
+  restActionTargets,
   type RestActionMode,
 } from '../game/restEconomy';
 import { applyTrapDamage } from '../game/hazards';
@@ -66,6 +67,9 @@ const ENTRY_CELL: Record<Dir, { col: number; row: number }> = {
   E: { col: 1, row: 5 },
   W: { col: ROOM_COLS - 2, row: 5 },
 };
+
+/** Rows per page in the rest room's card picker. */
+const REST_PICKER_PAGE_SIZE = 7;
 
 const ROOM_EVENT_LABEL: Record<RoomEvent, string> = {
   start: 'camp',
@@ -138,6 +142,7 @@ export class DungeonScene extends Phaser.Scene {
   private deckOverlay: Phaser.GameObjects.Container | null = null;
   private relicOverlay: Phaser.GameObjects.Container | null = null;
   private relicRevealPanel: Phaser.GameObjects.Container | null = null;
+  private chestCardPanel: Phaser.GameObjects.Container | null = null;
   private relicRevealDismiss: (() => void) | null = null;
   private visionGraphics: Phaser.GameObjects.Graphics | null = null;
   private restActionPanel: Phaser.GameObjects.Container | null = null;
@@ -378,6 +383,91 @@ export class DungeonScene extends Phaser.Scene {
     this.relicRevealDismiss = dismiss;
     this.relicRevealPanel = createRelicRevealPanel(this, relic, cx, cy, dismiss);
     this.input.keyboard?.once('keydown-ENTER', dismiss);
+  }
+
+  /**
+   * Offer a chest card as take-or-leave. Taking a card is a trade-off under the
+   * full-collection deck model, so the panel shows the card itself plus the deck-impact
+   * preview and makes declining a first-class option, not a hidden one.
+   */
+  private showChestCardOffer(card: Card, impactLabel: string): void {
+    this.closeChestCardPanel();
+    this.transitioning = true;
+    this.player.setVelocity(0, 0);
+    this.player.anims.stop();
+
+    const cx = this.origin.x + ROOM_W / 2;
+    const cy = this.origin.y + ROOM_H / 2;
+    const w = 360;
+    const h = 300;
+    const panel = createPanel(this, cx, cy, {
+      width: w,
+      height: h,
+      title: 'Chest: card found',
+      borderColor: PALETTE.gold,
+      bgAlpha: 0.98,
+      depth: 320,
+      titleOffsetY: 24,
+    });
+    this.chestCardPanel = panel;
+
+    panel.add(makeCardView(this, card, 0, -46, 0.9, false));
+    panel.add(
+      createRewardImpactText(this, 0, 40, impactLabel, w - 40, {
+        align: 'center',
+        originX: 0.5,
+        originY: 0,
+        fontSize: '10px',
+      }),
+    );
+
+    const close = (): void => {
+      this.closeChestCardPanel();
+      this.transitioning = false;
+      this.hud();
+    };
+
+    const button = (
+      label: string,
+      x: number,
+      color: string,
+      onPick: () => void,
+    ): Phaser.GameObjects.Text => {
+      const text = this.add
+        .text(x, h / 2 - 46, label, {
+          fontFamily: 'monospace',
+          fontSize: '13px',
+          fontStyle: 'bold',
+          color,
+          backgroundColor: '#221f1e',
+          padding: { x: 12, y: 8 },
+        })
+        .setOrigin(0.5)
+        .setInteractive({ useHandCursor: true });
+      text.on('pointerover', () => text.setColor('#ffe48a'));
+      text.on('pointerout', () => text.setColor(color));
+      text.on('pointerdown', onPick);
+      return text;
+    };
+
+    panel.add(
+      button('[ TAKE ]', -78, '#5fe07a', () => {
+        getRun().addCard(card);
+        this.floatText(this.player.x, this.player.y - 42, `${card.name} taken`, '#5fe07a');
+        close();
+      }),
+    );
+    panel.add(
+      button('[ LEAVE IT ]', 82, '#b8b0c8', () => {
+        this.floatText(this.player.x, this.player.y - 42, `${card.name} left behind`, '#6a6478');
+        close();
+      }),
+    );
+  }
+
+  private closeChestCardPanel(): void {
+    this.chestCardPanel?.destroy();
+    this.chestCardPanel = null;
   }
 
   private closeRestActionPanel(): void {
@@ -1284,20 +1374,28 @@ export class DungeonScene extends Phaser.Scene {
       return;
     }
 
+    // A card is the one chest reward with a real downside: the whole collection reshuffles
+    // into the Draw Pile every battle, so taking one thins every future draw. Offer it
+    // instead of banking it. The other outcomes (gold, HP, armor, relics) are pure upside,
+    // so prompting for those would be friction with no decision behind it.
+    if (result.kind === 'card') {
+      this.showChestCardOffer(result.card, result.impactLabel);
+      return;
+    }
+
+    // Everything reaching here is pure upside, so it still banks straight away.
     const message =
-      result.kind === 'card'
-        ? `Found card: ${result.cardName}!`
-        : result.kind === 'item'
-          ? `Found ${result.item.name}!`
-          : result.kind === 'armor'
-            ? '+1 Armor'
-            : result.kind === 'gold'
-              ? `+${result.amount} Gold${goldSuffix}`
-              : result.kind === 'heal'
-                ? `+${result.amount} HP`
-                : result.kind === 'relic_exhausted'
-                  ? `Relic pool exhausted — +${result.amount} Gold${goldSuffix}`
-                  : `${result.item.name} dropped!`;
+      result.kind === 'item'
+        ? `Found ${result.item.name}!`
+        : result.kind === 'armor'
+          ? '+1 Armor'
+          : result.kind === 'gold'
+            ? `+${result.amount} Gold${goldSuffix}`
+            : result.kind === 'heal'
+              ? `+${result.amount} HP`
+              : result.kind === 'relic_exhausted'
+                ? `Relic pool exhausted — +${result.amount} Gold${goldSuffix}`
+                : `${result.item.name} dropped!`;
     if (result.kind === 'inventory_full') {
       this.spawnFloorPotion(x, y + TILE, result.item);
     }
@@ -1307,9 +1405,7 @@ export class DungeonScene extends Phaser.Scene {
       message,
       result.kind === 'gold' || result.kind === 'relic_exhausted' ? '#f1c40f' : '#5fe07a',
     );
-    if (result.kind === 'card') {
-      this.floatImpactText(x, y - 78, result.impactLabel);
-    } else if (result.kind === 'relic_exhausted') {
+    if (result.kind === 'relic_exhausted') {
       this.floatImpactText(x, y - 78, 'No new relics available');
     }
     this.hud();
@@ -1329,7 +1425,7 @@ export class DungeonScene extends Phaser.Scene {
     const cx = this.origin.x + ROOM_W / 2;
     const cy = this.origin.y + ROOM_H / 2;
     const w = 330;
-    const h = 222;
+    const h = 236;
     const panel = createPanel(this, cx, cy, {
       width: w,
       height: h,
@@ -1373,10 +1469,24 @@ export class DungeonScene extends Phaser.Scene {
         button.on('pointerdown', () => this.openRestCardPicker(mode));
       }
       panel.add(button);
+
+      // A greyed-out action must say why. "Every card is fully upgraded" and "Not enough
+      // Gold" call for completely different responses from the player.
+      if (!enabled) {
+        panel.add(
+          this.add
+            .text(0, y + 20, check.reason, {
+              fontFamily: 'monospace',
+              fontSize: '9px',
+              color: '#8d8598',
+            })
+            .setOrigin(0.5),
+        );
+      }
     };
 
-    addChoice('UPGRADE A CARD', -30, 'upgrade');
-    addChoice('REMOVE A CARD', 14, 'remove');
+    addChoice('UPGRADE A CARD', -36, 'upgrade');
+    addChoice('REMOVE A CARD', 18, 'remove');
 
     const leave = this.add
       .text(0, 62, '[ LEAVE ]', {
@@ -1405,21 +1515,20 @@ export class DungeonScene extends Phaser.Scene {
     );
   }
 
-  private openRestCardPicker(mode: RestActionMode): void {
-    if (!this.restActionPanel) return;
+  private openRestCardPicker(mode: RestActionMode, page = 0): void {
     const run = getRun();
 
     this.closeRestActionPanel();
+    this.closeRestCardPanel();
     // Deck model (U12): every card fights, so list the collection reading-sorted.
-    // Upgrade mode (008): a card the upgrade table can't change (e.g. stun-only,
-    // shuffleCurse-only) is excluded — the picker must never offer a no-op paid action.
-    const eligible =
-      mode === 'upgrade'
-        ? run.cardCollection.filter((card) => isCardUpgradable(card))
-        : run.cardCollection;
-    const entries = [...eligible].sort(
+    // Upgrade mode excludes cards an upgrade cannot change — those at MAX_CARD_UPGRADES and
+    // the few whose only effects are un-upgradable — so the picker never offers a paid no-op.
+    // Removal deliberately keeps ALL of them: a maxed card is still worth cutting.
+    const entries = restActionTargets(run.cardCollection, mode).sort(
       (a, b) => b.tier - a.tier || a.name.localeCompare(b.name) || a.uid - b.uid,
     );
+    const pageCount = Math.max(1, Math.ceil(entries.length / REST_PICKER_PAGE_SIZE));
+    const currentPage = Math.min(Math.max(page, 0), pageCount - 1);
     const cx = this.origin.x + ROOM_W / 2;
     const cy = this.origin.y + ROOM_H / 2;
     const w = 520;
@@ -1456,10 +1565,26 @@ export class DungeonScene extends Phaser.Scene {
         .setOrigin(0.5),
     );
 
-    const visibleEntries = entries.slice(0, 7);
+    const pageStart = currentPage * REST_PICKER_PAGE_SIZE;
+    const visibleEntries = entries.slice(pageStart, pageStart + REST_PICKER_PAGE_SIZE);
+
+    if (entries.length === 0) {
+      panel.add(
+        this.add
+          .text(0, -10, 'Every card is already fully upgraded.\nRemoval is still available.', {
+            fontFamily: 'monospace',
+            fontSize: '12px',
+            color: '#b8b0c8',
+            align: 'center',
+          })
+          .setOrigin(0.5),
+      );
+    }
+
     for (const [index, card] of visibleEntries.entries()) {
       const y = -h / 2 + 82 + index * 38;
-      const row = `${String(index + 1).padStart(2, ' ')}. T${card.tier} ${card.name.padEnd(16, ' ')}`;
+      const number = pageStart + index + 1;
+      const row = `${String(number).padStart(2, ' ')}. T${card.tier} ${card.name.padEnd(16, ' ')}`;
       const impact = previewRewardImpact({
         collection: run.cardCollection,
         change:
@@ -1509,13 +1634,38 @@ export class DungeonScene extends Phaser.Scene {
         }),
     );
 
-    if (entries.length > visibleEntries.length) {
-      panel.add(
-        this.add
-          .text(0, h / 2 - 50, `+${entries.length - visibleEntries.length} more cards`, {
+    // Paging, not truncation: the old picker showed the first 7 and printed "+N more
+    // cards", which left the rest of a grown collection unreachable — you could not upgrade
+    // or remove a card you could see listed nowhere.
+    if (pageCount > 1) {
+      const pager = (label: string, x: number, targetPage: number, enabled: boolean): void => {
+        const text = this.add
+          .text(x, h / 2 - 56, label, {
             fontFamily: 'monospace',
             fontSize: '11px',
-            color: '#6a6478',
+            fontStyle: 'bold',
+            color: enabled ? '#f5edd8' : '#4a4556',
+            backgroundColor: enabled ? '#221f1e' : '#17151c',
+            padding: { x: 8, y: 5 },
+          })
+          .setOrigin(0.5);
+        if (enabled) {
+          text.setInteractive({ useHandCursor: true });
+          text.on('pointerover', () => text.setColor('#ffe48a'));
+          text.on('pointerout', () => text.setColor('#f5edd8'));
+          text.on('pointerdown', () => this.openRestCardPicker(mode, targetPage));
+        }
+        panel.add(text);
+      };
+
+      pager('[ PREV ]', -170, currentPage - 1, currentPage > 0);
+      pager('[ NEXT ]', 170, currentPage + 1, currentPage < pageCount - 1);
+      panel.add(
+        this.add
+          .text(0, h / 2 - 56, `Page ${currentPage + 1}/${pageCount}  ·  ${entries.length} cards`, {
+            fontFamily: 'monospace',
+            fontSize: '11px',
+            color: '#b8b0c8',
           })
           .setOrigin(0.5),
       );

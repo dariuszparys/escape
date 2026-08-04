@@ -1081,6 +1081,11 @@ export function simulateRun(
 
     if (event === 'chest') {
       const reward = rollChestReward(run, rng, depth);
+      // Chest cards are offered rather than auto-taken now, so the collection add happens
+      // here. The simulated player always accepts, preserving the tuned survival bands —
+      // modelling a player who declines a diluting chest card would make the sim stronger
+      // and re-open the whole curve (see the SIM_DECK_THIN_THRESHOLD note above).
+      if (reward.kind === 'card') run.addCard(reward.card);
       if (reward.kind === 'inventory_full') replaceInventoryItem(run, reward.item);
       continue;
     }

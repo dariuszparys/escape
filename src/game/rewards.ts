@@ -9,7 +9,14 @@ import { GameRng } from './rng';
 import { isScenarioAllowedCard, isScenarioAllowedRelic } from './scenarioRules';
 
 export type RewardResult =
-  | { kind: 'card'; cardName: string; impactLabel: string }
+  /**
+   * A drafted card, deliberately NOT yet added to the collection. Every card in the
+   * collection is shuffled into the Draw Pile at every battle, so taking one is a real
+   * trade-off (more options, thinner draws) rather than free upside — the caller decides
+   * whether to keep it and calls `run.addCard` itself. `impactLabel` is measured against
+   * the collection as it stands, so it stays accurate for that decision.
+   */
+  | { kind: 'card'; card: Card; cardName: string; impactLabel: string }
   | { kind: 'item'; item: InventoryItem }
   | { kind: 'armor'; amount: number }
   | { kind: 'gold'; amount: number }
@@ -52,8 +59,7 @@ export function rollChestReward(run: RunState, rng: GameRng, depth: number): Rew
       collection: run.cardCollection,
       change: { kind: 'add', card },
     });
-    run.addCard(card);
-    return { kind: 'card', cardName: card.name, impactLabel: impact.label };
+    return { kind: 'card', card, cardName: card.name, impactLabel: impact.label };
   }
 
   if (roll < 0.68) {

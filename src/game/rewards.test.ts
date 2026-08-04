@@ -132,7 +132,24 @@ describe('rewards', () => {
     if (result.kind !== 'card') throw new Error(`Unexpected result: ${result.kind}`);
     expect(result.impactLabel).toMatch(/deck/);
     expect(result.impactLabel).not.toMatch(/enters hand|replaces/i);
-    expect(run.cardCollection).toHaveLength(1);
+    // The roll OFFERS the card; it no longer banks it. Every card in the collection is
+    // shuffled in at every battle, so taking one is a trade-off the player must choose —
+    // the caller adds it only if they accept.
+    expect(run.cardCollection).toHaveLength(0);
+    expect(result.card.name).toBe(result.cardName);
+  });
+
+  test('a declined chest card leaves the collection untouched, an accepted one joins it', () => {
+    const declined = new RunState('seed');
+    rollChestReward(declined, new SequenceRng([0, 0]), 5);
+    expect(declined.cardCollection).toHaveLength(0);
+
+    const accepted = new RunState('seed');
+    const result = rollChestReward(accepted, new SequenceRng([0, 0]), 5);
+    if (result.kind !== 'card') throw new Error(`Unexpected result: ${result.kind}`);
+    accepted.addCard(result.card);
+    expect(accepted.cardCollection).toHaveLength(1);
+    expect(accepted.cardCollection[0].uid).toBe(result.card.uid);
   });
 
   test('Left Arm chest and victory card rewards exclude block cards', () => {
