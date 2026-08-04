@@ -4,6 +4,11 @@ import {
   ELITES,
   ENEMIES,
   MINIONS,
+  PACK_SOLO_CHANCE,
+  PACK_SOLO_CHANCE_DEEP,
+  PACK_TRIPLE_CHANCE,
+  packSoloChanceForDepth,
+  packTripleChanceForDepth,
   eliteHpForDepth,
   enemyHpForDepth,
   getEnemyTierForDepth,
@@ -16,6 +21,7 @@ import {
   spawnScenarioEncounter,
   toEngineEnemies,
 } from './enemies';
+import { MAX_DEPTH, RUN_LENGTH } from '../config';
 import { SequenceRng } from '../game/test-rng';
 import {
   createIntentState,
@@ -121,7 +127,10 @@ describe('elite encounter class (U5/R2)', () => {
 describe('intent patterns (U9, R5/R6)', () => {
   // `strength` (self-buff ritual) joined the legal enemy effect kinds with the combat-depth
   // rework — single-hit bruisers/bosses ramp with it; multi-hit enemies deliberately do not.
-  const RESOLVABLE_KINDS = ['damage', 'block', 'heal', 'status', 'strength'];
+  // `shuffleCurse` joined them with the difficulty rebalance: curses used to be elite-only,
+  // but they are the counter-pressure to a thin deck, so a strong-tier enemy and a boss now
+  // carry one too. They stay authored riders on specific beats, never a rolled effect.
+  const RESOLVABLE_KINDS = ['damage', 'block', 'heal', 'status', 'strength', 'shuffleCurse'];
   const all = [...ENEMIES, ...BOSSES];
 
   test('every enemy and boss carries a non-empty intent cycle', () => {
@@ -172,10 +181,9 @@ describe('intent patterns (U9, R5/R6)', () => {
 });
 
 describe('elite intent patterns (U5, R2)', () => {
-  // Deliberately NOT folded into the ENEMIES/BOSSES `all` array above: `shuffleCurse`
-  // is legal here but must stay absent from that block's allowlist, since it is an
-  // engine-routed rider consumed by turnEngine's shuffleIntoDrawPile hook, not a
-  // per-target combat resolution kind like damage/block/heal/status.
+  // `shuffleCurse` is an engine-routed rider consumed by turnEngine's shuffleIntoDrawPile
+  // hook rather than a per-target resolution kind, but it is legal on elites, strong-tier
+  // enemies, and bosses alike now that curses carry the back half's deck pressure.
   const RESOLVABLE_KINDS = ['damage', 'block', 'heal', 'status', 'shuffleCurse', 'strength'];
 
   test('every elite carries a non-empty intent cycle', () => {
@@ -464,6 +472,7 @@ describe('U4 medium/strong pattern rebuild (R1)', () => {
         [
           { kind: 'block', amount: 5 }, // Bone Ward: no damage, untouched
           { kind: 'status', status: 'poison', amount: 3, duration: 2 },
+          { kind: 'shuffleCurse', amount: 1 }, // curse rider is flat — depth never scales it
         ],
       ]);
       expect(empowered.special!.entry.effects).toEqual([
@@ -552,6 +561,43 @@ describe('multi-enemy packs (spawnEncounter)', () => {
         for (const foe of pack) expect(foe.hp).toBeGreaterThanOrEqual(6);
       }
     }
+  });
+
+  test('encounters thin toward undiluted solos with depth', () => {
+    // Counter-intuitive but harness-measured: a pack splits one solo's damage budget across
+    // bodies the player focus-fires down, so it is EASIER than the solo it replaces even with
+    // PACK_HP_MULTIPLIER. Raising deep pack frequency measurably RAISED the strong loadout's
+    // escape rate. Deep rooms therefore lean back toward full-strength solo enemies.
+    const depths = [MAX_DEPTH, 25, 50, 75, RUN_LENGTH];
+    for (let i = 1; i < depths.length; i++) {
+      expect(packSoloChanceForDepth(depths[i])).toBeGreaterThan(
+        packSoloChanceForDepth(depths[i - 1]),
+      );
+      expect(packTripleChanceForDepth(depths[i])).toBeLessThan(
+        packTripleChanceForDepth(depths[i - 1]),
+      );
+    }
+  });
+
+  test('the base run keeps its tuned pack odds, and the deep curve stays bounded', () => {
+    // Decade 1 must not shift — its difficulty is separately tuned (U12).
+    for (const depth of [3, 5, 8, MAX_DEPTH]) {
+      expect(packSoloChanceForDepth(depth)).toBeCloseTo(PACK_SOLO_CHANCE, 10);
+      expect(packTripleChanceForDepth(depth)).toBeCloseTo(PACK_TRIPLE_CHANCE, 10);
+    }
+    // Packs thin out late but never vanish — variety stays on the table all the way down.
+    expect(packSoloChanceForDepth(RUN_LENGTH)).toBeCloseTo(PACK_SOLO_CHANCE_DEEP, 10);
+    expect(packSoloChanceForDepth(RUN_LENGTH)).toBeLessThan(0.95);
+    expect(packTripleChanceForDepth(RUN_LENGTH)).toBeGreaterThan(0.1);
+    // Past the final room the curve clamps rather than running away.
+    expect(packSoloChanceForDepth(RUN_LENGTH + 50)).toBeCloseTo(PACK_SOLO_CHANCE_DEEP, 10);
+  });
+
+  test('a depth-scaled pack roll still routes through spawnEncounter', () => {
+    // At room 90 the solo threshold has risen past 0.8, so a high roll that packed during the
+    // base run now spawns an undiluted solo enemy instead.
+    expect(spawnEncounter(new SequenceRng([0.7, 0.9]), 5).length).toBeGreaterThan(1);
+    expect(spawnEncounter(new SequenceRng([0.7, 0.9]), 90)).toHaveLength(1);
   });
 
   test('pack spawning is deterministic under a scripted rng', () => {

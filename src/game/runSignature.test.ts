@@ -9,10 +9,15 @@ import { RngDrawDigest, runSignature } from './runSignature';
  */
 const GOLDEN_SEED = 7;
 const GOLDEN_SIGNATURE =
-  // Re-goldened for the Hundred-Room Escape U7 curve (2026-07-06). Deliberate, reviewed determinism
-  // change: post-first-decade pressure now uses the survival-curve tuning, and the retired meta
-  // payout field was replaced by final run Gold.
-  'v=0|boss=1|firstBoss=1|death=72|enc=12|gold=1349|draws=678|hash=1bdfc943';
+  // Re-goldened for the difficulty rebalance (2026-08-04). Deliberate, reviewed determinism change:
+  // the deep room-event table, the card tier weights, the depth-scaled pack odds and the upgrade
+  // cap all changed the VALUES consumed from the same draw sequence, and one enemy intent gained a
+  // curse rider. Determinism itself is unaffected — the same-seed stability test below still passes
+  // across 50 seeds; only this one fixed-seed outcome moved. Seed 7 happens to land on a win now,
+  // which is a single sample and says nothing about the curve; the survival BANDS are the
+  // difficulty statement. Previous golden, for reference:
+  //   'v=0|boss=1|firstBoss=1|death=72|enc=12|gold=1349|draws=678|hash=1bdfc943'
+  'v=1|boss=1|firstBoss=1|death=-|enc=15|gold=3088|draws=1020|hash=87c38bf0';
 
 describe('RngDrawDigest', () => {
   test('samples draw order and count, not just the value set (the load-bearing property)', () => {

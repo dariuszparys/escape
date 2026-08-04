@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'vitest';
-import { chooseForcedEliteDoor, isEliteEligibleDepth, makeNextRoom, rollRoomEvent } from './rooms';
+import {
+  chooseForcedEliteDoor,
+  isEliteEligibleDepth,
+  makeNextRoom,
+  rollRoomEvent,
+  type RoomEvent,
+} from './rooms';
 import { SequenceRng } from '../game/test-rng';
 import { BOSS_ROOM_INTERVAL, OPPOSITE, ROOM_COLS, ROOM_ROWS, TRAP_MIN_SPIKES } from '../config';
 import { hasSafeTrapRoute, isLaneDriftTrap, trapFairCells, trapSweptCells } from './traps';
@@ -53,16 +59,40 @@ describe('room generation', () => {
     }
   });
 
-  test('the deep pre-boss table repeats every decade past the first (depth 19 == depth 29), and is easier than the first decade (U12)', () => {
-    // Deep pre-boss table (past MAX_DEPTH): encounter 14, chest 28, potion 26, rest 24, trap 8 —
-    // softer than the first decade's own pre-boss table, so decade 2 doesn't stack that difficulty
-    // on top of itself.
+  test('the deep pre-boss table repeats every decade past the first (depth 19 == depth 29)', () => {
+    // Deep pre-boss table (past MAX_DEPTH): encounter 26, chest 30, potion 18, rest 14, trap 12.
+    // Still a touch softer than the first decade's own pre-boss table so decade 2 doesn't stack
+    // that difficulty on top of itself, but no longer the recovery lane it used to be.
     expect(rollRoomEvent(new SequenceRng([0.13]), 19)).toBe('encounter');
     expect(rollRoomEvent(new SequenceRng([0.13]), 29)).toBe('encounter');
-    expect(rollRoomEvent(new SequenceRng([0.15]), 19)).toBe('chest');
-    expect(rollRoomEvent(new SequenceRng([0.15]), 29)).toBe('chest');
+    expect(rollRoomEvent(new SequenceRng([0.3]), 19)).toBe('chest');
+    expect(rollRoomEvent(new SequenceRng([0.3]), 29)).toBe('chest');
     // The first decade's own pre-boss table (depth 9) is not deep — chest doesn't start until 0.30.
-    expect(rollRoomEvent(new SequenceRng([0.15]), 9)).toBe('encounter');
+    expect(rollRoomEvent(new SequenceRng([0.28]), 9)).toBe('encounter');
+    expect(rollRoomEvent(new SequenceRng([0.28]), 19)).toBe('chest');
+  });
+
+  test('the deep table keeps a real encounter share and a bounded recovery share', () => {
+    // The old endless-descent values ran 24% encounter against 44% potion+rest, so the back half
+    // healed off attrition faster than the fights applied it. Deep rooms stay MORE forgiving than
+    // shallow ones — a 90-room descent needs an out, and the survival harness confirms mid-tier
+    // loadouts wall without one — but the lane is narrower and fights are back to a real share.
+    const share = (depth: number, events: RoomEvent[]) => {
+      let hits = 0;
+      const samples = 400;
+      for (let i = 0; i < samples; i++) {
+        if (events.includes(rollRoomEvent(new SequenceRng([i / samples]), depth))) hits++;
+      }
+      return hits / samples;
+    };
+
+    const recovery: RoomEvent[] = ['potion', 'rest'];
+    const shallowRecovery = share(5, recovery);
+    const deepRecovery = share(42, recovery);
+
+    expect(deepRecovery).toBeGreaterThan(shallowRecovery); // long runs still need an out
+    expect(deepRecovery).toBeLessThanOrEqual(0.4); // but never back to the 44% recovery lane
+    expect(share(42, ['encounter'])).toBeGreaterThanOrEqual(0.28); // was 24%
   });
 });
 

@@ -6,6 +6,7 @@ import {
   applySimulatedRest,
   applySimulatedPostBattleRewards,
   assessCardEmphasisDominance,
+  assessRestPolicyDominance,
   BALANCE_LOADOUT_SCENARIOS,
   createSimRng,
   SIM_BATTLE_TURN_CAP,
@@ -20,6 +21,7 @@ import { spawnBoss, spawnEnemy } from '../data/enemies';
 import { restActionCost } from './restEconomy';
 import type { GameRng } from './rng';
 import { runSignature } from './runSignature';
+import { MAX_CARD_UPGRADES } from './cardUpgrade';
 
 function makeDeckCard(id: string) {
   const def = CARD_DEFS.find((card) => card.id === id);
@@ -99,8 +101,10 @@ describe('balance simulator battle kernel (U13)', () => {
 
     expect(run.hp).toBe(run.maxHp - 3);
     expect(run.gold).toBeGreaterThan(0);
-    // minRng at depth 10 offers heavy_strike, which beats a lone quick_jab deck's average.
-    expect(run.cardCollection.map((card) => card.id)).toContain('heavy_strike');
+    // minRng at depth 10 now lands on tier 1 rather than tier 2: the tier curve keeps tier 1 in
+    // the deep pool instead of flooding tier 3, so the floor roll offers Strike. The assertion is
+    // unchanged in intent — the offered card beats a lone quick_jab deck's average, so it's taken.
+    expect(run.cardCollection.map((card) => card.id)).toContain('strike');
   });
 
   test('curation declines dilution — by quality and, when bloated, by deck size (KTD9)', () => {
@@ -416,6 +420,41 @@ describe('card emphasis policy guard (U13)', () => {
     expect(dominance.policies.damage.runs).toBe(120);
     expect(dominance.policies.block.runs).toBe(120);
     expect(dominance.policies.disruption.runs).toBe(120);
+  });
+});
+
+describe('single-card snowball guard (difficulty rebalance)', () => {
+  simulationTest('CHARACTERIZATION: upgrade-first still dominates the default rest policy', () => {
+    // This is a FINDING, pinned as a test — not an invariant that currently holds.
+    //
+    // Sweeping the two rest policies showed the default (`balanced`, gated by
+    // SIM_DECK_THIN_THRESHOLD = 9) spends nearly every rest on removal, while an upgrade-first
+    // policy wins roughly 0.68 of its runs against the default's 0.18. The simulated player the
+    // survival bands grade is therefore materially weaker than any human, who upgrades — which is
+    // why those bands could read "roguelike-hard" while the real game played easy.
+    //
+    // Deliberately NOT asserted as `monoDominates === false`: that would be false today, and
+    // forcing it green would mean silently re-calibrating every band at once. See the comment on
+    // SIM_DECK_THIN_THRESHOLD. When the policy is fixed and the curve re-tuned to owner-set
+    // targets, this test should flip to asserting no dominance.
+    const dominance = assessRestPolicyDominance(BALANCE_LOADOUT_SCENARIOS.strong, {
+      runs: 120,
+      margin: 0.12,
+    });
+
+    expect(dominance.policies.mono.runs).toBe(120);
+    expect(dominance.policies.balanced.runs).toBe(120);
+    // Pin the gap so it cannot widen unnoticed, and so closing it makes this test fail loudly.
+    expect(dominance.monoAdvantage).toBeGreaterThan(0.12);
+    expect(dominance.monoDominates).toBe(true);
+  });
+
+  simulationTest('the upgrade cap bounds how far one card can actually be pushed', () => {
+    // The mono policy tries its hardest to over-invest in a single card; the cap is what stops it.
+    const dominance = assessRestPolicyDominance(BALANCE_LOADOUT_SCENARIOS.strong, { runs: 60 });
+
+    expect(dominance.policies.mono.avgPeakCardUpgrades).toBeGreaterThan(0);
+    expect(dominance.policies.mono.avgPeakCardUpgrades).toBeLessThanOrEqual(MAX_CARD_UPGRADES);
   });
 });
 

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { makeCard } from '../data/cards';
-import { isCardUpgradable, upgradeCard } from './cardUpgrade';
+import { MAX_CARD_UPGRADES, isCardUpgradable, upgradeCard, upgradeCount } from './cardUpgrade';
 
 describe('upgradeCard', () => {
   test('upgrades a damage card', () => {
@@ -57,7 +57,7 @@ describe('upgradeCard', () => {
     expect(card.effects).toEqual([{ kind: 'heal', amount: 8 }]);
   });
 
-  test('does not add duplicate plus on repeated upgrades', () => {
+  test('a second upgrade is a no-op: one upgraded version per card', () => {
     const card = makeCard({
       id: 'strike',
       name: 'Strike',
@@ -72,8 +72,94 @@ describe('upgradeCard', () => {
     upgradeCard(card);
     upgradeCard(card);
 
+    // The cap is what stops a run pouring every rest-room upgrade into one scaling card.
     expect(card.name).toBe('Strike+');
-    expect(card.effects).toEqual([{ kind: 'damage', amount: 9 }]);
+    expect(card.effects).toEqual([{ kind: 'damage', amount: 7 }]);
+    expect(card.upgrades).toBe(MAX_CARD_UPGRADES);
+    expect(isCardUpgradable(card)).toBe(false);
+  });
+
+  test('a maxed card drops out of the upgradable set even with upgradable effects', () => {
+    const card = makeCard({
+      id: 'guard',
+      name: 'Guard',
+      type: 'block',
+      tier: 1,
+      cost: 1,
+      color: 0,
+      description: 'Gain 7 block',
+      effects: [{ kind: 'block', amount: 7 }],
+    });
+
+    expect(isCardUpgradable(card)).toBe(true);
+    upgradeCard(card);
+    expect(isCardUpgradable(card)).toBe(false);
+  });
+
+  test('legacy cards without an upgrades field count as un-upgraded', () => {
+    const card = makeCard({
+      id: 'strike',
+      name: 'Strike',
+      type: 'attack',
+      tier: 1,
+      cost: 1,
+      color: 0,
+      description: 'Deal 5 damage',
+      effects: [{ kind: 'damage', amount: 5 }],
+    });
+    delete card.upgrades;
+
+    expect(upgradeCount(card)).toBe(0);
+    expect(isCardUpgradable(card)).toBe(true);
+  });
+
+  test('the cap bounds a multi-hit scaling card that used to snowball', () => {
+    // Sunder-shaped: two damage effects around a self-applied Vulnerable, so each upgrade pays
+    // +2 twice AND the second hit banks x1.5 off the card's own debuff. That is fine ONCE; the
+    // 60-damage card came from repeating it six times, which the cap now forbids.
+    const card = makeCard({
+      id: 'sunder',
+      name: 'Sunder',
+      type: 'attack',
+      tier: 3,
+      cost: 2,
+      color: 0,
+      description: 'Deal 4, Vulnerable, then Deal 4',
+      effects: [
+        { kind: 'damage', amount: 4 },
+        { kind: 'status', status: 'vulnerable', amount: 1, duration: 2 },
+        { kind: 'damage', amount: 4 },
+      ],
+    });
+
+    upgradeCard(card);
+    upgradeCard(card);
+    upgradeCard(card);
+
+    expect(card.effects).toEqual([
+      { kind: 'damage', amount: 6 },
+      { kind: 'status', status: 'vulnerable', amount: 1, duration: 3 },
+      { kind: 'damage', amount: 6 },
+    ]);
+    // 6 + floor(6 * 1.5) = 15 raw, against the 40 that six unbounded upgrades reached.
+    expect(card.upgrades).toBe(MAX_CARD_UPGRADES);
+  });
+
+  test('a single-hit card keeps the full damage budget', () => {
+    const card = makeCard({
+      id: 'strike',
+      name: 'Strike',
+      type: 'attack',
+      tier: 1,
+      cost: 1,
+      color: 0,
+      description: 'Deal 6 damage',
+      effects: [{ kind: 'damage', amount: 6 }],
+    });
+
+    upgradeCard(card);
+
+    expect(card.effects).toEqual([{ kind: 'damage', amount: 8 }]);
   });
 
   test('upgrades only upgradable effects on mixed cards', () => {

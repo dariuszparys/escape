@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'vitest';
-import type { Card } from '../data/cards';
+import { CARD_DEFS, type Card } from '../data/cards';
 import type { MutableCombatant } from './combat';
 import {
   type EffectContext,
+  curseCardDef,
   dispatchEffect,
   hasEffectHandler,
   registerEffectHandler,
@@ -104,6 +105,25 @@ describe('shuffleCurse (U5, hexer elite plumbing)', () => {
     const { ctx } = context();
     expect(() => dispatchEffect({ kind: 'shuffleCurse', amount: 1 }, ctx)).not.toThrow();
     expect(ctx.log).toHaveLength(0);
+  });
+
+  test('the leaden variant costs more of the turn than the default curse', () => {
+    const shuffled: Card[] = [];
+    const { ctx } = context({ shuffleIntoDrawPile: (card) => shuffled.push(card) });
+    dispatchEffect({ kind: 'shuffleCurse', amount: 1, curse: 'leaden' }, ctx);
+    expect(shuffled).toHaveLength(1);
+    expect(shuffled[0].name).toBe('Leaden Curse');
+    expect(shuffled[0].cost).toBeGreaterThan(curseCardDef('festering').cost);
+  });
+
+  test('no curse def can leak into a reward pool', () => {
+    // Curses must never be draftable. They live outside CARD_DEFS by construction; this
+    // pins that so adding a variant cannot quietly make one offerable.
+    for (const curse of ['festering', 'leaden'] as const) {
+      const def = curseCardDef(curse);
+      expect(def.effects).toHaveLength(0);
+      expect(CARD_DEFS.some((c) => c.id === def.id)).toBe(false);
+    }
   });
 
   test('no-ops when amount is zero or missing, even with the hook present', () => {

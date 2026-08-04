@@ -1,4 +1,4 @@
-import type { CardDef, CardEffect, StatusEffectType } from './cards';
+import type { Card, CardDef, CardEffect, StatusEffectType } from './cards';
 
 /**
  * The canonical keyword -> explanation glossary (U11 / KTD7). This is the first
@@ -32,7 +32,7 @@ export const KEYWORD_GLOSSARY: Record<KeywordKey, string> = {
   draw: 'Draws cards from the Draw Pile into hand, reshuffling the Discard Pile in if the Draw Pile runs out.',
   energy: 'Grants extra Energy to spend during the current turn.',
   shuffleCurse:
-    "Shuffles a dead Festering Curse card into the target's Draw Pile — it costs a future play and does nothing.",
+    "Shuffles a dead Curse card into the target's Draw Pile for this battle — it costs a future play and does nothing. A Leaden Curse costs two. Curses are gone by the next battle, and the thinner the deck the more often one is drawn.",
   exhaust: 'Leaves play for the rest of this battle instead of returning to the Discard Pile.',
   poison:
     "Deals its listed damage directly to HP (ignoring block) at the afflicted's own turn start, then its duration ticks down by one turn.",
@@ -80,7 +80,7 @@ function effectLine(effect: CardEffect): string {
     case 'strength':
       return `Gain ${effect.amount} Strength.`;
     case 'shuffleCurse':
-      return `Shuffle ${effect.amount} ${pluralize(effect.amount, 'curse')} into the target's draw pile.`;
+      return `Shuffle ${effect.amount} ${effect.curse === 'leaden' ? 'Leaden ' : ''}${pluralize(effect.amount, 'curse')} into the target's draw pile.`;
     case 'status':
       return statusLine(effect.status, effect.amount, effect.duration);
     default: {
@@ -89,6 +89,50 @@ function effectLine(effect: CardEffect): string {
       return String(_never);
     }
   }
+}
+
+/** Terse phrase for one effect, in the clipped voice authored descriptions use. */
+function effectPhrase(effect: CardEffect): string {
+  switch (effect.kind) {
+    case 'damage':
+      return `Deal ${effect.amount}`;
+    case 'block':
+      return `Gain ${effect.amount} block`;
+    case 'heal':
+      return `Restore ${effect.amount} HP`;
+    case 'draw':
+      return `Draw ${effect.amount}`;
+    case 'energy':
+      return `+${effect.amount} energy`;
+    case 'strength':
+      return `+${effect.amount} Strength`;
+    case 'shuffleCurse':
+      return `Curse ${effect.amount}`;
+    case 'status':
+      if (effect.status === 'stun') return 'Stun';
+      if (effect.status === 'vulnerable' || effect.status === 'weak' || effect.status === 'frail') {
+        return `${capitalize(effect.status)} ${effect.duration}`;
+      }
+      return `${capitalize(effect.status)} ${effect.amount} for ${effect.duration}`;
+    default: {
+      const _never: never = effect;
+      return String(_never);
+    }
+  }
+}
+
+/**
+ * The blurb to print on a card's face.
+ *
+ * Authored `description` text is canonical while a card is unmodified — it is hand-tuned to
+ * fit the face and to read better than any generated string. But `upgradeCard` changes
+ * `effects` without touching `description`, so an upgraded card used to display its ORIGINAL
+ * numbers: the face lied about what the card did. Once a card has been upgraded the face is
+ * derived from the effects instead, which cannot drift.
+ */
+export function cardFaceText(card: Pick<Card, 'description' | 'effects' | 'upgrades'>): string {
+  if (!card.upgrades) return card.description;
+  return card.effects.map(effectPhrase).join(', ');
 }
 
 /**

@@ -1,4 +1,4 @@
-import { MAX_DEPTH } from '../config';
+import { MAX_DEPTH, RUN_LENGTH } from '../config';
 import { GameRng } from '../game/rng';
 import type { ActiveStatusEffect } from '../game/combat';
 import { empowerPattern, type IntentPattern } from '../game/intentPatterns';
@@ -346,10 +346,16 @@ export const ENEMIES: EnemyDef[] = [
         },
         {
           name: 'Bone Ward',
-          telegraph: 'raises a lattice of bone to ward off retaliation while the curse lingers...',
+          telegraph:
+            'raises a lattice of bone to ward off retaliation, working a curse into your deck...',
+          // The curse rider is the strong tier's answer to a deck cut to its best few cards:
+          // the collection reshuffles every battle, so the thinner the deck the bigger the
+          // share of draws this eats. Rides a defensive beat, so it costs the player tempo
+          // rather than stacking onto a damage spike.
           effects: [
             { kind: 'block', amount: 5 },
             { kind: 'status', status: 'poison', amount: 3, duration: 2 },
+            { kind: 'shuffleCurse', amount: 1 },
           ],
         },
       ],
@@ -381,6 +387,11 @@ export const ENEMIES: EnemyDef[] = [
         {
           name: 'Brace Up',
           telegraph: 'plants its feet and tenses...',
+          // Deliberately NOT a curse beat, though it looks like a natural home for one. On a
+          // 3-entry cycle it fired every third turn, and curse pressure scales with FIGHT LENGTH,
+          // so it taxed slow damage-over-time decks hardest and pushed the Necromancer reference
+          // deck under its hard-fight floor. One strong-tier curse (necromancer, 1-in-4) is the
+          // tuned amount; the rest of the deep escalation comes from the room and encounter mix.
           effects: [{ kind: 'block', amount: 10 }],
         },
         {
@@ -490,6 +501,10 @@ export const BOSSES: EnemyDef[] = [
         entry: {
           name: 'Bone Staff',
           telegraph: 'The Bone Oracle raises a staff of splintered bone...',
+          // Deliberately NOT a curse beat. A recurring dilution tax on a boss special compounds
+          // with the boss's own damage on the fight the player has fewest outs in, and it pushed
+          // the LEAN reference deck under its win floor. Curse pressure sits on normal fights
+          // (necromancer) and the opt-in hexweaver elite, where the player still has resources.
           effects: [{ kind: 'status', status: 'poison', amount: 2, duration: 2 }],
         },
       },
@@ -638,8 +653,7 @@ export const ELITES: EnemyDef[] = [
     boss: false,
     // Hexer: fights the deck itself. Curse Weaving pairs an honestly-telegraphed
     // poison hit (so the intent still reads truthfully as a status move) with a
-    // shuffleCurse rider that slips a dead Festering Curse card into the Draw Pile —
-    // the one elite that needs the new engine-routed effect kind (U5 plumbing).
+    // shuffleCurse rider that slips a dead Leaden Curse card into the Draw Pile.
     pattern: {
       cycle: [
         {
@@ -654,11 +668,13 @@ export const ELITES: EnemyDef[] = [
         },
         {
           name: 'Curse Weaving',
-          telegraph:
-            'weaves a curse that festers into your very deck, alongside a sickly poison...',
+          telegraph: 'weaves a leaden curse into your very deck, alongside a sickly poison...',
+          // The curse specialist gets the heavy variant: an elite is an informed opt-in, so a
+          // 2-energy dead card is a cost the player accepted when they chose the room. The same
+          // rider on a boss special was too punishing (it sat on the fight with the fewest outs).
           effects: [
             { kind: 'status', status: 'poison', amount: 2, duration: 2 },
-            { kind: 'shuffleCurse', amount: 1 },
+            { kind: 'shuffleCurse', amount: 1, curse: 'leaden' },
           ],
         },
       ],
@@ -983,10 +999,50 @@ export const MINIONS: EnemyDef[] = [
   },
 ];
 
-/** Fraction of eligible encounters that stay a clean 1v1 (packs are weighted low). */
+/** Fraction of eligible encounters that stay a clean 1v1 at the base run's depths. */
 export const PACK_SOLO_CHANCE = 0.6;
-/** Among the packs, the fraction that are size 3 (the rest are size 2). */
+/** Solo share at room 100 — see `deepProgress` for why this RISES rather than falls. */
+export const PACK_SOLO_CHANCE_DEEP = 0.85;
+/** Among the packs, the fraction that are size 3 (the rest are size 2) at base-run depths. */
 export const PACK_TRIPLE_CHANCE = 0.35;
+/** Triple share at room 100. */
+export const PACK_TRIPLE_CHANCE_DEEP = 0.2;
+
+/**
+ * How far into the post-MAX_DEPTH stretch a depth sits, as 0..1.
+ *
+ * Per-enemy stats deliberately plateau after the base run (see `enemyHpForDepth` and
+ * `intentBonusForDepth`), which left rooms 11-100 barely escalating at all. Encounter SHAPE
+ * carries that escalation instead — but not in the direction it first appears.
+ *
+ * A pack is BUDGET-ANCHORED: its members split one solo's per-turn damage, and the player
+ * focus-fires them down one at a time, cutting the pack's output every time one dies. Even with
+ * `PACK_HP_MULTIPLIER` compensating, that makes a pack slightly EASIER than the full-strength
+ * solo it replaces. The balance harness measured this directly: raising deep pack frequency lifted
+ * the strong loadout's escape rate from 0.425 to 0.475, while lowering it brought every band back
+ * into range. So pack frequency is a VARIETY knob, not a difficulty one, and the deep curve leans
+ * back toward undiluted solo enemies. Packs stay common through the base run where they are a
+ * change of pace, and thin out late where the run needs teeth.
+ */
+function deepProgress(depth: number): number {
+  const span = RUN_LENGTH - MAX_DEPTH;
+  if (span <= 0) return 0;
+  return Math.min(1, Math.max(0, (depth - MAX_DEPTH) / span));
+}
+
+function lerp(from: number, to: number, t: number): number {
+  return from + (to - from) * t;
+}
+
+/** Solo-encounter odds for a depth: flat across the base run, rising across the deep stretch. */
+export function packSoloChanceForDepth(depth: number): number {
+  return lerp(PACK_SOLO_CHANCE, PACK_SOLO_CHANCE_DEEP, deepProgress(depth));
+}
+
+/** Size-3 odds among packs: flat across the base run, falling across the deep stretch. */
+export function packTripleChanceForDepth(depth: number): number {
+  return lerp(PACK_TRIPLE_CHANCE, PACK_TRIPLE_CHANCE_DEEP, deepProgress(depth));
+}
 const PACK_MIN_FOE_HP = 6;
 /**
  * A pack carries MORE total HP than the solo it stands in for: because the player
@@ -1048,11 +1104,16 @@ function spawnDoubledNormalEncounter(rng: GameRng, depth: number): EnemyInstance
 /**
  * A normal-encounter spawn: mostly a single enemy, sometimes a budget-anchored pack
  * of 2-3 minions (multi-enemy). Gated off the first two depths so the opener stays a
- * clean 1v1, and weighted low so packs stay a change of pace. Bosses/elites never pack.
+ * clean 1v1. Packs stay common through the base run as a change of pace, then thin out with
+ * depth — a split damage budget loses to focus-fire, so undiluted solos are what give the
+ * back half teeth (see `deepProgress`). Bosses/elites never pack.
+ *
+ * The two `rng.frac()` draws happen in a fixed order regardless of depth, so the RNG
+ * draw sequence stays stable for a given seed (R5 determinism).
  */
 export function spawnEncounter(rng: GameRng, depth: number): EnemyInstance[] {
-  if (depth <= 2 || rng.frac() < PACK_SOLO_CHANCE) return [spawnEnemy(rng, depth)];
-  const size = rng.frac() < PACK_TRIPLE_CHANCE ? 3 : 2;
+  if (depth <= 2 || rng.frac() < packSoloChanceForDepth(depth)) return [spawnEnemy(rng, depth)];
+  const size = rng.frac() < packTripleChanceForDepth(depth) ? 3 : 2;
   return spawnMinionPack(rng, depth, size);
 }
 

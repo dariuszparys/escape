@@ -4,6 +4,8 @@ import {
   Card,
   CardDef,
   CardEffect,
+  MAX_TIER3_WEIGHT,
+  MAX_ZERO_COST_DAMAGE,
   cardTierWeightsForDepth,
   cardPoolForArchetype,
   makeCard,
@@ -11,6 +13,7 @@ import {
   randomCardOfTier,
   type ArchetypeId,
 } from './cards';
+import { RUN_LENGTH } from '../config';
 import { SequenceRng } from '../game/test-rng';
 import { createIntentState, IntentPattern, telegraphIntent } from '../game/intentPatterns';
 import { playCard, TurnBattleState } from '../game/turnEngine';
@@ -20,39 +23,33 @@ describe('randomCard deep-run tier weights', () => {
   // second frac to choose within the tier pool. A frac of 0 on the second pick
   // deterministically selects the first card of the chosen tier.
 
-  test('tier odds keep shifting toward tier 3 past depth 9 instead of freezing', () => {
-    // r = 0.35 * 10 = 3.5. In decade 2 weights [0,4,6] that lands in tier 2;
-    // in decade 3 weights [0,3,7] the same roll lands in tier 3.
-    const decade2 = randomCard(new SequenceRng([0.35, 0]), 15).tier;
-    const decade3 = randomCard(new SequenceRng([0.35, 0]), 25).tier;
-
-    expect(decade2).toBe(2);
-    expect(decade3).toBe(3);
+  test('the deep curve holds its tier mix instead of drifting into tier 3', () => {
+    // Replaces the old "keeps shifting toward tier 3" rule. Depth stops changing the odds
+    // once the deep plateau is reached, so a tier-3 offer at room 90 is as rare as at room 20.
+    expect(cardTierWeightsForDepth(15)).toEqual(cardTierWeightsForDepth(25));
+    expect(cardTierWeightsForDepth(25)).toEqual(cardTierWeightsForDepth(99));
   });
 
-  test('tier-3 share grows from the first boss toward late decades', () => {
+  test('tier-3 share rises across the base run, then plateaus at its ceiling', () => {
     const tier3Share = (depth: number) => {
       const weights = cardTierWeightsForDepth(depth);
       return weights[2] / weights.reduce((sum, weight) => sum + weight, 0);
     };
 
-    expect(tier3Share(20)).toBeGreaterThan(tier3Share(10));
-    expect(tier3Share(40)).toBeGreaterThan(tier3Share(20));
+    expect(tier3Share(8)).toBeGreaterThan(tier3Share(2));
+    expect(tier3Share(20)).toBeGreaterThan(tier3Share(8));
+    // Plateau, not a climb: late decades must not keep enriching against a flat enemy curve.
+    expect(tier3Share(40)).toBe(tier3Share(20));
+    expect(tier3Share(99)).toBeCloseTo(MAX_TIER3_WEIGHT / 10, 10);
   });
 
-  test('depth 10 keeps the depth-9 baseline ([0,5,5]) so the base run is unchanged', () => {
-    // r = 0.45 * 10 = 4.5 → tier 2 boundary at 5, so tier 2 for [0,5,5].
-    expect(randomCard(new SequenceRng([0.45, 0]), 10).tier).toBe(2);
-    // r = 0.55 * 10 = 5.5 → past the tier-2 boundary, so tier 3.
-    expect(randomCard(new SequenceRng([0.55, 0]), 10).tier).toBe(3);
-  });
-
-  test('deep tiers never produce tier-1 cards', () => {
-    for (const depth of [12, 22, 42, 99]) {
-      for (const roll of [0, 0.1, 0.5, 0.9, 0.99]) {
-        expect(randomCard(new SequenceRng([roll, 0]), depth).tier).not.toBe(1);
-      }
-    }
+  test('the deep plateau still leaves tier 1 in the pool as filler', () => {
+    // Deliberate reversal of the old "deep tiers never produce tier-1 cards" rule: a run whose
+    // every offer is tier 2+ hands the player a strong deck by default. Cheap filler staying
+    // on the table is what keeps a late-run reward a real choice.
+    const [tier1] = cardTierWeightsForDepth(42);
+    expect(tier1).toBeGreaterThan(0);
+    expect(randomCard(new SequenceRng([0, 0]), 42).tier).toBe(1);
   });
 
   test('tier selection is deterministic for a fixed seed and depth', () => {
@@ -184,6 +181,59 @@ describe('card costs (U8, R2/R6)', () => {
         netEnergy > 0 && draws,
         `${def.id}: a 0-cost card must not net both energy and a draw`,
       ).toBe(false);
+    }
+  });
+
+  test('no 0-cost card carries more than chip damage (card-lint)', () => {
+    // The same reshuffle logic applies to raw damage, and this is the clause the original
+    // 0-cost lint was missing. A free attack never competes for the turn's 3 energy, so its
+    // damage is a floor the player adds to every single turn for the whole run — and it makes
+    // "one expensive payoff card + free filler" beat any real energy curve. Cap it at chip.
+    for (const def of CARD_DEFS) {
+      if (def.cost !== 0 || def.exhaust) continue;
+      const damage = def.effects.reduce((n, e) => n + (e.kind === 'damage' ? e.amount : 0), 0);
+      expect(
+        damage,
+        `${def.id}: a 0-cost card must deal at most ${MAX_ZERO_COST_DAMAGE} damage`,
+      ).toBeLessThanOrEqual(MAX_ZERO_COST_DAMAGE);
+    }
+  });
+});
+
+describe('tier scarcity across the 100-room arc (card-lint)', () => {
+  const depths = Array.from({ length: RUN_LENGTH }, (_, i) => i + 1);
+
+  test('tier 3 never exceeds its scarcity ceiling at any depth', () => {
+    for (const depth of depths) {
+      const [, , tier3] = cardTierWeightsForDepth(depth);
+      expect(
+        tier3,
+        `depth ${depth}: tier-3 weight ${tier3} exceeds the ceiling`,
+      ).toBeLessThanOrEqual(MAX_TIER3_WEIGHT);
+    }
+  });
+
+  test('tier 3 never becomes the most common tier', () => {
+    // Rarity is the whole point of the tier axis. If tier 3 ever outweighs tier 2 the label
+    // stops meaning anything and late-run reward quality runs away from the enemy curve.
+    for (const depth of depths) {
+      const [, tier2, tier3] = cardTierWeightsForDepth(depth);
+      expect(
+        tier3,
+        `depth ${depth}: tier 3 (${tier3}) outweighs tier 2 (${tier2})`,
+      ).toBeLessThanOrEqual(tier2);
+    }
+  });
+
+  test('offers improve with depth monotonically, by tier 1 fading rather than tier 3 flooding', () => {
+    let prevTier1 = Infinity;
+    let prevTier3 = -Infinity;
+    for (const depth of depths) {
+      const [tier1, , tier3] = cardTierWeightsForDepth(depth);
+      expect(tier1, `depth ${depth}: tier-1 weight rose`).toBeLessThanOrEqual(prevTier1);
+      expect(tier3, `depth ${depth}: tier-3 weight fell`).toBeGreaterThanOrEqual(prevTier3);
+      prevTier1 = tier1;
+      prevTier3 = tier3;
     }
   });
 });

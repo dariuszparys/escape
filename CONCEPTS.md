@@ -102,6 +102,34 @@ current battle, joining neither the Draw Pile nor the Discard Pile. It returns
 with the full collection at the next battle start. Exhaust is battle-scoped,
 never permanent deck removal.
 
+### Curse
+
+A dead card an enemy shuffles into the player's Draw Pile mid-battle. A Curse costs
+a play and does nothing; a **Leaden Curse** costs two. Curses are battle-scoped —
+they are gone at the next battle's reshuffle — and they never appear as a reward,
+living outside the draftable card pool entirely. Because the full collection
+reshuffles every battle, a Curse eats a larger share of draws the thinner the deck
+is, so it is the specific counter-pressure to a collection trimmed to a few premium
+cards. Carried by the Hexweaver elite and by one strong-tier enemy beat.
+
+### Card Tier
+
+A card's rarity band, 1 to 3, and the axis reward offers are rolled against. Tier 3
+stays genuinely seldom at every depth: depth improves offers by letting tier 1 fade
+out, never by flooding tier 3, so a tier-3 find still reads as a find at room 90.
+Tier is visible on the card face as its border — bronze, silver, then a
+double-framed gold — with the frame width varying alongside the colour so the band
+survives a scaled-down hand fan and colour-blind play.
+
+### Card Upgrade
+
+Improving a card at a rest room, for Gold. Each card has exactly **one** upgraded
+version: a card may be upgraded once, after which it leaves the rest room's upgrade
+list entirely. That cap is what keeps rest-room spending spread across the deck
+rather than compounding into a single card. An upgraded card is marked with a
+trailing `+`, and its face text is derived from its live effects so the numbers
+shown are always the numbers it deals.
+
 ### Status Effects
 
 Timed or permanent modifiers a combatant carries during a Card Battle, resolved through the

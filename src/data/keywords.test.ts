@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'vitest';
 import type { CardDef, CardEffect, StatusEffectType } from './cards';
-import { cardRulesLines, KEYWORD_GLOSSARY, type KeywordKey } from './keywords';
+import { makeCard } from './cards';
+import { upgradeCard } from '../game/cardUpgrade';
+import { cardFaceText, cardRulesLines, KEYWORD_GLOSSARY, type KeywordKey } from './keywords';
 
 const CARD_EFFECT_KINDS: CardEffect['kind'][] = [
   'damage',
@@ -89,5 +91,58 @@ describe('cardRulesLines', () => {
     expect(lines).toHaveLength(2);
     expect(lines[0]).toMatch(/damage/i);
     expect(lines[1]).toMatch(/burn/i);
+  });
+});
+
+describe('cardFaceText (upgraded cards must not display stale numbers)', () => {
+  const base = () =>
+    makeCard({
+      id: 'sunder',
+      name: 'Sunder',
+      type: 'attack',
+      tier: 3,
+      cost: 2,
+      color: 0,
+      description: 'Deal 4, Vulnerable, then Deal 4',
+      effects: [
+        { kind: 'damage', amount: 4 },
+        { kind: 'status', status: 'vulnerable', amount: 1, duration: 2 },
+        { kind: 'damage', amount: 4 },
+      ],
+    });
+
+  test('an unmodified card keeps its hand-authored blurb', () => {
+    expect(cardFaceText(base())).toBe('Deal 4, Vulnerable, then Deal 4');
+  });
+
+  test('an upgraded card derives its face text from the live effects', () => {
+    // upgradeCard rewrites effects but never description, so the face used to keep printing
+    // the ORIGINAL numbers — the card lied about what it did.
+    const card = upgradeCard(base());
+    const text = cardFaceText(card);
+
+    expect(text).not.toBe(card.description);
+    expect(text).toContain('Deal 6');
+    expect(text).not.toContain('Deal 4');
+  });
+
+  test('derived face text tracks every upgraded effect kind', () => {
+    const card = upgradeCard(
+      makeCard({
+        id: 'field_dressing',
+        name: 'Field Dressing',
+        type: 'heal',
+        tier: 1,
+        cost: 1,
+        color: 0,
+        description: 'Gain 5 block, restore 2 HP',
+        effects: [
+          { kind: 'block', amount: 5 },
+          { kind: 'heal', amount: 2 },
+        ],
+      }),
+    );
+
+    expect(cardFaceText(card)).toBe('Gain 8 block, Restore 5 HP');
   });
 });

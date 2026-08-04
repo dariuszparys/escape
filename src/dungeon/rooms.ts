@@ -51,23 +51,32 @@ export function rollRoomEvent(rng: GameRng, depth: number): RoomEvent {
   // The chest-heavy pre-boss table fires on the room before every boss (the 9th
   // room of each decade). The standard table leans toward encounters and away
   // from potion/rest (R6) so attrition accumulates across a decade, tuned
-  // against the roguelike-hard band (U12). Past the first decade (`deep`), the
-  // encounter roster stops escalating in tier (every depth beyond MAX_DEPTH
-  // still draws 'strong') but per-fight risk doesn't relent either; the deep
-  // table leans back toward recovery rooms so a long descent stays survivable
-  // without touching decade 1's own tuning. These table VALUES are preserved
-  // from the endless-descent era pending the U7 100-room curve re-tune. 'elite'
-  // is never rolled here — it only ever enters via the forced placement
+  // against the roguelike-hard band (U12).
+  //
+  // Past the first decade (`deep`) the encounter roster stops escalating in tier
+  // (every depth beyond MAX_DEPTH still draws 'strong'), so the deep tables carry
+  // the back half's escalation themselves. They used to do the opposite: the old
+  // endless-descent values ran 22% potion + 22% rest against the shallow table's
+  // 10% + 8%, making rooms 11-100 a recovery lane.
+  //
+  // The correction here is deliberately MODEST — deep recovery 44% -> 40%, encounters
+  // 24% -> 29%. Deep rooms stay clearly more generous than shallow ones because a
+  // 90-room descent genuinely needs an out: the survival harness walls the mid-tier
+  // loadout and the block-less Lost Left Arm scenario out of their bands well before
+  // deep recovery reaches shallow levels. This is the largest cut those two survive,
+  // not the cut the encounter mix would ideally want.
+  //
+  // 'elite' is never rolled here — it only ever enters via the forced placement
   // guarantee in makeNextRoom (KTD3), so a decade never gets more than one.
   const preBoss = roomWithinDecade(depth) === BOSS_ROOM_INTERVAL - 1;
   const deep = depth > MAX_DEPTH;
   const table: [RoomEvent, number][] = preBoss
     ? deep
       ? [
-          ['encounter', 14],
+          ['encounter', 22],
           ['chest', 28],
-          ['potion', 26],
-          ['rest', 24],
+          ['potion', 22],
+          ['rest', 20],
           ['trap', 8],
         ]
       : [
@@ -79,10 +88,10 @@ export function rollRoomEvent(rng: GameRng, depth: number): RoomEvent {
         ]
     : deep
       ? [
-          ['encounter', 24],
-          ['chest', 24],
-          ['potion', 22],
-          ['rest', 22],
+          ['encounter', 29],
+          ['chest', 23],
+          ['potion', 21],
+          ['rest', 19],
           ['trap', 8],
         ]
       : [

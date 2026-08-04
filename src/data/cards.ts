@@ -1,4 +1,3 @@
-import { BOSS_ROOM_INTERVAL } from '../config';
 import { GameRng } from '../game/rng';
 
 export type CardType = 'attack' | 'block' | 'heal' | 'utility' | 'status';
@@ -32,6 +31,17 @@ export type StatusEffectType =
  */
 export type DebuffStatusType = Exclude<StatusEffectType, 'strength'>;
 
+/**
+ * Which dead card a `shuffleCurse` beat slips into the Draw Pile.
+ *
+ * Curses are the counter-pressure to a thin deck: the full collection reshuffles every battle,
+ * so a deck cut down to its best few cards feels a curse in a far larger share of its draws
+ * than a broad one does. `leaden` costs more of the turn to clear and is reserved for late,
+ * authored threats. The defs live in `../game/effectHandlers` and are deliberately kept out of
+ * `CARD_DEFS` so no curse can ever surface as a reward.
+ */
+export type CurseId = 'festering' | 'leaden';
+
 export type CardEffect =
   | { kind: 'damage'; amount: number }
   | { kind: 'block'; amount: number }
@@ -40,7 +50,7 @@ export type CardEffect =
   | { kind: 'strength'; amount: number }
   | { kind: 'draw'; amount: number }
   | { kind: 'energy'; amount: number }
-  | { kind: 'shuffleCurse'; amount: number };
+  | { kind: 'shuffleCurse'; amount: number; curse?: CurseId };
 
 export interface CardDef {
   id: string;
@@ -61,8 +71,29 @@ export interface CardDef {
   exhaust?: boolean;
 }
 
+/**
+ * Authoring ceiling for raw damage on a free (0-cost, non-exhaust) card, enforced by card-lint.
+ *
+ * The full collection reshuffles every battle, so a 0-cost attack is a permanent per-turn engine
+ * that never competes for the turn's energy — it needs a bound that the original 0-cost lint
+ * (Strength / energy+draw only) never provided.
+ *
+ * Set to Quick Jab's established value rather than below it. Quick Jab is load-bearing: dropping
+ * it by a single point moved the LEAN reference deck's boss win rate from 0.60 to 0.48, because
+ * that point decides whether the deck kills the boss a turn sooner. So this is a ceiling on
+ * FUTURE authoring — no new free card may out-damage the one the game already balances around —
+ * not a nerf to the current one.
+ */
+export const MAX_ZERO_COST_DAMAGE = 4;
+
 export interface Card extends CardDef {
   uid: number;
+  /**
+   * Times this instance has been upgraded, capped by `MAX_CARD_UPGRADES`. Optional so runs
+   * suspended before the cap shipped restore without a snapshot migration — treat a missing
+   * value as 0 (see `upgradeCount` in `../game/cardUpgrade`).
+   */
+  upgrades?: number;
 }
 
 let nextUid = 1;
@@ -111,6 +142,11 @@ export const CARD_DEFS: CardDef[] = [
     tier: 1,
     cost: 0,
     color: 0xe67e22,
+    // Free damage every turn, so it sits at the MAX_ZERO_COST_DAMAGE ceiling and defines it.
+    // Deliberately NOT reduced: the reference-deck anchor showed a single point off this card
+    // swings LEAN's boss win rate ~12 points (it decides a kill turn), and the snowball this
+    // rebalance targets came from unbounded upgrades on one card, not from free chip damage.
+    // It also cannot simply cost 1 — Strike is tier 1 / cost 1 / 6 damage and would dominate it.
     description: 'Deal 4 damage',
     effects: [{ kind: 'damage', amount: 4 }],
   },
@@ -803,18 +839,26 @@ function pickWeighted(rng: GameRng, weights: [number, number, number]): 1 | 2 | 
 }
 
 /**
- * Tier weights for the 100-room arc. The room-10 baseline is [0, 5, 5]; each decade beyond
- * the first shifts one point from tier 2 toward tier 3 (clamped so a sliver of tier 2
- * always remains), so deeper decades keep improving card quality rather than freezing.
+ * Hard ceiling on the tier-3 share of a reward roll, out of 10.
+ *
+ * Tier is the game's rarity axis, so tier 3 has to stay seldom at every depth for a tier-3
+ * offer to read as a find. The previous curve shifted a point from tier 2 into tier 3 every
+ * decade, ending the run near [0, 1, 9] — tier 3 became the common case exactly where the
+ * run should be at its most selective, and it fed the late-run power spike.
+ */
+export const MAX_TIER3_WEIGHT = 3;
+
+/**
+ * Tier weights for the 100-room arc. Depth improves offers by letting tier 1 fade out, not by
+ * flooding tier 3: tier 3 climbs to its `MAX_TIER3_WEIGHT` ceiling and stays there, so deep
+ * rewards get more consistent without getting rarer-in-name-only.
  * Deterministic in depth — Daily reproducibility holds (KTD4).
  */
 export function cardTierWeightsForDepth(depth: number): [number, number, number] {
   if (depth <= 3) return [8, 2, 0];
-  if (depth <= 6) return [4, 5, 1];
-  if (depth <= 9) return [2, 5, 3];
-  const beyondFirst = Math.max(0, Math.floor((depth - 1) / BOSS_ROOM_INTERVAL));
-  const tier2 = Math.max(1, 5 - beyondFirst);
-  return [0, tier2, 10 - tier2];
+  if (depth <= 6) return [5, 4, 1];
+  if (depth <= 9) return [3, 5, 2];
+  return [2, 5, MAX_TIER3_WEIGHT];
 }
 
 /**

@@ -1,4 +1,4 @@
-import type { Card, CardDef, StatusEffectType } from '../data/cards';
+import type { Card, CardDef, CurseId, StatusEffectType } from '../data/cards';
 import { makeCard } from '../data/cards';
 import type { ActiveStatusEffect, MutableCombatant } from './combat';
 import { modifiedBlock, modifiedDamage, STRENGTH_CAP } from './combat';
@@ -15,6 +15,7 @@ export interface ResolvableEffect {
   readonly amount?: number;
   readonly status?: StatusEffectType;
   readonly duration?: number;
+  readonly curse?: CurseId;
 }
 
 /**
@@ -155,26 +156,48 @@ registerEffectHandler('energy', (effect, { actor, log, gainEnergy }) => {
 });
 
 /**
- * A dead/punishment card the hexer elite (U5) shuffles into the player's Draw Pile.
- * Deliberately NOT added to `CARD_DEFS` in `cards.ts` — it must never appear in reward
- * pools, only as a curse riding alongside the hexer's honestly-telegraphed status hit.
+ * Dead/punishment cards that curse-weaving enemies shuffle into the player's Draw Pile.
+ * Deliberately NOT added to `CARD_DEFS` in `cards.ts` — they must never appear in reward
+ * pools, only as a curse riding alongside an honestly-telegraphed intent.
+ *
+ * Curses are deliberately battle-scoped: they occupy the Draw Pile for this fight and are
+ * gone at the next battle's reshuffle, so they apply pressure without permanently taxing a
+ * run. They are also the specific answer to a deck cut down to a handful of premium cards —
+ * the thinner the collection, the larger the share of draws a curse eats.
  */
-const CURSE_CARD_DEF: CardDef = {
-  id: 'festering_curse',
-  name: 'Festering Curse',
-  type: 'status',
-  tier: 1,
-  cost: 1,
-  color: 0x6c3483,
-  description: 'A cursed card. Costs a play and does nothing.',
-  effects: [],
+const CURSE_CARD_DEFS: Record<CurseId, CardDef> = {
+  festering: {
+    id: 'festering_curse',
+    name: 'Festering Curse',
+    type: 'status',
+    tier: 1,
+    cost: 1,
+    color: 0x6c3483,
+    description: 'A cursed card. Costs a play and does nothing.',
+    effects: [],
+  },
+  leaden: {
+    id: 'leaden_curse',
+    name: 'Leaden Curse',
+    type: 'status',
+    tier: 1,
+    cost: 2,
+    color: 0x4a235a,
+    description: 'A heavy cursed card. Costs two plays and does nothing.',
+    effects: [],
+  },
 };
+
+export function curseCardDef(curse: CurseId = 'festering'): CardDef {
+  return CURSE_CARD_DEFS[curse];
+}
 
 registerEffectHandler('shuffleCurse', (effect, { target, log, shuffleIntoDrawPile }) => {
   const amount = effect.amount ?? 0;
   if (!shuffleIntoDrawPile || amount <= 0) return;
+  const def = curseCardDef(effect.curse);
   for (let i = 0; i < amount; i++) {
-    shuffleIntoDrawPile(makeCard(CURSE_CARD_DEF));
+    shuffleIntoDrawPile(makeCard(def));
   }
   log.push(`${target.name} feels a curse slip into their deck`);
 });

@@ -47,7 +47,7 @@ import {
   TurnBattleState,
   useItem,
 } from './turnEngine';
-import { upgradeCard } from './cardUpgrade';
+import { isCardUpgradable, upgradeCard, upgradeCount } from './cardUpgrade';
 import { canUseRestAction, payRestAction } from './restEconomy';
 
 /**
@@ -76,6 +76,8 @@ interface SimRunOptions {
   createRng: SimRngFactory;
   /** Optional slant for the greedy card policy — the no-dominant-policy gate sweeps these. */
   emphasis: CardEmphasis | null;
+  /** How the run spends its rest rooms — the mono-vs-balanced exploit gate sweeps these. */
+  restPolicy: SimRestPolicy;
 }
 
 export interface BalanceScenario {
@@ -220,6 +222,12 @@ export interface BalanceSimulationSummary {
   byTier: Record<StandardTier, TierBucketSummary>;
   /** wins / total for weak-tier fights specifically — fresh-deck winnability (U12 tier-1 floor). 0 if none fought. */
   weakTierWinRate: number;
+  /**
+   * Average across runs of the most upgrades any ONE card accumulated. The single-card-snowball
+   * signal: it is bounded by MAX_CARD_UPGRADES by construction, so a value drifting toward that
+   * cap while win rate climbs is the shape of a run collapsing onto one card.
+   */
+  avgPeakCardUpgrades: number;
 }
 
 export interface SimRunResult {
@@ -238,6 +246,13 @@ export interface SimRunResult {
   finalGold: number;
   /** Individual 'encounter'-room battle outcomes this run, bucketed by tier (U12). */
   tierFights: Record<StandardTier, TierBucketSummary>;
+  /** Most upgrades landed on any single card by the end of this run. */
+  peakCardUpgrades: number;
+}
+
+/** Most upgrades sitting on any single card in the collection — the snowball signal. */
+function peakCardUpgrades(run: RunState): number {
+  return run.cardCollection.reduce((max, card) => Math.max(max, upgradeCount(card)), 0);
 }
 
 function emptyTierFights(): Record<StandardTier, TierBucketSummary> {
@@ -402,25 +417,81 @@ export function applySimulatedPostBattleRewards(
   chooseRewardCard(run, offers);
 }
 
-/** Deck size above which a rest thins the deck instead of upgrading a card. */
+/**
+ * Deck size above which a rest thins the deck instead of upgrading a card.
+ *
+ * KNOWN CALIBRATION GAP, measured during the difficulty rebalance and deliberately left in place
+ * rather than changed here. At 9 the deck is over this threshold almost always, so the simulated
+ * player spends nearly every rest on REMOVAL and rarely upgrades: 0.33 average peak upgrades per
+ * run, against 0.93 for an upgrade-first policy. Head to head on the strong loadout, upgrade-first
+ * won 0.683 of its runs against this policy's 0.183 — a 0.50 swing (reproduce with
+ * `assessRestPolicyDominance`).
+ *
+ * That gap means the survival bands grade a player materially weaker than any human, who
+ * upgrades. Raising this to 13 makes the simulated player competent and lifts the strong
+ * loadout's escape rate from 0.18 to 0.51 — i.e. the game is far easier than these bands imply.
+ * Fixing it is the right change, but it re-calibrates EVERY band at once (bare/mid/strong plus
+ * the whole scenario matrix) and needs owner-directed difficulty targets, so it is filed as
+ * follow-up work rather than folded into this rebalance.
+ */
 export const SIM_DECK_THIN_THRESHOLD = 9;
 
-export function applySimulatedRest(run: RunState): void {
+/**
+ * How a simulated run spends its rest rooms.
+ *
+ * `balanced` is the competent default: thin a bloated deck, otherwise improve the best card.
+ *
+ * `mono` deliberately plays the degenerate line a human found — pour every rest into making one
+ * card as large as possible and never thin the deck to do it. The harness's survival bands all
+ * passed while the real game felt trivial precisely because no simulated policy tried this, so
+ * the tooling was blind to the exploit class it exists to catch. Sweeping both and asserting
+ * neither dominates is what keeps a future single-card snowball visible.
+ */
+export type SimRestPolicy = 'balanced' | 'mono';
+
+function restRemove(run: RunState, card: Card | undefined): boolean {
+  if (!card) return false;
+  const payment = payRestAction(run, 'remove');
+  if (!payment.ok) return false;
+  if (run.removeCard(card.uid)) return true;
+  run.gold += payment.cost;
+  return false;
+}
+
+function restUpgrade(run: RunState, card: Card | undefined): boolean {
+  // Never pay for a no-op: a card at MAX_CARD_UPGRADES still sorts highest by score, so
+  // charging for it would silently burn the run's gold on nothing.
+  if (!card || !isCardUpgradable(card)) return false;
+  const payment = payRestAction(run, 'upgrade');
+  if (!payment.ok) return false;
+  upgradeCard(card);
+  return true;
+}
+
+export function applySimulatedRest(run: RunState, policy: SimRestPolicy = 'balanced'): void {
   const byScore = [...run.cardCollection].sort((a, b) => simCardScore(a) - simCardScore(b));
-  const worst = byScore[0];
-  if (run.cardCollection.length > SIM_DECK_THIN_THRESHOLD && worst) {
-    const payment = payRestAction(run, 'remove');
-    if (!payment.ok) return;
-    if (run.removeCard(worst.uid)) return;
-    run.gold += payment.cost;
+  const upgradable = byScore.filter(isCardUpgradable);
+  const bestUpgradable = upgradable[upgradable.length - 1];
+
+  if (policy === 'mono') {
+    // Concentrate: always sink the rest into the best card still able to grow, and only fall
+    // back to thinning once nothing can be improved at all.
+    if (restUpgrade(run, bestUpgradable)) return;
+    restRemove(run, byScore[0]);
     return;
   }
 
-  const best = byScore[byScore.length - 1];
-  if (!best) return;
-  const payment = payRestAction(run, 'upgrade');
-  if (!payment.ok) return;
-  upgradeCard(best);
+  // Upgrade-first: a rest spent improving a card beats one spent trimming a merely-mediocre
+  // one at any deck size the run realistically reaches. Thinning is reserved for a deck bloated
+  // enough that dilution genuinely outweighs the upgrade.
+  if (run.cardCollection.length > SIM_DECK_THIN_THRESHOLD && byScore[0]) {
+    if (restRemove(run, byScore[0])) return;
+    return;
+  }
+
+  if (restUpgrade(run, bestUpgradable)) return;
+  // Everything worth upgrading is maxed — thinning is the only remaining use for the room.
+  restRemove(run, byScore[0]);
 }
 
 function maybeUseDungeonPotion(run: RunState, beforeBoss = false): void {
@@ -850,6 +921,7 @@ export function simulateReferenceDeck(
 const DEFAULT_RUN_OPTIONS: SimRunOptions = {
   createRng: (seed) => new SeededRng(seed >>> 0),
   emphasis: null,
+  restPolicy: 'balanced',
 };
 
 export function simulateRun(
@@ -857,7 +929,7 @@ export function simulateRun(
   scenario: BalanceScenario,
   options: Partial<SimRunOptions> = {},
 ): SimRunResult {
-  const { createRng, emphasis } = {
+  const { createRng, emphasis, restPolicy } = {
     ...DEFAULT_RUN_OPTIONS,
     ...options,
   };
@@ -893,6 +965,7 @@ export function simulateRun(
         eliteWins,
         finalGold: run.gold,
         tierFights,
+        peakCardUpgrades: peakCardUpgrades(run),
       };
     }
     maybeUseDungeonPotion(run, atBoss);
@@ -917,6 +990,7 @@ export function simulateRun(
           eliteWins,
           finalGold: run.gold,
           tierFights,
+          peakCardUpgrades: peakCardUpgrades(run),
         };
       }
       run.enemiesDefeated++;
@@ -936,6 +1010,7 @@ export function simulateRun(
           eliteWins,
           finalGold: run.gold,
           tierFights,
+          peakCardUpgrades: peakCardUpgrades(run),
         };
       }
       continue; // descend past the boss toward room 100
@@ -964,6 +1039,7 @@ export function simulateRun(
           eliteWins,
           finalGold: run.gold,
           tierFights,
+          peakCardUpgrades: peakCardUpgrades(run),
         };
       }
       eliteWins++;
@@ -994,6 +1070,7 @@ export function simulateRun(
           eliteWins,
           finalGold: run.gold,
           tierFights,
+          peakCardUpgrades: peakCardUpgrades(run),
         };
       }
       tierFights[tier].wins++;
@@ -1009,7 +1086,7 @@ export function simulateRun(
     }
 
     if (event === 'rest') {
-      applySimulatedRest(run);
+      applySimulatedRest(run, restPolicy);
       continue;
     }
 
@@ -1046,6 +1123,7 @@ export function simulateScenarioSummary(
   let eliteEngagedTotal = 0;
   let eliteWinsTotal = 0;
   const byTier: Record<StandardTier, TierBucketSummary> = emptyTierFights();
+  let peakUpgradeTotal = 0;
 
   for (let seed = 1; seed <= runs; seed++) {
     const result = simulateRun(seed, scenario, options);
@@ -1073,6 +1151,7 @@ export function simulateScenarioSummary(
     eliteOfferedTotal += result.eliteEligible;
     eliteEngagedTotal += result.eliteEncounters;
     eliteWinsTotal += result.eliteWins;
+    peakUpgradeTotal += result.peakCardUpgrades;
 
     for (const tier of ['weak', 'medium', 'strong'] as const) {
       byTier[tier].total += result.tierFights[tier].total;
@@ -1098,6 +1177,7 @@ export function simulateScenarioSummary(
     eliteWinRate: eliteEngagedTotal === 0 ? 0 : eliteWinsTotal / eliteEngagedTotal,
     byTier,
     weakTierWinRate: byTier.weak.total === 0 ? 0 : byTier.weak.wins / byTier.weak.total,
+    avgPeakCardUpgrades: runs === 0 ? 0 : peakUpgradeTotal / runs,
   };
 }
 
@@ -1182,5 +1262,66 @@ export function assessCardEmphasisDominance(
     spread,
     dominantEmphasis,
     hasDominantEmphasis: dominantEmphasis !== null,
+  };
+}
+
+export interface RestPolicySummary {
+  policy: SimRestPolicy;
+  runs: number;
+  winRate: number;
+  bossReachRate: number;
+  /** Largest upgrade investment landed on any single card, averaged across runs. */
+  avgPeakCardUpgrades: number;
+}
+
+export interface RestPolicyDominanceSummary {
+  margin: number;
+  policies: Record<SimRestPolicy, RestPolicySummary>;
+  /** mono win rate minus balanced win rate; positive means concentrating paid off. */
+  monoAdvantage: number;
+  monoDominates: boolean;
+}
+
+const SIM_REST_POLICIES: SimRestPolicy[] = ['balanced', 'mono'];
+
+/**
+ * The single-card-snowball gate.
+ *
+ * A human found that pouring every rest-room upgrade into one scaling card produced a card
+ * dealing more damage than the player's entire HP pool, yet every survival band still passed —
+ * the simulated policies all played a broad game, so the harness could not see the exploit it
+ * exists to catch. This sweeps the concentrating line explicitly and proves it does not beat
+ * the balanced line by more than `margin`.
+ *
+ * A failure here means specialization has become strictly correct: the deck-building decision
+ * has collapsed into "find the best card, feed it everything."
+ */
+export function assessRestPolicyDominance(
+  scenario: BalanceScenario = BALANCE_LOADOUT_SCENARIOS.strong,
+  options: EmphasisDominanceOptions = {},
+): RestPolicyDominanceSummary {
+  const runs = options.runs ?? 120;
+  const margin = options.margin ?? 0.12;
+  const entries = SIM_REST_POLICIES.map((policy) => {
+    const summary = simulateScenarioSummary(scenario, runs, { restPolicy: policy });
+    return [
+      policy,
+      {
+        policy,
+        runs,
+        winRate: summary.winRate,
+        bossReachRate: summary.bossReachRate,
+        avgPeakCardUpgrades: summary.avgPeakCardUpgrades,
+      },
+    ] as const;
+  });
+  const policies = Object.fromEntries(entries) as Record<SimRestPolicy, RestPolicySummary>;
+  const monoAdvantage = policies.mono.winRate - policies.balanced.winRate;
+
+  return {
+    margin,
+    policies,
+    monoAdvantage,
+    monoDominates: monoAdvantage > margin,
   };
 }
