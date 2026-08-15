@@ -20,8 +20,7 @@ export const SCENARIOS: ScenarioDef[] = [
     name: 'Escape the Dungeon',
     backstory:
       'You wake below the old stones with a single promise: reach the gate alive and leave the dungeon behind.',
-    ruleSummary:
-      'A clean escape attempt. Keep your archetype, ignore other Campfire advantages, and earn no progression rewards.',
+    ruleSummary: 'A clean escape attempt. Keep your campfire loadout. Every finished run pays XP.',
   },
   {
     id: 'im_poisoned',

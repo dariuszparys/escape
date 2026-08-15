@@ -1,6 +1,7 @@
 import { CARD_DEFS, makeCard } from '../data/cards';
 import { allRelicPool, makeRelic, type RelicId } from '../data/relics';
 import type { ScenarioId } from '../data/scenarios';
+import { STARTING_SCOUT_CHARGES } from '../config';
 import type { MetaProgressionState } from '../meta';
 import type { ProfileState } from '../profile';
 import { RunState } from '../state';
@@ -29,7 +30,7 @@ export function applyLoadoutToRun(
     : DEFAULT_STARTING_CARD_CHOICES;
   run.startingCardPicks = DEFAULT_STARTING_CARD_PICKS;
   run.startingCardsTaken = 0;
-  run.scoutCharges = 0;
+  run.scoutCharges = STARTING_SCOUT_CHARGES;
   run.archetypeId =
     !run.isDaily &&
     progression.activeArchetypeId !== null &&

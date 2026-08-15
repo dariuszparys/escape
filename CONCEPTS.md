@@ -13,14 +13,24 @@ camera shake, and hit sting) plays over locked input, then the battle launches.
 There is no in-room monster phase to move through, no contact trigger, and no
 way to slip back out to skip the fight; the monster is a static sprite that
 fades on victory. Avoiding a fight means not entering the room, informed by the
-Scout Charge reveal of adjacent room types.
+Scout Charge labels on adjacent unexplored rooms while those charges last.
 
 ### Scout Charge
 
-A limited Run resource that reveals the event type of the adjacent unexplored
-rooms behind the current room's open doors. The reveal fires at most once per
-room and its text persists until the player moves on; Scout Charges are the
-informed-routing tool for choosing which rooms to commit to.
+A short opening allotment of informed routing. A run starts with a few Scout
+Charges; each one labels the current room's open doors with the event waiting
+behind them (enemy, chest, rest, potion, trap, elite, boss). The labels appear
+once the room is safe to read — on entry for quiet rooms, after victory for
+fights. Trap fog still hides distant labels until the player steps close.
+When the charges are spent, doors stay unlabeled for the rest of the descent.
+
+### Chapter
+
+A named band of 10 rooms ending in a boss — the local goal the HUD shows
+instead of a 100-room commute. Rooms 1-10 are the Gate Halls, and their boss
+is the First Gate; later decades keep their own names (Drowned Crypt, Ash
+Warrens, and so on). Escape is still room 100; the chapter is how a run is
+read while you are in it.
 
 ### Trap Room
 
@@ -33,7 +43,7 @@ so the opening layout cannot be memorized as a solved path.
 ### Elite
 
 A hand-authored spike encounter placed before a decade's boss. Elite rooms are
-their own room type — Scout Charge reveals them distinctly, so fighting one is
+their own room type — a Scout Charge labels them distinctly, so fighting one is
 an informed opt-in for rewards clearly better than a normal encounter's. Each
 elite carries a signature mechanic that teaches a specific counterplay lesson.
 Each decade offers at most one Elite room; the offer is satisfied when the room
@@ -247,8 +257,9 @@ determines Level.
 
 ### Level
 
-A derived value from lifetime XP. Level gates access to archetypes, starting
-relic choices, and starter variety. It never grants direct combat stats.
+A derived value from lifetime XP. Level gates access to starting relic
+choices and starter variety. It never grants direct combat stats, and it does
+not gate the class fantasy — archetypes are selectable from the first campfire.
 
 ### Discovery
 
@@ -268,18 +279,19 @@ A Level unlock that broadens the opening card choices for normal runs.
 
 ### Archetype
 
-A player class — Barbarian, Necromancer, or Ranger — selected on the Progression
-screen after Level unlocks it. Selecting one reshapes the whole run's card
-identity rather than adding a single card: the opening picks come from that
-archetype's pick pool, and every card reward/chest draw is rolled from the
-archetype's cards **plus** the shared neutral pool. With no archetype selected
-the pool is neutral only. The fixed starting deck body (2 Strike, 2 Guard) stays
+A player class — Barbarian, Necromancer, or Ranger — selected at the Campfire
+from the first run. Selecting one reshapes the whole run's card identity rather
+than adding a single card: the opening picks come from that archetype's pick
+pool, and every card reward/chest draw is rolled from the archetype's cards
+**plus** the shared neutral pool. With no archetype selected (Wanderer) the
+pool is neutral only. The fixed starting deck body (2 Strike, 2 Guard) stays
 neutral across archetypes so the picks can be fully thematic without leaving a
 deck defensively broken. Barbarian scales Strength and swings big; Necromancer
 stacks poison/burn damage-over-time and life-drain sustain; Ranger marks prey
 Vulnerable and sprays multi-hit volleys with card draw. Daily Descents ignore
 Archetype selection so attempts stay comparable. Only one archetype is active for
-future normal runs until the player changes it.
+future normal runs until the player changes it. Level still gates starting
+relics and starter variety, never the class fantasy.
 
 ### Suspend
 

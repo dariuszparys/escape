@@ -1,17 +1,9 @@
-import { ARCHETYPES } from '../data/archetypes';
 import { relicDef } from '../data/relics';
 import type { DailyRecord } from '../daily';
 import type { RunChronicle } from '../chronicle';
 import type { MetaProgressionState } from '../meta';
 import { levelForXp, xpForLevel, type ProfileState } from '../profile';
 import { eligibleStartingRelics, hasStarterCardVariety } from './progression';
-
-function activeArchetypeName(progression: MetaProgressionState): string {
-  const archetype = progression.activeArchetypeId
-    ? ARCHETYPES.find((candidate) => candidate.id === progression.activeArchetypeId)
-    : null;
-  return archetype?.name ?? 'none';
-}
 
 export function formatProfileProgressLine(profile: ProfileState): string {
   const level = levelForXp(profile.xp);
@@ -27,7 +19,6 @@ export function formatCampfireProgressionSummary(
 ): string {
   const eligibleRelics = eligibleStartingRelics(profile);
   return [
-    `Archetype: ${activeArchetypeName(progression)}`,
     `Starter variety: ${hasStarterCardVariety(profile) ? 'unlocked' : 'level 4'}`,
     `Discovered relics: ${profile.discoveredRelicIds.length}`,
     `Starting relic choices: ${eligibleRelics.length}`,

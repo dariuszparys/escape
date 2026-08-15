@@ -4,6 +4,7 @@ import {
   applyContractCompletions,
   applyContractDiscoveries,
   evaluateNewContracts,
+  nextChargeContract,
 } from './contracts';
 import { createDefaultMetaState } from '../meta';
 import { createDefaultProfileState } from '../profile';
@@ -174,5 +175,19 @@ describe('contracts', () => {
     });
 
     expect(completions).toEqual([]);
+  });
+
+  test('campfire charge prefers the first-session contract over the late hoard', () => {
+    expect(nextChargeContract([])?.id).toBe('reach_depth_6');
+    expect(nextChargeContract(['reach_depth_6'])?.id).toBe('first_elite_kill');
+    expect(
+      nextChargeContract([
+        'reach_depth_6',
+        'first_elite_kill',
+        'reach_room_20',
+        'slayer_25',
+        'escape_with_3_relics',
+      ]),
+    ).toBeNull();
   });
 });

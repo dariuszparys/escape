@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_H, GAME_W } from '../config';
+import { ARCHETYPES } from '../data/archetypes';
+import type { ArchetypeId } from '../data/cards';
 import { dailyKey, dailySeed, loadDailyRecord } from '../daily';
 import { loadRunChronicle } from '../chronicle';
 import {
@@ -8,12 +10,15 @@ import {
   formatDailyRecordLine,
   formatProfileProgressLine,
 } from '../game/campfireSummary';
-import { getMeta } from '../meta';
+import { formatCampfireRunGoal, formatPathPrompt } from '../game/runHook';
+import { setActiveArchetype } from '../game/progression';
+import { getMeta, setMeta } from '../meta';
 import { newRun, setRun } from '../state';
 import { FONT_FAMILY, TEXT_COLOR } from '../gfx/theme';
 import { getProfile } from '../profile';
 import { applyLoadoutToRun } from '../game/campfirePrep';
 import { clearRunSnapshot, loadRunSnapshot } from '../game/runSnapshot';
+import { playSfx } from '../audio/sfx';
 
 const TEXT_STYLE = {
   fontFamily: FONT_FAMILY,
@@ -177,7 +182,28 @@ export class CampfireScene extends Phaser.Scene {
     );
 
     this.dynamic.add(
-      this.add.text(STATUS_X, 174, 'LOADOUT', {
+      this.add.text(STATUS_X, 168, formatPathPrompt(meta.progression.activeArchetypeId), {
+        ...TEXT_STYLE,
+        fontSize: '18px',
+        fontStyle: 'bold',
+        color: TEXT_COLOR.gold,
+      }),
+    );
+    for (const [index, archetype] of ARCHETYPES.entries()) {
+      this.addPathButton(
+        STATUS_X,
+        196 + index * 24,
+        `${archetype.name} - ${archetype.tagline}`,
+        meta.progression.activeArchetypeId === archetype.id,
+        () => this.selectArchetype(archetype.id),
+      );
+    }
+    this.addPathButton(STATUS_X, 268, 'Wanderer - no class', false, () =>
+      this.selectArchetype(null),
+    );
+
+    this.dynamic.add(
+      this.add.text(STATUS_X, 304, 'THIS RUN', {
         ...TEXT_STYLE,
         fontSize: '18px',
         fontStyle: 'bold',
@@ -185,35 +211,37 @@ export class CampfireScene extends Phaser.Scene {
       }),
     );
     this.dynamic.add(
-      this.add.text(STATUS_X, 206, formatCampfireProgressionSummary(meta.progression, profile), {
-        ...TEXT_STYLE,
-        fontSize: '13px',
-        color: TEXT_COLOR.muted,
-        lineSpacing: 8,
-        fixedWidth: STATUS_W,
-        wordWrap: { width: STATUS_W, useAdvancedWrap: true },
-      }),
+      this.add.text(
+        STATUS_X,
+        332,
+        formatCampfireRunGoal(
+          profile.personalBestRoom,
+          meta.progression.completedContractIds ?? [],
+        ),
+        {
+          ...TEXT_STYLE,
+          fontSize: '13px',
+          color: TEXT_COLOR.body,
+          lineSpacing: 6,
+          fixedWidth: STATUS_W,
+          wordWrap: { width: STATUS_W, useAdvancedWrap: true },
+        },
+      ),
     );
+
     this.dynamic.add(
-      this.add.text(STATUS_X, 354, 'RUN RECORD', {
+      this.add.text(STATUS_X, 392, formatCampfireProgressionSummary(meta.progression, profile), {
         ...TEXT_STYLE,
-        fontSize: '18px',
-        fontStyle: 'bold',
-        color: TEXT_COLOR.gold,
-      }),
-    );
-    this.dynamic.add(
-      this.add.text(STATUS_X, 388, formatChronicleLine(chronicle), {
-        ...TEXT_STYLE,
-        fontSize: '13px',
+        fontSize: '12px',
         color: TEXT_COLOR.muted,
+        lineSpacing: 5,
         fixedWidth: STATUS_W,
         wordWrap: { width: STATUS_W, useAdvancedWrap: true },
       }),
     );
     if (snapshot) {
       this.dynamic.add(
-        this.add.text(STATUS_X, 426, `Suspended run: room ${snapshot.run.depth}`, {
+        this.add.text(STATUS_X, 478, `Suspended run: room ${snapshot.run.depth}`, {
           ...TEXT_STYLE,
           fontSize: '13px',
           color: TEXT_COLOR.gold,
@@ -221,24 +249,17 @@ export class CampfireScene extends Phaser.Scene {
           wordWrap: { width: STATUS_W, useAdvancedWrap: true },
         }),
       );
+    } else {
+      this.dynamic.add(
+        this.add.text(STATUS_X, 478, formatDailyRecordLine(dailyRecord), {
+          ...TEXT_STYLE,
+          fontSize: '12px',
+          color: TEXT_COLOR.muted,
+          fixedWidth: STATUS_W,
+          wordWrap: { width: STATUS_W, useAdvancedWrap: true },
+        }),
+      );
     }
-    this.dynamic.add(
-      this.add.text(STATUS_X, 468, 'TODAY', {
-        ...TEXT_STYLE,
-        fontSize: '18px',
-        fontStyle: 'bold',
-        color: TEXT_COLOR.gold,
-      }),
-    );
-    this.dynamic.add(
-      this.add.text(STATUS_X, 502, formatDailyRecordLine(dailyRecord), {
-        ...TEXT_STYLE,
-        fontSize: '13px',
-        color: TEXT_COLOR.muted,
-        fixedWidth: STATUS_W,
-        wordWrap: { width: STATUS_W, useAdvancedWrap: true },
-      }),
-    );
 
     this.addActionButton(142, '[ PROGRESSION ]', () => this.scene.start('Progression'));
     if (snapshot) {
@@ -249,6 +270,35 @@ export class CampfireScene extends Phaser.Scene {
       this.addActionButton(596, '[ DAILY DESCENT ]', () => this.startDailyRun());
     }
   };
+
+  private addPathButton(
+    x: number,
+    y: number,
+    label: string,
+    active: boolean,
+    onPointerDown: () => void,
+  ): void {
+    const button = this.add
+      .text(x, y, active ? `> ${label}` : `  ${label}`, {
+        ...TEXT_STYLE,
+        fontSize: '13px',
+        fontStyle: active ? 'bold' : 'normal',
+        color: active ? TEXT_COLOR.gold : TEXT_COLOR.body,
+      })
+      .setInteractive({ useHandCursor: true });
+    button.on('pointerover', () => button.setColor(TEXT_COLOR.goldHover));
+    button.on('pointerout', () => button.setColor(active ? TEXT_COLOR.gold : TEXT_COLOR.body));
+    button.on('pointerdown', onPointerDown);
+    this.dynamic.add(button);
+  }
+
+  private selectArchetype(archetypeId: ArchetypeId | null): void {
+    const result = setActiveArchetype(getMeta(), getProfile(), archetypeId);
+    if (!result.ok) return;
+    const updated = setMeta(result.state);
+    this.game.events.emit('meta-update', updated);
+    playSfx(this, 'purchase');
+  }
 
   private addActionButton(x: number, label: string, onPointerDown: () => void): void {
     const button = this.add

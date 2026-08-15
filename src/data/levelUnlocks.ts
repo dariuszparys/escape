@@ -17,12 +17,12 @@ export interface ResolvedLevelUnlocks {
 }
 
 export const LEVEL_UNLOCKS: LevelUnlockEntry[] = [
+  { level: 1, archetypeIds: ['barbarian', 'ranger', 'necromancer'] },
   { level: 2, startingRelicSlots: 1, relicIds: STARTER_RELIC_IDS },
-  { level: 3, archetypeIds: ['barbarian'] },
   { level: 4, starterCardVariety: true },
-  { level: 5, archetypeIds: ['ranger'], relicIds: ['spark_coil', 'vital_charm'] },
+  { level: 5, relicIds: ['spark_coil', 'vital_charm'] },
   { level: 6, relicIds: ['stone_heart', 'merchants_seal'] },
-  { level: 7, archetypeIds: ['necromancer'], relicIds: ['venom_ring', 'hunter_charm'] },
+  { level: 7, relicIds: ['venom_ring', 'hunter_charm'] },
   { level: 8, relicIds: ['hoarders_map', 'wanderers_flask'] },
 ];
 

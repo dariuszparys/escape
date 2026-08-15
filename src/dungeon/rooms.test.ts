@@ -4,6 +4,7 @@ import {
   isEliteEligibleDepth,
   makeNextRoom,
   rollRoomEvent,
+  ROOM_EVENT_LABEL,
   type RoomEvent,
 } from './rooms';
 import { SequenceRng } from '../game/test-rng';
@@ -262,5 +263,21 @@ describe('trap room spike placement', () => {
     expect(room.event).toBe('rest');
     expect(room.spikes).toEqual([]);
     expect(room.blockedDoor).toBe('S');
+  });
+
+  test('door intel labels cover every room event', () => {
+    const events: RoomEvent[] = [
+      'start',
+      'encounter',
+      'chest',
+      'potion',
+      'rest',
+      'trap',
+      'boss',
+      'elite',
+    ];
+    for (const event of events) {
+      expect(ROOM_EVENT_LABEL[event].length).toBeGreaterThan(0);
+    }
   });
 });

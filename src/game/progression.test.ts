@@ -34,24 +34,30 @@ function state(): ProgressionState {
 }
 
 describe('level-gated archetype selection', () => {
-  test('fresh profiles start neutral-only', () => {
+  test('fresh profiles can pick any archetype', () => {
     const profile = profileAtLevel(1);
 
-    expect(isArchetypeUnlocked(profile, 'barbarian')).toBe(false);
+    expect(isArchetypeUnlocked(profile, 'barbarian')).toBe(true);
+    expect(isArchetypeUnlocked(profile, 'ranger')).toBe(true);
+    expect(isArchetypeUnlocked(profile, 'necromancer')).toBe(true);
     expect(setActiveArchetype(state(), profile, 'barbarian')).toEqual({
-      ok: false,
-      reason: 'Archetype requires level 3.',
-      state: state(),
+      ok: true,
+      state: {
+        progression: {
+          ...state().progression,
+          activeArchetypeId: 'barbarian',
+        },
+      },
     });
   });
 
-  test('selects and clears an archetype once its level gate is met', () => {
-    const selected = setActiveArchetype(state(), profileAtLevel(3), 'barbarian');
+  test('selects and clears an archetype', () => {
+    const selected = setActiveArchetype(state(), profileAtLevel(1), 'barbarian');
 
     expect(selected.ok).toBe(true);
     expect(selected.state.progression.activeArchetypeId).toBe('barbarian');
 
-    const cleared = setActiveArchetype(selected.state, profileAtLevel(3), null);
+    const cleared = setActiveArchetype(selected.state, profileAtLevel(1), null);
     expect(cleared.ok).toBe(true);
     expect(cleared.state.progression.activeArchetypeId).toBeNull();
   });
@@ -74,7 +80,7 @@ describe('level-gated archetype selection', () => {
     expect(formatArchetypeSelectionSummary(active)).toContain('Barbarian');
     expect(formatArchetypeProgressionLine(active, profile, 'barbarian')).toContain('active');
     expect(formatArchetypeProgressionLine(state(), profileAtLevel(1), 'barbarian')).toContain(
-      'locked - level 3',
+      'available - select for next run',
     );
     expect(formatArchetypeProgressionLine(active, profile, 'barbarian')).not.toMatch(/spend/i);
   });

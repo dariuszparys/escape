@@ -13,6 +13,7 @@ import {
   evaluateNewContracts,
 } from '../game/contracts';
 import { CONTRACT_DEFS, contractDef } from '../data/contracts';
+import { formatDeathHookLines } from '../game/runHook';
 import { awardRunXpOnce, type RunXpAwardResult } from '../game/runCompletion';
 import { clearRunSnapshot } from '../game/runSnapshot';
 
@@ -134,42 +135,45 @@ export class EndScene extends Phaser.Scene {
     } else {
       playSfx(this, 'death');
       this.add
-        .text(cx, 170, 'YOU DIED', {
+        .text(cx, 140, 'YOU DIED', {
           fontFamily: 'monospace',
           fontSize: '54px',
           fontStyle: 'bold',
           color: '#ff5544',
         })
         .setOrigin(0.5);
-      this.add.image(cx, 280, 'skeleton').setScale(6).setAlpha(0.8);
+      this.add.image(cx, 240, 'skeleton').setScale(5).setAlpha(0.8);
       this.add
         .text(
           cx,
-          390,
+          365,
           [
-            `The dungeon claims another soul in room ${run.depth}.`,
+            ...formatDeathHookLines(
+              run.depth,
+              run.archetypeId,
+              xpAward.profile,
+              getMeta().progression.completedContractIds ?? [],
+            ),
             xpLine,
             levelLine,
             bestRoomLine,
             contractLine,
-            contractProgressLine,
-            relicLine,
           ]
             .filter(Boolean)
             .join('\n'),
           {
             fontFamily: 'monospace',
-            fontSize: '17px',
+            fontSize: '16px',
             color: '#b8b0c8',
             align: 'center',
-            lineSpacing: 6,
+            lineSpacing: 5,
           },
         )
         .setOrigin(0.5);
     }
 
     const retry = this.add
-      .text(cx, 500, '[ SPACE: RETURN TO THE FIRE ]', {
+      .text(cx, this.victory ? 505 : 545, '[ SPACE: RETURN TO THE FIRE ]', {
         fontFamily: 'monospace',
         fontSize: '20px',
         fontStyle: 'bold',

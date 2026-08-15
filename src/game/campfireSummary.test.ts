@@ -26,7 +26,6 @@ describe('campfire summary formatting', () => {
 
     expect(summary).toBe(
       [
-        'Archetype: none',
         'Starter variety: unlocked',
         'Discovered relics: 1',
         'Starting relic choices: 1',
@@ -49,7 +48,7 @@ describe('campfire summary formatting', () => {
       discoveredRelicIds: ['swift_boots'],
     });
 
-    expect(summary).toContain('Archetype: Necromancer');
+    expect(summary).not.toContain('Archetype:');
     expect(summary).toContain('Starting relic: Swift Boots');
   });
 

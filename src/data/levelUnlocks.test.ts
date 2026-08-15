@@ -9,9 +9,9 @@ import {
 } from './levelUnlocks';
 
 describe('level unlocks', () => {
-  test('fresh profiles start neutral-only with no loadout relic slot', () => {
+  test('fresh profiles start with all archetypes and no loadout relic slot', () => {
     expect(unlocksForLevel(1)).toEqual({
-      archetypeIds: [],
+      archetypeIds: ['barbarian', 'ranger', 'necromancer'],
       startingRelicSlots: 0,
       starterCardVariety: false,
       relicIds: [],
@@ -30,9 +30,10 @@ describe('level unlocks', () => {
     }
   });
 
-  test('archetypes and relics are level-gated by the table', () => {
-    expect(isArchetypeLevelEligible(1, 'barbarian')).toBe(false);
-    expect(isArchetypeLevelEligible(3, 'barbarian')).toBe(true);
+  test('archetypes are available at level 1; relics stay level-gated', () => {
+    expect(isArchetypeLevelEligible(1, 'barbarian')).toBe(true);
+    expect(isArchetypeLevelEligible(1, 'ranger')).toBe(true);
+    expect(isArchetypeLevelEligible(1, 'necromancer')).toBe(true);
     expect(isRelicLevelEligible(1, 'swift_boots')).toBe(false);
     expect(isRelicLevelEligible(2, 'swift_boots')).toBe(true);
     expect(isRelicLevelEligible(4, 'spark_coil')).toBe(false);
@@ -40,7 +41,7 @@ describe('level unlocks', () => {
   });
 
   test('reports the first level that grants each unlock', () => {
-    expect(requiredLevelForArchetype('barbarian')).toBe(3);
+    expect(requiredLevelForArchetype('barbarian')).toBe(1);
     expect(requiredLevelForRelic('swift_boots')).toBe(2);
     expect(requiredLevelForRelic('spark_coil')).toBe(5);
   });

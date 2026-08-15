@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest';
+import { STARTING_SCOUT_CHARGES } from '../config';
 import { createDefaultProgressionState } from '../meta';
 import { createDefaultProfileState, xpForLevel } from '../profile';
 import { RunState } from '../state';
@@ -33,6 +34,14 @@ describe('campfire loadout application', () => {
     expect(run.startingCardsTaken).toBe(0);
   });
 
+  test('grants a short opening Scout Charge allotment, not a lasting resource', () => {
+    const run = new RunState('seed', 'run-scout');
+
+    applyLoadoutToRun(run, createDefaultProgressionState(), profileAtLevel(1));
+
+    expect(run.scoutCharges).toBe(STARTING_SCOUT_CHARGES);
+  });
+
   test('applies an unlocked archetype and discovered eligible starting relic', () => {
     const run = new RunState('seed', 'run-loadout');
     const progression = {
@@ -53,7 +62,7 @@ describe('campfire loadout application', () => {
     ]);
   });
 
-  test('ignores stale locked selections rather than granting level power', () => {
+  test('applies an unlocked archetype at level 1 while ignoring under-leveled relics', () => {
     const run = new RunState('seed', 'run-locked');
     const progression = {
       ...createDefaultProgressionState(),
@@ -63,7 +72,7 @@ describe('campfire loadout application', () => {
 
     applyLoadoutToRun(run, progression, profileAtLevel(1, ['spark_coil']));
 
-    expect(run.archetypeId).toBeNull();
+    expect(run.archetypeId).toBe('barbarian');
     expect(run.relicIds).toEqual([]);
     expect(run.maxHp).toBe(new RunState().maxHp);
     expect(run.gold).toBe(0);

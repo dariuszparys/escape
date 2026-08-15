@@ -1,4 +1,4 @@
-import { BOSS_ROOM_INTERVAL, Dir, DIRS, MAX_DEPTH, OPPOSITE } from '../config';
+import { BOSS_ROOM_INTERVAL, Dir, DIRS, MAX_DEPTH, OPPOSITE, RUN_LENGTH } from '../config';
 import { GameRng } from '../game/rng';
 import { createTrapDescriptors, type SpikeTrap } from './traps';
 
@@ -24,6 +24,60 @@ export function decadeForDepth(depth: number): number {
 /** True at every boss room — depths 10, 20, 30, ..., 100. */
 export function isBossRoom(depth: number): boolean {
   return depth >= 1 && depth % BOSS_ROOM_INTERVAL === 0;
+}
+
+/**
+ * Player-facing chapter for each decade. HUD uses `name`; the campfire/death
+ * goal uses `gateName` so the first summit reads as "the First Gate" rather
+ * than "the Gate Halls gate".
+ */
+export interface DecadeChapter {
+  name: string;
+  gateName: string;
+}
+
+export const DECADE_CHAPTERS: readonly DecadeChapter[] = [
+  { name: 'Gate Halls', gateName: 'the First Gate' },
+  { name: 'Drowned Crypt', gateName: 'the Drowned Crypt' },
+  { name: 'Ash Warrens', gateName: 'the Ash Warrens' },
+  { name: 'Iron Vaults', gateName: 'the Iron Vaults' },
+  { name: 'Bone Choir', gateName: 'the Bone Choir' },
+  { name: 'Ember Court', gateName: 'the Ember Court' },
+  { name: 'Hungering Dark', gateName: 'the Hungering Dark' },
+  { name: 'False Sanctum', gateName: 'the False Sanctum' },
+  { name: 'Last Descent', gateName: 'the Last Descent' },
+  { name: 'Threshold', gateName: 'the Threshold' },
+];
+
+export function chapterForDepth(depth: number): DecadeChapter {
+  const decade = decadeForDepth(depth);
+  return (
+    DECADE_CHAPTERS[Math.min(Math.max(0, decade), DECADE_CHAPTERS.length - 1)] ?? DECADE_CHAPTERS[0]
+  );
+}
+
+/** Compact HUD readout: chapter name, then progress toward that decade's boss. */
+export function formatHudChapterText(depth: number): string {
+  const chapter = chapterForDepth(depth);
+  return `${chapter.name}\n${roomWithinDecade(depth)}/${BOSS_ROOM_INTERVAL}`;
+}
+
+export const ROOM_EVENT_LABEL: Record<RoomEvent, string> = {
+  start: 'camp',
+  encounter: 'enemy',
+  chest: 'chest',
+  potion: 'potion',
+  rest: 'rest',
+  trap: 'trap',
+  boss: 'boss',
+  elite: 'elite',
+};
+
+/** Next boss room the player has not yet reached, or the escape room once they have. */
+export function nextGateRoom(personalBestRoom: number): number {
+  if (personalBestRoom >= RUN_LENGTH) return RUN_LENGTH;
+  const reached = Math.max(0, Math.floor(personalBestRoom));
+  return Math.min(RUN_LENGTH, Math.ceil((reached + 1) / BOSS_ROOM_INTERVAL) * BOSS_ROOM_INTERVAL);
 }
 
 export type RoomEvent =

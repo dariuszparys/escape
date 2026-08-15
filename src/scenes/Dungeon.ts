@@ -23,7 +23,7 @@ import {
   makeStartRoom,
   makeNextRoom,
   RoomData,
-  type RoomEvent,
+  ROOM_EVENT_LABEL,
 } from '../dungeon/rooms';
 import { trapCenterAt, trapContactRectFromCenter, type SpikeTrap } from '../dungeon/traps';
 import { makeCardView } from '../gfx/cardview';
@@ -32,7 +32,7 @@ import { createPanel } from '../gfx/panel';
 import { createRelicPanel } from '../gfx/relicPanel';
 import { createRelicRevealPanel } from '../gfx/relicRevealPanel';
 import { createRewardImpactText } from '../gfx/rewardImpactView';
-import { PALETTE } from '../gfx/theme';
+import { PALETTE, TEXT_COLOR } from '../gfx/theme';
 import { PhaserGameRng } from '../game/rng';
 import { relicChestGoldBonusLabel } from '../game/relicRegistry';
 import { playSfx } from '../audio/sfx';
@@ -68,18 +68,26 @@ const ENTRY_CELL: Record<Dir, { col: number; row: number }> = {
   W: { col: ROOM_COLS - 2, row: 5 },
 };
 
+/** Pull door labels into the room so they sit on the walkable side of the frame. */
+const DOOR_INTEL_INSET: Record<Dir, { dx: number; dy: number }> = {
+  N: { dx: 0, dy: 28 },
+  S: { dx: 0, dy: -28 },
+  W: { dx: 34, dy: 0 },
+  E: { dx: -34, dy: 0 },
+};
+
 /** Rows per page in the rest room's card picker. */
 const REST_PICKER_PAGE_SIZE = 7;
 
-const ROOM_EVENT_LABEL: Record<RoomEvent, string> = {
-  start: 'camp',
-  encounter: 'enemy',
-  chest: 'chest',
-  potion: 'potion',
-  rest: 'rest',
-  trap: 'trap',
-  boss: 'boss',
-  elite: 'elite',
+const ROOM_EVENT_INTEL_COLOR: Record<keyof typeof ROOM_EVENT_LABEL, string> = {
+  start: TEXT_COLOR.muted,
+  encounter: TEXT_COLOR.primary,
+  chest: TEXT_COLOR.gold,
+  potion: TEXT_COLOR.success,
+  rest: TEXT_COLOR.muted,
+  trap: TEXT_COLOR.warn,
+  boss: TEXT_COLOR.danger,
+  elite: TEXT_COLOR.gold,
 };
 
 interface CardPickup {
@@ -135,7 +143,7 @@ export class DungeonScene extends Phaser.Scene {
   private lastHintAt = 0;
   private nextRoomOptions: Partial<Record<Dir, NextRoomOption>> = {};
   private exitHatch: { x: number; y: number; img: Phaser.GameObjects.Image } | null = null;
-  private scoutRevealText: Phaser.GameObjects.Text | null = null;
+  private doorIntelLabels: Phaser.GameObjects.Text[] = [];
   private itemSwapPrompt: Phaser.GameObjects.Container | null = null;
   private itemSwapKeyHandlers: { event: string; handler: (event: KeyboardEvent) => void }[] = [];
   private ignoredPotionUid: number | null = null;
@@ -160,7 +168,7 @@ export class DungeonScene extends Phaser.Scene {
     this.transitioning = false;
     this.battleActive = false;
     this.exitHatch = null;
-    this.scoutRevealText = null;
+    this.doorIntelLabels = [];
 
     let spawn: { x: number; y: number };
     if (snapshot) {
@@ -211,7 +219,7 @@ export class DungeonScene extends Phaser.Scene {
     if (snapshot && this.room.event !== 'start') {
       this.onRoomEntered();
     } else {
-      this.tryRevealScoutOptions();
+      this.showDoorIntel();
     }
 
     this.game.events.off('battle-end');
@@ -274,7 +282,6 @@ export class DungeonScene extends Phaser.Scene {
       duration: 1100,
       ease: 'Cubic.easeOut',
       onComplete: () => {
-        if (this.scoutRevealText === t) this.scoutRevealText = null;
         t.destroy();
       },
     });
@@ -307,11 +314,12 @@ export class DungeonScene extends Phaser.Scene {
     return t;
   }
 
-  private clearScoutRevealText(): void {
-    if (!this.scoutRevealText) return;
-    this.tweens.killTweensOf(this.scoutRevealText);
-    this.scoutRevealText.destroy();
-    this.scoutRevealText = null;
+  private clearDoorIntel(): void {
+    for (const label of this.doorIntelLabels) {
+      this.tweens.killTweensOf(label);
+      label.destroy();
+    }
+    this.doorIntelLabels = [];
   }
 
   private toggleDeckOverlay(): void {
@@ -536,29 +544,38 @@ export class DungeonScene extends Phaser.Scene {
     }
   }
 
-  private tryRevealScoutOptions(): void {
+  private showDoorIntel(): void {
     const run = getRun();
-    if (run.scoutCharges <= 0 || this.room.openDoors.length === 0 || this.scoutRevealText) return;
+    if (
+      run.scoutCharges <= 0 ||
+      this.room.openDoors.length === 0 ||
+      this.doorIntelLabels.length > 0
+    )
+      return;
 
-    const lines = this.room.openDoors.map((dir) => {
+    for (const dir of this.room.openDoors) {
       const option = this.nextRoomOptions[dir];
-      const label = option ? ROOM_EVENT_LABEL[option.room.event] : 'unknown';
-      return `${dir}: ${label}`;
-    });
-
-    this.scoutRevealText = this.add
-      .text(this.origin.x + ROOM_W / 2, this.origin.y + 42, `Scout Flame\n${lines.join('   ')}`, {
-        fontFamily: 'monospace',
-        fontSize: '15px',
-        fontStyle: 'bold',
-        color: '#f1c40f',
-        align: 'center',
-        stroke: '#16121e',
-        strokeThickness: 4,
-      })
-      .setOrigin(0.5)
-      .setDepth(60);
-    this.built.objs.push(this.scoutRevealText);
+      const event = option?.room.event;
+      const cell = DOOR_CELL[dir];
+      const inset = DOOR_INTEL_INSET[dir];
+      const label = this.add
+        .text(
+          this.origin.x + cell.col * TILE + TILE / 2 + inset.dx,
+          this.origin.y + cell.row * TILE + TILE / 2 + inset.dy,
+          event ? ROOM_EVENT_LABEL[event] : '?',
+          {
+            fontFamily: 'monospace',
+            fontSize: '13px',
+            fontStyle: 'bold',
+            color: event ? ROOM_EVENT_INTEL_COLOR[event] : TEXT_COLOR.faint,
+            stroke: '#16121e',
+            strokeThickness: 4,
+          },
+        )
+        .setOrigin(0.5)
+        .setDepth(60);
+      this.doorIntelLabels.push(label);
+    }
 
     run.scoutCharges--;
     this.hud();
@@ -959,7 +976,7 @@ export class DungeonScene extends Phaser.Scene {
     this.disableDarknessOverlay();
     this.player.setVelocity(0, 0);
     this.player.body.enable = false;
-    this.clearScoutRevealText();
+    this.clearDoorIntel();
     playSfx(this, 'door');
 
     const run = getRun();
@@ -1065,9 +1082,9 @@ export class DungeonScene extends Phaser.Scene {
     } else if (room.event === 'trap') {
       this.enableDarknessOverlay();
       this.floatText(this.player.x, this.player.y - 50, 'Watch your step!', '#ff9944');
-      this.tryRevealScoutOptions();
+      this.showDoorIntel();
     } else {
-      this.tryRevealScoutOptions();
+      this.showDoorIntel();
     }
   }
 
@@ -1077,7 +1094,7 @@ export class DungeonScene extends Phaser.Scene {
    * overlays via the update-loop guard, then play the relocated contact cue
    * (KTD2) and fade into the card battle after ~450ms. Phaser scene timers and
    * tweens run independently of the update guard, so the locked cue still fires.
-   * The pre-battle scout reveal is skipped for these rooms (KTD4) — onBattleEnd
+   * The pre-battle door labels are skipped for these rooms (KTD4) — onBattleEnd
    * reveals post-victory instead.
    */
   private triggerEncounter(sprite: Phaser.GameObjects.Image): void {
@@ -1143,9 +1160,9 @@ export class DungeonScene extends Phaser.Scene {
       );
     } else {
       // A cleared 'elite' room falls here too (it's not 'boss'), so it clears exactly
-      // like a normal encounter — no exit hatch, just the post-victory scout reveal.
+      // like a normal encounter — no exit hatch, just the post-victory door labels.
       // Elite-specific rewards are U8's concern (TurnBattle.ts's runVictory), not this.
-      this.tryRevealScoutOptions();
+      this.showDoorIntel();
     }
     this.hud();
   }

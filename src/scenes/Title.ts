@@ -55,7 +55,7 @@ export class TitleScene extends Phaser.Scene {
     });
 
     this.add
-      .text(cx, layout.objectiveY, 'Descend 10 rooms. Slay the boss. Escape.', {
+      .text(cx, layout.objectiveY, 'Reach the First Gate. A hundred rooms to escape.', {
         ...TEXT_STYLE,
         fontSize: '15px',
         color: '#d8d2e4',
@@ -64,11 +64,11 @@ export class TitleScene extends Phaser.Scene {
 
     this.addInfoColumn(cx - 204, layout, 'RUN', [
       'WASD / arrows move',
-      'Walk into loot',
-      'Find the stairs down',
+      'First doors show the way',
+      'Reach the First Gate',
     ]);
     this.addInfoColumn(cx, layout, 'CARDS', [
-      'Pick 2 at the fire',
+      'Pick a path at the fire',
       'Scenarios shape runs',
       'Gold in-run, XP after',
     ]);

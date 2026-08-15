@@ -32,6 +32,10 @@ export const MAX_ARMOR = 3;
 
 export const PLAYER_SPEED = 210;
 
+/** Opening Scout Charges granted at run start. Each reveal spends one; after they
+ * run out, doors stay unlabeled for the rest of the descent. */
+export const STARTING_SCOUT_CHARGES = 3;
+
 export type Dir = 'N' | 'E' | 'S' | 'W';
 export const DIRS: Dir[] = ['N', 'E', 'S', 'W'];
 export const OPPOSITE: Record<Dir, Dir> = { N: 'S', S: 'N', E: 'W', W: 'E' };

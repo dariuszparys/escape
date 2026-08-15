@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
-import { GAME_W, ROOM_H, HUD_H, MAX_INVENTORY, RUN_LENGTH } from '../config';
+import { GAME_W, ROOM_H, HUD_H, MAX_INVENTORY } from '../config';
 import type { Relic } from '../data/relics';
-import { isBossRoom } from '../dungeon/rooms';
+import { formatHudChapterText, isBossRoom } from '../dungeon/rooms';
 import { createRelicTooltip } from '../gfx/relicTooltip';
 import { FONT_FAMILY, PALETTE, TEXT_COLOR, TYPE_COLOR, bodyStyle } from '../gfx/theme';
 import { getRun } from '../state';
@@ -93,13 +93,14 @@ export class HudScene extends Phaser.Scene {
       .setOrigin(0, 0.5);
 
     this.roomText = this.add
-      .text(GAME_W - 24, y0 + 40, '', {
+      .text(GAME_W - 24, y0 + 28, '', {
         fontFamily: FONT_FAMILY,
-        fontSize: '17px',
+        fontSize: '15px',
         fontStyle: 'bold',
         color: TEXT_COLOR.gold,
+        align: 'right',
       })
-      .setOrigin(1, 0.5);
+      .setOrigin(1, 0);
 
     this.variable = this.add.container(0, 0);
 
@@ -149,7 +150,7 @@ export class HudScene extends Phaser.Scene {
 
     const atBoss = isBossRoom(run.depth);
     this.roomText
-      .setText(`ROOM ${run.depth}/${RUN_LENGTH}`)
+      .setText(formatHudChapterText(run.depth))
       .setColor(atBoss ? TEXT_COLOR.danger : TEXT_COLOR.gold);
 
     // Variable-count sections: card-type chips and relic chips. Their counts
