@@ -1,20 +1,32 @@
 import Phaser from 'phaser';
 import { GAME_H, GAME_W } from '../config';
-import { ARCHETYPES } from '../data/archetypes';
+import {
+  campfireClassOption,
+  campfireClassOptions,
+  type CampfireClassOption,
+} from '../data/archetypes';
 import type { ArchetypeId } from '../data/cards';
-import { dailyKey, dailySeed, loadDailyRecord } from '../daily';
+import { dailyKey, dailySeed } from '../daily';
 import { loadRunChronicle } from '../chronicle';
 import {
+  formatCampfireClassChip,
   formatChronicleLine,
-  formatCampfireProgressionSummary,
-  formatDailyRecordLine,
+  formatDailyModeBlurb,
+  formatDescendModeBlurb,
   formatProfileProgressLine,
 } from '../game/campfireSummary';
-import { formatCampfireRunGoal, formatPathPrompt } from '../game/runHook';
+import { formatCampfireRunGoal } from '../game/runHook';
+import {
+  createCampfireClassLayout,
+  createCampfireDepartLayout,
+  initialCampfireBeat,
+  type CampfireBeat,
+  type RectLayout,
+} from '../game/campfireLayout';
 import { setActiveArchetype } from '../game/progression';
 import { getMeta, setMeta } from '../meta';
 import { newRun, setRun } from '../state';
-import { FONT_FAMILY, TEXT_COLOR } from '../gfx/theme';
+import { FONT_FAMILY, PALETTE, TEXT_COLOR } from '../gfx/theme';
 import { getProfile } from '../profile';
 import { applyLoadoutToRun } from '../game/campfirePrep';
 import { clearRunSnapshot, loadRunSnapshot } from '../game/runSnapshot';
@@ -25,17 +37,22 @@ const TEXT_STYLE = {
   color: TEXT_COLOR.primary,
 };
 
-const FIRE_X = 210;
-const FIRE_Y = 348;
-const HERO_X = 104;
-const HERO_Y = 356;
-const STATUS_X = 392;
-const STATUS_W = 290;
 const FOREGROUND_DEPTH = 10;
-const ACTION_Y = 584;
+const SELECTED_FILL = 0x2d2414;
+const IDLE_FILL = 0x0f0d15;
+const IDLE_STROKE = 0x3f394d;
+const CLASS_TINT: Record<string, number> = {
+  barbarian: 0xe07040,
+  necromancer: 0x9a70c8,
+  ranger: 0x5a9a4a,
+  wanderer: 0xc4baa0,
+};
+
+let classConfirmedThisSession = false;
 
 export class CampfireScene extends Phaser.Scene {
   private dynamic!: Phaser.GameObjects.Container;
+  private beat: CampfireBeat = 'class';
 
   constructor() {
     super('Campfire');
@@ -45,9 +62,15 @@ export class CampfireScene extends Phaser.Scene {
     this.cameras.main.fadeIn(350, 11, 10, 18);
     this.drawCell();
     this.dynamic = this.add.container(0, 0).setDepth(FOREGROUND_DEPTH);
+    this.beat = initialCampfireBeat(
+      classConfirmedThisSession,
+      getMeta().progression.activeArchetypeId,
+    );
     this.game.events.on('meta-update', this.redraw, this);
+    this.input.keyboard?.on('keydown-ENTER', this.confirmClassBeat, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.game.events.off('meta-update', this.redraw, this);
+      this.input.keyboard?.off('keydown-ENTER', this.confirmClassBeat, this);
     });
     this.redraw();
   }
@@ -69,74 +92,16 @@ export class CampfireScene extends Phaser.Scene {
 
     const shadows = this.add.graphics();
     shadows.fillStyle(0x000000, 0.42);
-    shadows.fillRect(0, 0, GAME_W, 74);
-    shadows.fillRect(0, 470, GAME_W, GAME_H - 470);
-    shadows.fillRect(0, 0, 58, GAME_H);
-    shadows.fillRect(GAME_W - 58, 0, 58, GAME_H);
+    shadows.fillRect(0, 0, GAME_W, 86);
+    shadows.fillRect(0, 548, GAME_W, GAME_H - 548);
 
     const fireGlow = this.add.graphics().setDepth(1);
-    fireGlow.fillStyle(0xf1a23a, 0.14);
-    fireGlow.fillCircle(FIRE_X, FIRE_Y, 110);
+    fireGlow.fillStyle(0xf1a23a, 0.12);
+    fireGlow.fillCircle(GAME_W / 2, 560, 90);
     this.tweens.add({
       targets: fireGlow,
-      alpha: 0.45,
+      alpha: 0.4,
       duration: 760,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    });
-
-    const hero = this.add.image(HERO_X, HERO_Y, 'hero_down_0').setScale(5).setDepth(3);
-    hero.setTint(0xc4baa0);
-    this.tweens.add({
-      targets: hero,
-      y: HERO_Y - 6,
-      duration: 900,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    });
-
-    this.drawFire();
-  }
-
-  private drawFire(): void {
-    const logs = this.add.graphics().setDepth(3);
-    logs.lineStyle(8, 0x5c321f, 1);
-    logs.lineBetween(FIRE_X - 42, FIRE_Y + 14, FIRE_X + 38, FIRE_Y + 28);
-    logs.lineBetween(FIRE_X + 42, FIRE_Y + 14, FIRE_X - 38, FIRE_Y + 28);
-    logs.fillStyle(0x26160f, 1);
-    logs.fillEllipse(FIRE_X, FIRE_Y + 24, 106, 18);
-
-    const outer = this.add.graphics().setDepth(4);
-    outer.fillStyle(0xff7a2f, 0.95);
-    outer.fillTriangle(FIRE_X - 28, FIRE_Y + 15, FIRE_X, FIRE_Y - 67, FIRE_X + 24, FIRE_Y + 15);
-
-    const inner = this.add.graphics().setDepth(5);
-    inner.fillStyle(0xf1c40f, 0.96);
-    inner.fillTriangle(
-      FIRE_X - 14,
-      FIRE_Y + 17,
-      FIRE_X + 10,
-      FIRE_Y - 45,
-      FIRE_X + 24,
-      FIRE_Y + 17,
-    );
-
-    this.tweens.add({
-      targets: outer,
-      scaleY: 0.9,
-      alpha: 0.7,
-      duration: 420,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    });
-    this.tweens.add({
-      targets: inner,
-      x: -4,
-      scaleY: 1.08,
-      duration: 360,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
@@ -145,35 +110,80 @@ export class CampfireScene extends Phaser.Scene {
 
   private redraw = (): void => {
     this.dynamic.removeAll(true);
-    const meta = getMeta();
-    const profile = getProfile();
-    const snapshot = loadRunSnapshot();
-    const dailyRecord = loadDailyRecord();
-    const chronicle = loadRunChronicle();
+    if (this.beat === 'class') {
+      this.drawClassBeat();
+      return;
+    }
+    this.drawDepartBeat();
+  };
+
+  private drawClassBeat(): void {
+    const options = campfireClassOptions();
+    const layout = createCampfireClassLayout(options.length);
+    const selectedId = getMeta().progression.activeArchetypeId;
+    const selected = campfireClassOption(selectedId);
 
     this.dynamic.add(
       this.add
-        .text(GAME_W / 2, 50, 'THE LAST FIRE', {
+        .text(GAME_W / 2, layout.titleY, 'CHOOSE YOUR CLASS', {
           ...TEXT_STYLE,
-          fontSize: '38px',
+          fontSize: '32px',
           fontStyle: 'bold',
           color: TEXT_COLOR.gold,
         })
         .setOrigin(0.5),
     );
 
+    for (const [index, option] of options.entries()) {
+      this.addClassCard(option, layout.cards[index], option.id === selectedId);
+    }
+
     this.dynamic.add(
       this.add
-        .text(GAME_W / 2, 94, formatProfileProgressLine(profile), {
+        .text(layout.description.x, layout.description.y, selected.description, {
           ...TEXT_STYLE,
-          fontSize: '18px',
+          fontSize: '15px',
+          color: TEXT_COLOR.body,
+          align: 'center',
+          lineSpacing: 5,
+          fixedWidth: layout.description.w,
+          wordWrap: { width: layout.description.w, useAdvancedWrap: true },
+        })
+        .setOrigin(0, 0),
+    );
+
+    this.addFilledButton(layout.continueButton, '[ CONTINUE ]', () => this.confirmClassBeat());
+  }
+
+  private drawDepartBeat(): void {
+    const meta = getMeta();
+    const profile = getProfile();
+    const snapshot = loadRunSnapshot();
+    const chronicle = loadRunChronicle();
+    const layout = createCampfireDepartLayout();
+
+    this.dynamic.add(
+      this.add
+        .text(GAME_W / 2, layout.titleY, 'THE LAST FIRE', {
+          ...TEXT_STYLE,
+          fontSize: '34px',
+          fontStyle: 'bold',
+          color: TEXT_COLOR.gold,
+        })
+        .setOrigin(0.5),
+    );
+    this.dynamic.add(
+      this.add
+        .text(GAME_W / 2, layout.statusY, formatProfileProgressLine(profile), {
+          ...TEXT_STYLE,
+          fontSize: '16px',
           color: TEXT_COLOR.primary,
         })
         .setOrigin(0.5),
     );
     this.dynamic.add(
       this.add
-        .text(GAME_W / 2, 120, formatChronicleLine(chronicle), {
+        .text(GAME_W / 2, layout.chronicleY, formatChronicleLine(chronicle), {
           ...TEXT_STYLE,
           fontSize: '12px',
           color: TEXT_COLOR.muted,
@@ -181,130 +191,241 @@ export class CampfireScene extends Phaser.Scene {
         .setOrigin(0.5),
     );
 
+    this.addPanel(layout.classChip, false);
+    const chipLabelW = layout.changeClassButton.x - layout.classChip.x - 20;
     this.dynamic.add(
-      this.add.text(STATUS_X, 168, formatPathPrompt(meta.progression.activeArchetypeId), {
-        ...TEXT_STYLE,
-        fontSize: '18px',
-        fontStyle: 'bold',
-        color: TEXT_COLOR.gold,
-      }),
+      this.add
+        .text(
+          layout.classChip.x + 16,
+          layout.classChip.y + layout.classChip.h / 2,
+          formatCampfireClassChip(meta.progression.activeArchetypeId),
+          {
+            ...TEXT_STYLE,
+            fontSize: '16px',
+            fontStyle: 'bold',
+            color: TEXT_COLOR.gold,
+            fixedWidth: chipLabelW,
+            wordWrap: { width: chipLabelW, useAdvancedWrap: true },
+          },
+        )
+        .setOrigin(0, 0.5),
     );
-    for (const [index, archetype] of ARCHETYPES.entries()) {
-      this.addPathButton(
-        STATUS_X,
-        196 + index * 24,
-        `${archetype.name} - ${archetype.tagline}`,
-        meta.progression.activeArchetypeId === archetype.id,
-        () => this.selectArchetype(archetype.id),
+    this.addFilledButton(
+      layout.changeClassButton,
+      '[ CHANGE CLASS ]',
+      () => this.changeClass(),
+      '13px',
+    );
+
+    this.dynamic.add(
+      this.add
+        .text(
+          GAME_W / 2,
+          layout.goal.y,
+          snapshot
+            ? `Suspended run: room ${snapshot.run.depth}`
+            : formatCampfireRunGoal(
+                profile.personalBestRoom,
+                meta.progression.completedContractIds ?? [],
+              ),
+          {
+            ...TEXT_STYLE,
+            fontSize: '14px',
+            color: snapshot ? TEXT_COLOR.gold : TEXT_COLOR.body,
+            align: 'center',
+            lineSpacing: 4,
+            fixedWidth: layout.goal.w,
+            wordWrap: { width: layout.goal.w, useAdvancedWrap: true },
+          },
+        )
+        .setOrigin(0.5, 0),
+    );
+
+    if (snapshot) {
+      this.addModeCard(
+        layout.primaryMode,
+        true,
+        'RESUME',
+        `Continue from room ${snapshot.run.depth}.`,
+        () => this.resumeRun(),
+      );
+      this.addModeCard(
+        layout.secondaryMode,
+        false,
+        'ABANDON',
+        'End the run at this room.',
+        () => this.abandonRun(),
+        TEXT_COLOR.danger,
+      );
+    } else {
+      this.addModeCard(layout.primaryMode, true, 'DESCEND', formatDescendModeBlurb(), () =>
+        this.startRun(),
+      );
+      this.addModeCard(layout.secondaryMode, false, 'DAILY DESCENT', formatDailyModeBlurb(), () =>
+        this.startDailyRun(),
       );
     }
-    this.addPathButton(STATUS_X, 268, 'Wanderer - no class', false, () =>
-      this.selectArchetype(null),
-    );
 
-    this.dynamic.add(
-      this.add.text(STATUS_X, 304, 'THIS RUN', {
+    this.addTextButton(layout.loadoutButton.x, layout.loadoutButton.y, '[ LOADOUT ]', () =>
+      this.scene.start('Progression'),
+    );
+  }
+
+  private addClassCard(option: CampfireClassOption, rect: RectLayout, selected: boolean): void {
+    this.addPanel(rect, selected);
+    const cx = rect.x + rect.w / 2;
+    const name = this.add
+      .text(cx, rect.y + 16, option.name, {
         ...TEXT_STYLE,
-        fontSize: '18px',
+        fontSize: '16px',
         fontStyle: 'bold',
-        color: TEXT_COLOR.gold,
-      }),
-    );
-    this.dynamic.add(
-      this.add.text(
-        STATUS_X,
-        332,
-        formatCampfireRunGoal(
-          profile.personalBestRoom,
-          meta.progression.completedContractIds ?? [],
-        ),
-        {
-          ...TEXT_STYLE,
-          fontSize: '13px',
-          color: TEXT_COLOR.body,
-          lineSpacing: 6,
-          fixedWidth: STATUS_W,
-          wordWrap: { width: STATUS_W, useAdvancedWrap: true },
-        },
-      ),
-    );
+        color: selected ? TEXT_COLOR.gold : TEXT_COLOR.primary,
+        align: 'center',
+        fixedWidth: rect.w - 12,
+        wordWrap: { width: rect.w - 12, useAdvancedWrap: true },
+      })
+      .setOrigin(0.5, 0);
+    this.dynamic.add(name);
 
-    this.dynamic.add(
-      this.add.text(STATUS_X, 392, formatCampfireProgressionSummary(meta.progression, profile), {
+    if (selected) {
+      this.dynamic.add(
+        this.add
+          .text(cx, rect.y + 38, 'SELECTED', {
+            ...TEXT_STYLE,
+            fontSize: '11px',
+            fontStyle: 'bold',
+            color: TEXT_COLOR.goldHover,
+          })
+          .setOrigin(0.5, 0),
+      );
+    }
+
+    const hero = this.add
+      .image(cx, rect.y + 118, 'hero_down_0')
+      .setScale(4)
+      .setTint(CLASS_TINT[option.id ?? 'wanderer']);
+    this.dynamic.add(hero);
+
+    const tagline = this.add
+      .text(cx, rect.y + rect.h - 36, option.tagline, {
         ...TEXT_STYLE,
         fontSize: '12px',
-        color: TEXT_COLOR.muted,
+        color: selected ? TEXT_COLOR.goldHover : TEXT_COLOR.muted,
+        align: 'center',
+        fixedWidth: rect.w - 12,
+        wordWrap: { width: rect.w - 12, useAdvancedWrap: true },
+      })
+      .setOrigin(0.5, 0);
+    this.dynamic.add(tagline);
+
+    const zone = this.add
+      .zone(cx, rect.y + rect.h / 2, rect.w, rect.h)
+      .setInteractive({ useHandCursor: true });
+    zone.on('pointerover', () => {
+      name.setColor(TEXT_COLOR.goldHover);
+      tagline.setColor(TEXT_COLOR.goldHover);
+    });
+    zone.on('pointerout', () => {
+      name.setColor(selected ? TEXT_COLOR.gold : TEXT_COLOR.primary);
+      tagline.setColor(selected ? TEXT_COLOR.goldHover : TEXT_COLOR.muted);
+    });
+    zone.on('pointerdown', () => this.selectArchetype(option.id));
+    this.dynamic.add(zone);
+  }
+
+  private addModeCard(
+    rect: RectLayout,
+    primary: boolean,
+    title: string,
+    blurb: string,
+    onPointerDown: () => void,
+    titleColor: string = TEXT_COLOR.gold,
+  ): void {
+    this.addPanel(rect, primary);
+    const cx = rect.x + rect.w / 2;
+    const heading = this.add
+      .text(cx, rect.y + 28, title, {
+        ...TEXT_STYLE,
+        fontSize: '22px',
+        fontStyle: 'bold',
+        color: titleColor,
+        align: 'center',
+        fixedWidth: rect.w - 28,
+        wordWrap: { width: rect.w - 28, useAdvancedWrap: true },
+      })
+      .setOrigin(0.5, 0);
+    this.dynamic.add(heading);
+    const body = this.add
+      .text(cx, rect.y + 72, blurb, {
+        ...TEXT_STYLE,
+        fontSize: '14px',
+        color: TEXT_COLOR.body,
+        align: 'center',
         lineSpacing: 5,
-        fixedWidth: STATUS_W,
-        wordWrap: { width: STATUS_W, useAdvancedWrap: true },
-      }),
-    );
-    if (snapshot) {
-      this.dynamic.add(
-        this.add.text(STATUS_X, 478, `Suspended run: room ${snapshot.run.depth}`, {
-          ...TEXT_STYLE,
-          fontSize: '13px',
-          color: TEXT_COLOR.gold,
-          fixedWidth: STATUS_W,
-          wordWrap: { width: STATUS_W, useAdvancedWrap: true },
-        }),
-      );
-    } else {
-      this.dynamic.add(
-        this.add.text(STATUS_X, 478, formatDailyRecordLine(dailyRecord), {
-          ...TEXT_STYLE,
-          fontSize: '12px',
-          color: TEXT_COLOR.muted,
-          fixedWidth: STATUS_W,
-          wordWrap: { width: STATUS_W, useAdvancedWrap: true },
-        }),
-      );
-    }
+        fixedWidth: rect.w - 36,
+        wordWrap: { width: rect.w - 36, useAdvancedWrap: true },
+      })
+      .setOrigin(0.5, 0);
+    this.dynamic.add(body);
 
-    this.addActionButton(142, '[ PROGRESSION ]', () => this.scene.start('Progression'));
-    if (snapshot) {
-      this.addActionButton(378, '[ RESUME ]', () => this.resumeRun());
-      this.addActionButton(596, '[ ABANDON ]', () => this.abandonRun());
-    } else {
-      this.addActionButton(378, '[ DESCEND ]', () => this.startRun());
-      this.addActionButton(596, '[ DAILY DESCENT ]', () => this.startDailyRun());
-    }
-  };
+    const zone = this.add
+      .zone(cx, rect.y + rect.h / 2, rect.w, rect.h)
+      .setInteractive({ useHandCursor: true });
+    zone.on('pointerover', () => heading.setColor(TEXT_COLOR.goldHover));
+    zone.on('pointerout', () => heading.setColor(titleColor));
+    zone.on('pointerdown', onPointerDown);
+    this.dynamic.add(zone);
+  }
 
-  private addPathButton(
+  private addPanel(rect: RectLayout, selected: boolean): void {
+    const bg = this.add.graphics();
+    bg.fillStyle(selected ? SELECTED_FILL : IDLE_FILL, selected ? 0.94 : 0.86);
+    bg.fillRect(rect.x, rect.y, rect.w, rect.h);
+    if (selected) {
+      bg.fillStyle(PALETTE.gold, 0.95);
+      bg.fillRect(rect.x, rect.y, rect.w, 6);
+    }
+    bg.lineStyle(selected ? 3 : 2, selected ? PALETTE.gold : IDLE_STROKE, selected ? 0.95 : 0.55);
+    bg.strokeRect(rect.x, rect.y, rect.w, rect.h);
+    this.dynamic.add(bg);
+  }
+
+  private addFilledButton(
+    rect: RectLayout,
+    label: string,
+    onPointerDown: () => void,
+    fontSize = '18px',
+  ): void {
+    this.addPanel(rect, true);
+    const button = this.add
+      .text(rect.x + rect.w / 2, rect.y + rect.h / 2, label, {
+        ...TEXT_STYLE,
+        fontSize,
+        fontStyle: 'bold',
+        color: TEXT_COLOR.gold,
+      })
+      .setOrigin(0.5);
+    this.dynamic.add(button);
+    const zone = this.add
+      .zone(rect.x + rect.w / 2, rect.y + rect.h / 2, rect.w, rect.h)
+      .setInteractive({ useHandCursor: true });
+    zone.on('pointerover', () => button.setColor(TEXT_COLOR.goldHover));
+    zone.on('pointerout', () => button.setColor(TEXT_COLOR.gold));
+    zone.on('pointerdown', onPointerDown);
+    this.dynamic.add(zone);
+  }
+
+  private addTextButton(
     x: number,
     y: number,
     label: string,
-    active: boolean,
     onPointerDown: () => void,
+    fontSize = '18px',
   ): void {
     const button = this.add
-      .text(x, y, active ? `> ${label}` : `  ${label}`, {
+      .text(x, y, label, {
         ...TEXT_STYLE,
-        fontSize: '13px',
-        fontStyle: active ? 'bold' : 'normal',
-        color: active ? TEXT_COLOR.gold : TEXT_COLOR.body,
-      })
-      .setInteractive({ useHandCursor: true });
-    button.on('pointerover', () => button.setColor(TEXT_COLOR.goldHover));
-    button.on('pointerout', () => button.setColor(active ? TEXT_COLOR.gold : TEXT_COLOR.body));
-    button.on('pointerdown', onPointerDown);
-    this.dynamic.add(button);
-  }
-
-  private selectArchetype(archetypeId: ArchetypeId | null): void {
-    const result = setActiveArchetype(getMeta(), getProfile(), archetypeId);
-    if (!result.ok) return;
-    const updated = setMeta(result.state);
-    this.game.events.emit('meta-update', updated);
-    playSfx(this, 'purchase');
-  }
-
-  private addActionButton(x: number, label: string, onPointerDown: () => void): void {
-    const button = this.add
-      .text(x, ACTION_Y, label, {
-        ...TEXT_STYLE,
-        fontSize: '18px',
+        fontSize,
         fontStyle: 'bold',
         color: TEXT_COLOR.gold,
       })
@@ -315,6 +436,27 @@ export class CampfireScene extends Phaser.Scene {
     button.on('pointerout', () => button.setColor(TEXT_COLOR.gold));
     button.on('pointerdown', onPointerDown);
     this.dynamic.add(button);
+  }
+
+  private confirmClassBeat = (): void => {
+    if (this.beat !== 'class') return;
+    classConfirmedThisSession = true;
+    this.beat = 'depart';
+    playSfx(this, 'door', 0.4);
+    this.redraw();
+  };
+
+  private changeClass(): void {
+    this.beat = 'class';
+    this.redraw();
+  }
+
+  private selectArchetype(archetypeId: ArchetypeId | null): void {
+    const result = setActiveArchetype(getMeta(), getProfile(), archetypeId);
+    if (!result.ok) return;
+    const updated = setMeta(result.state);
+    this.game.events.emit('meta-update', updated);
+    playSfx(this, 'purchase');
   }
 
   private startRun(): void {

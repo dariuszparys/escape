@@ -4,8 +4,11 @@ import { createDefaultProgressionState } from '../meta';
 import { createDefaultProfileState, xpForLevel } from '../profile';
 import {
   formatChronicleLine,
+  formatCampfireClassChip,
   formatCampfireProgressionSummary,
+  formatDailyModeBlurb,
   formatDailyRecordLine,
+  formatDescendModeBlurb,
   formatProfileProgressLine,
 } from './campfireSummary';
 
@@ -78,5 +81,15 @@ describe('campfire summary formatting', () => {
         attempts: 3,
       }),
     ).toBe('Daily 2026-06-27 - best room 8, escaped: no');
+  });
+
+  test('names the selected campfire class, including Wanderer', () => {
+    expect(formatCampfireClassChip(null)).toBe('Class: Wanderer · Neutral cards');
+    expect(formatCampfireClassChip('barbarian')).toBe('Class: Barbarian · Rage & Might');
+  });
+
+  test('daily mode copy states that class is ignored', () => {
+    expect(formatDescendModeBlurb()).toContain('scenario');
+    expect(formatDailyModeBlurb()).toMatch(/class ignored/i);
   });
 });

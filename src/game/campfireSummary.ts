@@ -1,3 +1,5 @@
+import { campfireClassOption } from '../data/archetypes';
+import type { ArchetypeId } from '../data/cards';
 import { relicDef } from '../data/relics';
 import type { DailyRecord } from '../daily';
 import type { RunChronicle } from '../chronicle';
@@ -37,4 +39,17 @@ export function formatChronicleLine(chronicle: RunChronicle): string {
 
 export function formatDailyRecordLine(record: DailyRecord): string {
   return `Daily ${record.date} - best room ${record.bestDepth}, escaped: ${record.escaped ? 'yes' : 'no'}`;
+}
+
+export function formatCampfireClassChip(activeArchetypeId: ArchetypeId | null): string {
+  const option = campfireClassOption(activeArchetypeId);
+  return `Class: ${option.name} · ${option.tagline}`;
+}
+
+export function formatDescendModeBlurb(): string {
+  return 'Choose a scenario and enter the dungeon.';
+}
+
+export function formatDailyModeBlurb(): string {
+  return 'Shared seed. Class ignored.';
 }
